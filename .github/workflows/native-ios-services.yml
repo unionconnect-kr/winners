@@ -1,7 +1,7 @@
 name: Native iOS service checks
 on:
   push:
-    branches: [codex/ios-build-preparation]
+    branches: [main, codex/ios-build-preparation]
     paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
   pull_request:
     paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']

@@ -2,9 +2,14 @@ name: iOS signed archive
 
 on:
   push:
-    branches: [codex/ios-build-preparation]
+    branches: [main, codex/ios-build-preparation]
     paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: 'Upload to App Store Connect for TestFlight (main only; no review submission)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,9 +20,9 @@ concurrency:
 
 jobs:
   archive:
-    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-build-preparation'
+    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation')
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -35,6 +40,11 @@ jobs:
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
           xcodebuild -version
+          xcrun altool --help > "$RUNNER_TEMP/manee-altool-help.txt" 2>&1
+          grep -q -- '--validate-app' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--upload-app' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--apiKey' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--apiIssuer' "$RUNNER_TEMP/manee-altool-help.txt"
       - name: Check signing secrets and decode files
         env:
           IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
@@ -164,6 +174,20 @@ jobs:
           path: ${{ runner.temp }}/manee-ipa/*.ipa
           if-no-files-found: error
           retention-days: 7
+      - name: Upload to App Store Connect for TestFlight
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_testflight && github.ref == 'refs/heads/main'
+        env:
+          MANEE_UPLOAD_TESTFLIGHT: 'true'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=("$RUNNER_TEMP/manee-ipa/"*.ipa)
+          test "${#ipas[@]}" -eq 1
+          node scripts/upload-testflight.mjs "${ipas[0]}"
+          echo 'Upload accepted; Apple processing is pending. No review submission or tester invitation was performed.' >> "$GITHUB_STEP_SUMMARY"
       - name: Remove temporary signing materials
         if: always()
         run: |
@@ -174,3 +198,4 @@ jobs:
             rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$profile_uuid.mobileprovision"
           fi
           rm -rf "$signing_dir"
+          rm -rf "$RUNNER_TEMP"/manee-upload-*

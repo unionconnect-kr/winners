@@ -48,7 +48,9 @@ npm run open:ios
 
 ## GitHub에서 서명 빌드
 
-워크플로: `.github/workflows/ios-signed-build.yml` (`iOS signed archive`). 회사 저장소의 `codex/ios-build-preparation` 브랜치만 실행합니다. 모바일 소스·자산 및 해당 워크플로 파일 변경 push로 실행되며, 기본 브랜치에 등록된 뒤에는 workflow_dispatch도 사용할 수 있습니다.
+워크플로: `.github/workflows/ios-signed-build.yml` (`iOS signed archive`). 회사 저장소의 `main`과 `codex/ios-build-preparation`에서 실행합니다. 모바일 소스·자산 및 해당 워크플로 파일 변경 push는 서명된 IPA만 생성하며 Apple에 업로드하지 않습니다.
+
+기본 브랜치에 반영된 후 GitHub Actions → iOS signed archive → Run workflow에서 `main`을 선택하고 `upload_testflight`를 체크한 수동 실행만 App Store Connect 업로드를 수행합니다. 기본값은 false입니다. 기존 `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`를 사용하며, 고정된 매니 앱 접근 확인 → Apple IPA 검증 → 업로드 순서로 진행합니다. 검증 실패 시 업로드하지 않고 개인키는 성공/실패 시 모두 제거합니다. 업로드 성공과 Apple 처리 완료는 별개이며, 이 절차는 테스터 초대·외부 테스트 심사·앱스토어 심사 제출을 하지 않습니다.
 
 Repository secrets:
 - `IOS_DISTRIBUTION_P12_BASE64`: 배포 인증서와 개인키를 포함하는 p12의 Base64
@@ -57,7 +59,7 @@ Repository secrets:
 
 임시 키체인 암호는 실행마다 무작위로 생성합니다. 입력 파일 해독, 암호와 개인키 import, 배포 인증서/프로파일 일치, 회사 Team, 앱 ID, 프로파일 만료 및 배포 유형을 검증합니다. Windows OpenSSL 3 p12를 macOS에서 직접 import할 수 없으면 임시 로컬 파일로 호환 컨테이너를 만들고 삭제합니다. 서명 자료는 작업 종료 시 제거되며 artifact에 포함하지 않습니다.
 
-`npm test` → `build:production` → `sync:ios` → Release archive → app-store-connect IPA export 순서입니다. 빌드 번호는 `1.<run_number>.<run_attempt>`이고 IPA artifact는 7일 보관합니다. 빌드 성공은 기능/실기기 QA나 App Store 심사 통과를 의미하지 않습니다. 위 제출 전 남은 작업을 완료한 후 업로드해야 합니다.
+`npm test` → `build:production` → `sync:ios` → Release archive → app-store-connect IPA export 순서입니다. 빌드 번호는 `1.<run_number>.<run_attempt>`이고 IPA artifact는 7일 보관합니다. TestFlight에서 먼저 로그인·파일·알림을 검증하고, 결제는 별도 Sandbox 서버 연결 후 검증합니다. 운영 서버의 과금 활성화와 앱스토어 심사 제출은 위 출시 조건을 완료한 뒤 진행합니다.
 
 
 ## 네이티브 서버 배포와 키 설정
