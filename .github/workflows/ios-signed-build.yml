@@ -3,7 +3,7 @@ name: iOS signed archive
 on:
   push:
     branches: [codex/ios-build-preparation]
-    paths: ['.github/workflows/ios-signed-build.yml']
+    paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
 
 permissions:
@@ -97,6 +97,7 @@ jobs:
           require(profile.get('TeamIdentifier') == [team], 'Profile is for a different Apple team.')
           require(ent.get('application-identifier') == team + '.' + bundle, 'Profile is for a different app.')
           require(ent.get('com.apple.developer.team-identifier') == team, 'Profile team entitlement mismatch.')
+          require(ent.get('aps-environment') == 'production', 'Regenerate the App Store profile with Push Notifications enabled.')
           require(not ent.get('get-task-allow', True), 'A distribution profile is required.')
           require('ProvisionedDevices' not in profile and not profile.get('ProvisionsAllDevices'), 'An App Store profile is required.')
           require(profile['ExpirationDate'] > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), 'Profile has expired.')

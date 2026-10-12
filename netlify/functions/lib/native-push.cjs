@@ -1,0 +1,62 @@
+'use strict';
+const http2=require('node:http2');
+const {createPrivateKey,sign}=require('node:crypto');
+let cached;
+function configured(env=process.env){return !!env.APNS_KEY_ID&&!!env.APNS_PRIVATE_KEY&&env.APNS_TEAM_ID==='J7AWFKW86N';}
+function providerToken(env=process.env,now=Math.floor(Date.now()/1000)){
+ if(!configured(env))throw Error('push_not_ready');
+ if(cached&&cached.keyId===env.APNS_KEY_ID&&cached.key===env.APNS_PRIVATE_KEY&&cached.issued<=now&&now-cached.issued<3000)return cached.value;
+ const header=Buffer.from(JSON.stringify({alg:'ES256',kid:env.APNS_KEY_ID})).toString('base64url');
+ const payload=Buffer.from(JSON.stringify({iss:env.APNS_TEAM_ID,iat:now})).toString('base64url');
+ const key=createPrivateKey(env.APNS_PRIVATE_KEY.replace(/\\n/g,'\n'));
+ if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')throw Error('push_not_ready');
+ const input=header+'.'+payload;
+ const value=input+'.'+sign('sha256',Buffer.from(input),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
+ cached={keyId:env.APNS_KEY_ID,key:env.APNS_PRIVATE_KEY,issued:now,value};return value;
+}
+async function sendApns(token,notification,env=process.env){
+ if(!/^[0-9a-f]{32,512}$/.test(token)||token.length%2)throw Error('invalid_device');
+ // Generic content avoids displaying customer/staff financial data on lock screens.
+ const payload=JSON.stringify({aps:{alert:{title:'매니',body:notification.kind==='test'?'아이폰 알림이 연결됐어요.':'매장에 확인할 새 알림이 있어요. 매니에서 확인해 주세요.'},sound:'default'},storeId:notification.storeId});
+ const jwt=providerToken(env);
+ return new Promise((resolve,reject)=>{
+  // App Store/TestFlight provisioning uses the production APNs environment.
+  const client=http2.connect('https://api.push.apple.com');
+  let settled=false,request,timer;
+  const end=(error,result)=>{if(settled)return;settled=true;clearTimeout(timer);request?.close();client.destroy();error?reject(error):resolve(result);};
+  timer=setTimeout(()=>end(Error('push_timeout')),7000);
+  client.on('error',()=>end(Error('push_connection_failed')));
+  client.on('goaway',()=>end(Error('push_connection_closed')));
+  client.once('connect',()=>{
+   request=client.request({':method':'POST',':path':'/3/device/'+token,authorization:'bearer '+jwt,
+    'apns-topic':'kr.co.manee.app','apns-push-type':'alert','apns-priority':'10','apns-expiration':'0','content-type':'application/json'});
+   let status=0,body='';
+   request.on('response',headers=>status=Number(headers[':status']));
+   request.setEncoding('utf8');request.on('data',chunk=>{body+=chunk;if(body.length>4096)end(Error('push_response_invalid'));});
+   request.on('error',()=>end(Error('push_request_failed')));
+   request.on('end',()=>{
+    if(status===200)return end(null,{sent:true,expired:false});
+    let reason;try{reason=JSON.parse(body).reason;}catch{}
+    end(null,{sent:false,expired:status===410||(status===400&&reason==='BadDeviceToken')});
+   });
+   request.end(payload);
+  });
+ });
+}
+async function sendNativePush(db,{storeId,userId=null,kind='notice'},env=process.env,send=sendApns){
+ if(!configured(env))return {ready:false,sent:0,failed:0};
+ const {data,error}=await db.rpc('manee_ios_push_targets',{p_store_id:storeId,p_user_id:userId});
+ if(error)throw Error('push_targets_unavailable');
+ let sent=0,failed=0;
+ for(let at=0;at<(data||[]).length;at+=10){
+  await Promise.all(data.slice(at,at+10).map(async target=>{
+   try{
+    const result=await send(target.token,{storeId,kind},env);
+    if(result.sent)sent++;else failed++;
+    if(result.expired){const dropped=await db.rpc('manee_ios_drop_push',{p_token:target.token});if(dropped.error)throw Error('push_cleanup_failed');}
+   }catch{failed++;}
+  }));
+ }
+ return {ready:true,sent,failed};
+}
+module.exports={configured,providerToken,sendApns,sendNativePush};

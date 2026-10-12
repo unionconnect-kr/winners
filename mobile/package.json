@@ -9,7 +9,7 @@
   "scripts": {
     "build:staging": "node scripts/build-web.mjs staging",
     "build:production": "node scripts/build-web.mjs production",
-    "sync:ios": "cap sync ios",
+    "sync:ios": "cap sync ios && node scripts/prepare-ios.mjs",
     "open:ios": "cap open ios",
     "test": "node --test scripts/*.test.mjs"
   },
@@ -17,6 +17,7 @@
     "@capacitor/core": "8.5.3",
     "@capacitor/geolocation": "8.2.3",
     "@capacitor/ios": "8.5.3",
+    "@capacitor/push-notifications": "8.1.2",
     "@supabase/supabase-js": "2.116.0",
     "xlsx-js-style": "1.2.0"
   },
