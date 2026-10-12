@@ -1,6 +1,6 @@
 # 매니 iOS 빌드 준비
 
-현재 상태: 개발용 iOS 프로젝트. App Store 제출용 완료본이 아니며, 배포용 서명이나 업로드는 수행하지 않습니다.
+현재 상태: iOS 프로젝트와 CI 서명 빌드 경로를 준비했습니다. App Store 제출용 완료본은 아니며, CI는 IPA artifact만 생성하고 Apple 업로드나 심사 제출은 수행하지 않습니다.
 
 - 앱 ID: `kr.co.manee.app`, Apple Team: `J7AWFKW86N`, 버전: `1.0`
 - 최초 대상: iPhone, iOS 15 이상. iPad 전용 배포는 현재 준비 범위에 포함하지 않습니다.
@@ -34,7 +34,7 @@ npm run open:ios
 3. **알림**: 웹 Service Worker 등록과 웹 푸시 가입을 비활성화했습니다. APNs 및 서버 토큰 연동을 별도로 구현해야 합니다. 운영 서버에서 다른 웹 사용자에게 발송하는 기능은 유지됩니다.
 4. **구독**: App Store Connect의 `manee.store1.monthly` 생성만으로 결제가 동작하지 않습니다. StoreKit 구매/복원 및 서버 구독 권한 검증이 아직 없습니다. 결제 화면과 출시 범위를 확정한 후 구현·Sandbox 시험해야 합니다.
 5. **개인정보**: 네이티브 SDK/외부 AI 처리/구독 데이터까지 포함하여 개인정보 공개와 실제 수집 동작을 대조해야 합니다. 이 프로젝트는 미확인 암호화 수출 답변이나 개인정보 선언을 자동 입력하지 않습니다.
-6. **서명 및 업로드**: 아래 Mac 절차 또는 별도 승인된 CI 서명 설정이 필요합니다. 인증서, `.p8`, `.p12`, 비밀번호는 저장소/대화에 넣지 않습니다.
+6. **서명 및 업로드**: 아래 CI는 서명된 IPA를 생성합니다. Apple 업로드 및 심사 제출은 별도 단계입니다. 인증서, `.p8`, `.p12`, 비밀번호는 저장소/대화에 넣지 않습니다.
 
 ## Apple 서명 후 업로드 (Mac)
 
@@ -46,4 +46,16 @@ npm run open:ios
 4. 실제 기기 대상에서 Product → Archive → Distribute App → App Store Connect로 업로드합니다.
 5. Apple 처리 완료 후 App Store Connect → 매니 → iOS 앱 버전 1.0 → 빌드에서 선택합니다.
 
-Mac을 직접 사용하지 않는 경우 Xcode Cloud 또는 GitHub macOS의 서명·업로드 경로를 추가로 설정해야 합니다. 현재 CI에는 Apple 비밀키를 요청하거나 배포하는 단계가 없습니다.
+## GitHub에서 서명 빌드
+
+워크플로: `.github/workflows/ios-signed-build.yml` (`iOS signed archive`). 회사 저장소의 `codex/ios-build-preparation` 브랜치만 실행합니다. 해당 워크플로 파일 변경 push로 실행되며, 기본 브랜치에 등록된 뒤에는 workflow_dispatch도 사용할 수 있습니다.
+
+Repository secrets:
+- `IOS_DISTRIBUTION_P12_BASE64`: 배포 인증서와 개인키를 포함하는 p12의 Base64
+- `IOS_DISTRIBUTION_P12_PASSWORD`: p12 암호
+- `IOS_PROVISION_PROFILE_BASE64`: App Store 프로파일의 Base64
+
+임시 키체인 암호는 실행마다 무작위로 생성합니다. 입력 파일 해독, 암호와 개인키 import, 배포 인증서/프로파일 일치, 회사 Team, 앱 ID, 프로파일 만료 및 배포 유형을 검증합니다. Windows OpenSSL 3 p12를 macOS에서 직접 import할 수 없으면 임시 로컬 파일로 호환 컨테이너를 만들고 삭제합니다. 서명 자료는 작업 종료 시 제거되며 artifact에 포함하지 않습니다.
+
+`npm test` → `build:production` → `sync:ios` → Release archive → app-store-connect IPA export 순서입니다. 빌드 번호는 `1.<run_number>.<run_attempt>`이고 IPA artifact는 7일 보관합니다. 빌드 성공은 기능/실기기 QA나 App Store 심사 통과를 의미하지 않습니다. 위 제출 전 남은 작업을 완료한 후 업로드해야 합니다.
+
