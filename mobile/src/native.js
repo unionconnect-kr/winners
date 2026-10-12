@@ -98,7 +98,7 @@ async function openSettings(){
   if(result.subscriptions?.some(s=>s.active))return '이 매장의 구독이 확인됐어요.';
   return '구매 내역을 확인했어요. 현재 활성 구독은 없어요.';
  };
- const buy=button('월 구독 시작',async()=>{status.textContent=resultText(await billing.purchase());});buy.hidden=true;
+ const buy=button('월 구독 시작',async()=>{status.textContent=resultText(await billing.purchase());});buy.hidden=true;buy.style.display='none';
  button('구매 복원',async()=>{status.textContent=resultText(await billing.restore());});
  button('Apple 구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');});
  button('이 매장 알림 켜기',async()=>{await enablePush();status.textContent='이 매장의 아이폰 알림이 연결됐어요.';});
@@ -120,7 +120,7 @@ async function openSettings(){
   }
   if(info.ready&&!info.otherStoreSubscribed){
    const product=await billing.products();if(!sameContext(c)||dialog!==sheet)return;
-   buy.textContent=(product.oneMonthFree?'1개월 무료 체험 후 ':'')+product.price+' / 월';buy.hidden=false;
+   buy.textContent=(product.oneMonthFree?'1개월 무료 체험 후 ':'')+product.price+' / 월';buy.hidden=false;buy.style.display='block';
   }else if(info.otherStoreSubscribed)status.textContent=messages.other_store_subscribed;
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }

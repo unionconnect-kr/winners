@@ -17,6 +17,7 @@ create table public.store_memberships(user_id uuid,store_id uuid,role text,statu
 const helpers=fs.readFileSync(new URL('../supabase/migrations/20260916070000_staff_auth_foundation_part1.sql',import.meta.url),'utf8');
 await db.exec(helpers.slice(helpers.indexOf('create or replace function private.is_live_manee_session()'),helpers.indexOf('create or replace function private.current_crew_id')));
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261012093336_native_ios_services.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261012094025_native_ios_account_cleanup.sql',import.meta.url),'utf8'));
 const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const owner=id(1),other=id(2),store=id(101),store2=id(102),device='ab'.repeat(32);
 await db.exec(`insert into auth.users(id) values('${owner}'),('${other}');
@@ -55,4 +56,10 @@ test('push authorization is current; account takeover and revoked sessions are r
  await role(owner);await rpc('select public.manee_ios_push(null,null,false)');
  await db.exec(`reset role;update auth.sessions set not_after=now()-interval '1 day' where user_id='${owner}'`);
  await role(owner);await assert.rejects(()=>rpc('select public.manee_ios_context($1)',[store]));
+});
+
+test('account deletion removes native bindings and cannot leave restorable client entitlements',async()=>{
+ await db.exec('reset role');await db.query('delete from auth.users where id=$1',[owner]);
+ assert.equal((await db.query('select count(*)::int as n from private.ios_billing_accounts where user_id=$1',[owner])).rows[0].n,0);
+ assert.equal((await db.query('select count(*)::int as n from private.ios_subscriptions')).rows[0].n,0);
 });

@@ -35,3 +35,22 @@ test('APNs targets come only from server RPC, expired tokens are removed and fai
  const result=await push.sendNativePush(db,{storeId:'store',userId:'owner'},env,async token=>({sent:token==='valid',expired:token==='expired'}));
  assert.equal(result.sent,1);assert.equal(result.failed,1);assert.equal(calls[0].args.p_user_id,'owner');assert.equal(calls[1].name,'manee_ios_drop_push');
 });
+
+test('native HTTP endpoints reject unauthenticated and foreign-origin calls before server access',async()=>{
+ const config=require('../netlify/functions/lib/manee-environment.json'),previous={...config};
+ Object.assign(config,{environment:'production',externalServicesEnabled:true});
+ try{for(const name of ['ios-billing','ios-push']){
+  const {handler}=require('../netlify/functions/'+name+'.js');
+  const body=JSON.stringify({action:'status',storeId:token});
+  const denied=await handler({httpMethod:'POST',headers:{origin:'capacitor://localhost'},body});
+  assert.equal(denied.statusCode,401);
+  assert.equal(JSON.parse(denied.body).error,'authentication_required');
+  const origin=await handler({httpMethod:'POST',headers:{origin:'https://untrusted.invalid'},body});
+  assert.equal(origin.statusCode,403);
+ }}finally{Object.assign(config,previous);}
+});
+test('official Apple verifier rejects unsigned or malformed JWS without accepting claims',async()=>{
+ const {SignedDataVerifier,Environment}=require('@apple/app-store-server-library');
+ const verifier=new SignedDataVerifier([require('../netlify/functions/lib/apple-root.cjs')],true,Environment.PRODUCTION,'kr.co.manee.app',6820833544);
+ await assert.rejects(()=>verifier.verifyAndDecodeTransaction('eyJhbGciOiJub25lIn0.e30.'));
+});

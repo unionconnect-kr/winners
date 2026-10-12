@@ -2,9 +2,9 @@ name: Native iOS service checks
 on:
   push:
     branches: [codex/ios-build-preparation]
-    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios_services.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
   pull_request:
-    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios_services.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
 permissions:
   contents: read
 jobs:

@@ -53,7 +53,7 @@ async function sendNativePush(db,{storeId,userId=null,kind='notice'},env=process
    try{
     const result=await send(target.token,{storeId,kind},env);
     if(result.sent)sent++;else failed++;
-    if(result.expired){const dropped=await db.rpc('manee_ios_drop_push',{p_token:target.token});if(dropped.error)throw Error('push_cleanup_failed');}
+    if(result.expired){const dropped=await db.rpc('manee_ios_drop_push',{p_token:target.token});if(dropped.error)console.warn('Native push cleanup unavailable');}
    }catch{failed++;}
   }));
  }
