@@ -46,10 +46,14 @@ test('Android only builds staging and cannot invoke Apple billing or APNs', () =
   assert.equal(info.environment, 'staging');
   assert.equal(info.platform, 'android');
   const native = read('www/native.js');
-  assert.doesNotMatch(native, /ManeeStoreKit|ios-billing|ios-push|manee_ios_push|PushNotifications/);
+  assert.doesNotMatch(native, /ManeeStoreKit|ios-billing|ios-push|manee_ios_push/);
   assert.match(native, /Geolocation/);
+  assert.match(native, /manee_android_push/);
+  assert.match(native, /manee-android-push/);
   const html = read('www/index.html');
   assert.match(html, /테스트 앱 안내/);
+  assert.match(html, /return nativeAndroidPushAction\("enable"\)/);
+  assert.match(html, /return nativeAndroidPushAction\("disable"\)/);
   assert.doesNotMatch(html, /아이폰 구독·알림/);
   for (const name of ['askApp', 'startVoiceInput', 'autoFillFromPhoto']) {
     // Exercise the generated functions: unsupported services must return before any I/O.

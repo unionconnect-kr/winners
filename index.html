@@ -1537,7 +1537,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function clearStaffAuthView(){
     maneeViewEpoch++;   // in-flight lookups of the previous account are discarded when they arrive
     state.ownerReportHomeNotices=null;
-    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;
+    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;state.ownerSetupLocationResult=null;
     state.staffClockBusy=null;state.staffAttendanceBusy=null;
     state.reservationSaving=null;state.checklistLoadFailed=false;state.homeChecklistFailed=false;
     state.salesReportSaving=null;
@@ -5862,6 +5862,30 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const draft=state.ownerSetupDraft?.[id];
     return '<label class="setup-field">'+label+'<input data-setup-draft id="'+id+'" type="'+type+'" value="'+escapeHtml(draft??value??'')+'"'+(type==='number'?' inputmode="decimal"':'')+'></label>';
   }
+  function ownerSetupLocationFeedback(){
+    const result=state.ownerSetupLocationResult;
+    if(!result||result.storeId!==currentStoreId()||result.username!==state.myUsername)return '';
+    return '<p class="setup-note" role="status" aria-live="polite">'+escapeHtml(result.message)+'</p>';
+  }
+  async function saveOwnerSetupLocation(){
+    await ownerSetupMutation(async(sid,alive)=>{
+      const store=state.store,username=state.myUsername;
+      const feedback=message=>{if(alive())state.ownerSetupLocationResult={storeId:sid,username,message};};
+      feedback('현재 위치를 확인하는 중이에요…');render();
+      try{
+        const pos=await staffCoordinates();if(!alive())return;
+        feedback('매장 위치를 저장하는 중이에요…');render();
+        const saved=await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id,lat,lng'));
+        if(!alive())return;
+        if(saved.id!==sid||!Number.isFinite(saved.lat)||Math.abs(saved.lat)>90||!Number.isFinite(saved.lng)||Math.abs(saved.lng)>180)throw new Error('저장된 위치를 확인하지 못했어요. 다시 시도해 주세요.');
+        state.storeLocationMap[store]={lat:saved.lat,lng:saved.lng};
+        feedback('현재 위치로 저장했어요. 다음 단계로 진행해 주세요.');
+      }catch(e){
+        if(alive())feedback(staffErrorMessage(e));
+        throw new Error(staffErrorMessage(e));
+      }
+    });
+  }
   function ownerSetupSummary(){
     const statuses=ownerSetupProgress().statuses||{};
     const failed=state.reportDataFailed||new Set();
@@ -5873,7 +5897,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const step=state.onboardingStep,i=OWNER_SETUP_STEPS.indexOf(step),busy=!!state.ownerSetupBusy;
     let html='<div class="owner-setup"><p class="setup-eyebrow">'+escapeHtml(state.store)+' · 매장 준비 '+(i+1)+' / '+OWNER_SETUP_STEPS.length+'</p><progress max="'+OWNER_SETUP_STEPS.length+'" value="'+(i+1)+'" aria-label="매장 준비 진행"></progress><h2>'+OWNER_SETUP_LABELS[step]+'</h2><fieldset class="setup-fields"'+(busy?' disabled':'')+'>';
     if(step==='location'){
-      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>현재 위치를 매장 위치로 등록</button>';
+      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>'+(busy?'위치 등록 중…':'현재 위치를 매장 위치로 등록')+'</button>'+ownerSetupLocationFeedback();
     }else if(step==='cutoff'){
       html+='<p>이 시간 전까지의 매출·출퇴근·체크리스트를 전날 영업일로 묶어요.</p><label class="setup-field">영업일 기준 시간<select id="setup-cutoff" data-setup-draft>';
       const hour=Number(state.ownerSetupDraft?.['setup-cutoff']??storeCutoffHour(state.store));
@@ -5995,10 +6019,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     app.querySelectorAll('[data-setup-goto]').forEach(el=>el.onclick=()=>{state.onboardingStep=el.dataset.setupGoto;rememberOwnerSetup(state.onboardingStep);render();});
     app.querySelectorAll('[data-setup-add]').forEach(el=>el.onclick=()=>addOwnerSetupRecord(el.dataset.setupAdd));
     bind('[data-setup-retry]',async()=>{const store=state.store;await Promise.all([loadVendors(store),loadFixedExpenses(store,monthKey())]);render();});
-    bind('[data-setup-location]',async()=>{
-      const sid=currentStoreId(),user=state.myUsername;
-      await ownerSetupMutation(async(_,alive)=>{const pos=await staffCoordinates();if(!alive()||!ownerSetupAlive(sid,user))return;await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id'));if(alive())state.storeLocationMap[state.store]={lat:pos.current_lat,lng:pos.current_lng};});
-    });
+    bind('[data-setup-location]',saveOwnerSetupLocation);
     bind('[data-setup-code]',()=>ownerSetupMutation(async(sid,alive)=>{const access=await staffPortal('owner_list',{store_id:sid});if(alive())state.ownerStaffAccess={...access,storeId:sid};}));
     bind('[data-setup-copy]',()=>{const a=state.ownerStaffAccess;if(a?.storeId===currentStoreId()&&a.store_join_code)copyCode(a.store_join_code);});
     bind('[data-setup-share]',async()=>{const a=state.ownerStaffAccess;if(a?.storeId!==currentStoreId()||!a.store_join_code)return;const text=state.store+' 매니 직원 초대\n직원으로 가입 후 매장코드 '+a.store_join_code+'를 입력해 주세요.\n'+location.origin+'/';try{if(navigator.share)await navigator.share({title:'매니 직원 초대',text});else copyCode(text);}catch(e){if(e.name!=='AbortError')showToast('공유하지 못했어요. 코드 복사를 이용해 주세요.');}});

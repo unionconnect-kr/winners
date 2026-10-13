@@ -22,3 +22,7 @@ android/capacitor-cordova-android-plugins/
 *.keystore
 *.apk
 *.aab
+
+# Firebase client config is supplied separately for each environment.
+android/app/google-services.json
+*service-account*.json

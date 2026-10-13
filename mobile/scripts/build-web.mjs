@@ -2,11 +2,13 @@ import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { androidFirebaseProject } from './android-firebase-config.mjs';
 
 const mobile = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = resolve(mobile, '..');
 const environment = process.argv[2];
 const platform = process.argv[3] || 'ios';
+const androidPushProjectId = platform === 'android' ? androidFirebaseProject(resolve(mobile, 'android/app/google-services.json')) : null;
 if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported native platform.');
 if (platform === 'android' && environment !== 'staging') {
   throw new Error('Android currently supports staging test builds only.');
@@ -39,13 +41,36 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.b
 replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>',
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
-  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store}));\n  // END MANEE_ENVIRONMENT');
+  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role}));\n  // END MANEE_ENVIRONMENT');
 replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? '테스트 앱 안내' : '아이폰 구독·알림'}<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
   "        await window.MANEE_NATIVE.prepareLogout();\n        const { error } = await db.auth.signOut({ scope: 'local' });");
 html = html.replaceAll('navigator.geolocation', 'window.MANEE_GEOLOCATION');
 if (platform === 'android') {
+  const pushAdapter = `  async function nativeAndroidPushAction(action){
+    if(state.pushBusy)return;
+    const alive=maneeLoadGuard("pushSubscription");
+    state.pushBusy=true;state.pushRegistrationError=null;render();
+    try{
+      const result=await window.MANEE_NATIVE.push(action);
+      if(!alive())return;
+      state.pushSubscribed=!!result.subscribed;
+      state.pushRegistrationError=result.message||null;
+      if(action!=="refresh"&&result.message)showToast(result.message);
+    }catch(e){
+      if(alive()){
+        if(action!=="disable")state.pushSubscribed=false;
+        state.pushRegistrationError=e?.message||"알림 연결을 확인하지 못했어요. 다시 시도해 주세요.";
+        if(action!=="refresh")showToast(state.pushRegistrationError);
+      }
+    }finally{if(alive()){state.pushBusy=false;render();}}
+  }
+`;
+  replaceOnce('  async function refreshPushSubStatus(){', pushAdapter+'  async function refreshPushSubStatus(){\n    return nativeAndroidPushAction("refresh");');
+  replaceOnce('  async function subscribeToPush(){', '  async function subscribeToPush(){\n    return nativeAndroidPushAction("enable");');
+  replaceOnce('  async function unsubscribeFromPush(){', '  async function unsubscribeFromPush(){\n    return nativeAndroidPushAction("disable");');
+  replaceOnce('출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.', '휴대폰 알림 연결을 확인해요. 현재는 테스트 알림을 준비 중이에요.');
   // Let Capacitor inset the WebView below system bars and above the keyboard.
   replaceOnce('viewport-fit=cover', 'viewport-fit=contain');
   replaceOnce('  function startVoiceInput(){', '  function startVoiceInput(){\n    showToast("이 테스트 앱은 음성 입력을 지원하지 않아요. 키보드로 입력해 주세요."); return;');
@@ -70,7 +95,7 @@ for (const asset of ['owner-ui.css', 'report-assets', 'icons', 'manifest.json'])
 cpSync(resolve(mobile, 'node_modules/xlsx-js-style/dist/xlsx.bundle.js'), resolve(output, 'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), resolve(output, 'vendor/supabase.js'));
 await build({ entryPoints: [resolve(mobile, platform === 'android' ? 'src/native-android.js' : 'src/native.js')], bundle: true,
-  define: {NATIVE_SERVICES_ORIGIN:JSON.stringify(functionsOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},
+  define: {ANDROID_FIREBASE_PROJECT:JSON.stringify(androidPushProjectId),NATIVE_SERVICES_ORIGIN:JSON.stringify(functionsOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},
   outfile: resolve(output, 'native.js'), format: 'iife', target: platform === 'android' ? 'chrome100' : 'safari15', minify: true });
-writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef }, null, 2) + '\n');
+writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef, ...(platform === 'android' ? { androidPushProjectId } : {}) }, null, 2) + '\n');
 console.log(`Prepared ${environment} native web assets (${config.projectRef}).`);

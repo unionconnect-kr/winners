@@ -9,7 +9,7 @@ function harness(savedEntries=[]){
  const saved=new Map(savedEntries),calls=[],messages=[];let response={data:[{id:'s1'}]},pending;
  const state={role:'storeOwner',myUsername:'owner1',store:'A',storeIdMap:{A:'s1',B:'s2'},storeOnboardingMap:{A:false,B:false},storeLocationMap:{},storeCutoffMap:{A:6},storeLaborLimitMap:{A:22},storeFoodLimitMap:{A:40},storeManagerDashboardMap:{},ownerSetupDraft:{},onboardingStep:'location',vendors:[],fixedExpenses:[],items:{},reportDataFailed:new Set(),myStores:['A','B']};
  const q={update(p){calls.push(['update',p]);return this;},insert(p){calls.push(['insert',p]);return this;},eq(...p){calls.push(['eq',...p]);return this;},select(){return pending?new Promise(r=>pending.resolve=r):Promise.resolve(response);}};
- const c={state,localGet:k=>saved.has(k)?{value:saved.get(k)}:null,localSet:(k,v)=>saved.set(k,String(v)),currentStoreId:()=>state.storeIdMap[state.store],canManageBusinessData:()=>true,render(){},showToast:m=>messages.push(m),escapeHtml:s=>String(s??'').replace(/[&<>"']/g,'_'),monthKey:()=> '2026-09',storeCutoffHour:()=>6,laborRatioLimit:()=>22,foodRatioLimit:()=>40,managerDashboardEnabled:()=>false,expenseCategoryLabel:x=>x||'',vendorCategoryOptions:()=>'<option value="food">식자재</option>',vendorCategoryValid:v=>v==='food',db:{from:t=>{calls.push(['from',t]);return q},rpc:async()=>({data:{ok:true}})}};
+ const c={state,localGet:k=>saved.has(k)?{value:saved.get(k)}:null,localSet:(k,v)=>saved.set(k,String(v)),currentStoreId:()=>state.storeIdMap[state.store],canManageBusinessData:()=>true,render(){},showToast:m=>messages.push(m),staffErrorMessage:e=>e.message||'위치 권한을 확인해 주세요.',staffCoordinates:async()=>({current_lat:37.5,current_lng:127}),escapeHtml:s=>String(s??'').replace(/[&<>"']/g,'_'),monthKey:()=> '2026-09',storeCutoffHour:()=>6,laborRatioLimit:()=>22,foodRatioLimit:()=>40,managerDashboardEnabled:()=>false,expenseCategoryLabel:x=>x||'',vendorCategoryOptions:()=>'<option value="food">식자재</option>',vendorCategoryValid:v=>v==='food',db:{from:t=>{calls.push(['from',t]);return q},rpc:async()=>({data:{ok:true}})}};
  c.loadAllForStore=async()=>{};c.switchOwnerStore=async store=>{state.store=store;};
  vm.createContext(c);vm.runInContext(checked+'\n'+block+'\n'+html.match(/^  async function becomeStoreOwner\([^\n]*\n[\s\S]*?^  }/m)[0],c);
  return {c,state,calls,messages,saved,setResponse:r=>response=r,defer:()=>pending={},resolve:r=>pending.resolve(r)};
@@ -106,4 +106,25 @@ test('resume targets selected home store and ignores a changed owner during the 
  h.c.pauseOwnerSetup();h.state.store='A';h.state.homeStore='B';
  h.c.switchOwnerStore=async store=>{h.state.store=store;h.state.myUsername='owner2';};
  await h.c.resumeOwnerSetup();assert.equal(h.state.onboardingStep,null);h.state.myUsername='owner1';assert.equal(h.c.ownerSetupProgress().paused,true);
+});
+
+test('location registration stays pending until server confirmation, uses returned coordinates and ignores repeated taps',async()=>{
+ const h=harness();h.defer();const task=h.c.saveOwnerSetupLocation();await new Promise(r=>setImmediate(r));
+ assert.match(h.c.renderOnboardingWizard(),/위치 등록 중/);assert.match(h.c.ownerSetupLocationFeedback(),/저장하는 중/);
+ await h.c.saveOwnerSetupLocation();assert.equal(h.calls.filter(c=>c[0]==='update').length,1);
+ h.resolve({data:[{id:'s1',lat:37.500001,lng:127.000002}]});await task;
+ assert.equal(h.state.storeLocationMap.A.lat,37.500001);assert.match(h.c.renderOnboardingWizard(),/현재 위치로 저장했어요/);
+ h.state.store='B';assert.equal(h.c.ownerSetupLocationFeedback(),'');
+});
+test('failed/empty/invalid location response keeps previous location and shows retry feedback',async()=>{
+ for(const response of [{error:Error('offline')},{data:[]},{data:[{id:'s1'}]},{data:[{id:'s2',lat:37,lng:127}]}]){
+  const h=harness();h.state.storeLocationMap.A={lat:35,lng:126};h.setResponse(response);await h.c.saveOwnerSetupLocation();
+  assert.equal(h.state.storeLocationMap.A.lat,35);assert.doesNotMatch(h.c.ownerSetupLocationFeedback(),/저장했어요/);assert.ok(h.messages.length);
+ }
+});
+test('location refusal never writes; delayed location result cannot save to a different store',async()=>{
+ const h=harness();h.c.staffCoordinates=async()=>{throw Error('정확한 위치를 허용해 주세요.');};await h.c.saveOwnerSetupLocation();
+ assert.equal(h.calls.length,0);assert.match(h.c.ownerSetupLocationFeedback(),/정확한 위치/);
+ let resolve;h.c.staffCoordinates=()=>new Promise(r=>resolve=r);const task=h.c.saveOwnerSetupLocation();h.state.store='B';resolve({current_lat:37,current_lng:127});await task;
+ assert.equal(h.calls.length,0);assert.equal(h.c.ownerSetupLocationFeedback(),'');
 });
