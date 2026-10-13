@@ -147,3 +147,21 @@ unfinished; no additional phone reinstall is needed for this infrastructure work
   restores any owned matching product, so it cannot yet sell that same product
   separately to another store. Do not activate checkout or represent the
   internal setup bundle as the completed public paid app.
+
+### Upload key and local build outcome
+
+- Generated a dedicated 3072-bit RSA upload key (alias `manee-upload`, PKCS12,
+  10,000-day certificate). It is not the Google-managed app-signing key.
+- Saved the private recovery archive as `MANEE_PRIVATE_upload-signing-backup.zip`
+  (Library id `libfile_377c725907dc819185237b5f3fb80f5a`). It contains the key,
+  passwords and public certificate and must remain company-private. No secret
+  values or private key files were committed to Git.
+- 41 mobile tests passed, including the real production web build and three new
+  guard tests. Production native sync and signing-input checks succeeded.
+- The local Gradle bundle build stopped because Google Maven was unreachable for
+  `com.android.billingclient:billing:9.1.0`; no signed AAB was generated.
+- The prepared GitHub internal-bundle workflow still needs its secure values
+  configured. GitHub connector tools in this session do not offer secret writes.
+  No public rollout, Play upload, subscription activation or checkout occurred.
+- Production cron has now executed successfully on consecutive minutes. This
+  does not change the unverified Google OAuth/FCM or handset-delivery status.
