@@ -4,7 +4,7 @@
 
 ## 빌드
 
-Node 22 이상, JDK 21, Android SDK Platform 36 및 Build Tools 36.0.0이 필요합니다.
+Node 22 이상, JDK 21, Android SDK Platform 36 및 Build Tools 35.0.0/36.0.0이 필요합니다.
 
 ```sh
 cd mobile
@@ -28,7 +28,7 @@ node scripts/verify-android-apk.mjs android/app/build/outputs/apk/debug/app-debu
 | AI·영수증 자동 인식 | staging API 미구성으로 사용 중단 안내 |
 | 음성 입력 | 사용 중단 안내, 마이크 권한 없음 |
 | 푸시·구독 결제 | 미구현; APNs/StoreKit/Firebase 푸시 플러그인 미포함 |
-| PDF·엑셀 내보내기 | 기존 브라우저 다운로드 방식, Android 저장 동작 미검증 |
+| PDF·엑셀 내보내기 | Android 시스템 저장 위치 선택창 사용; 실제 기기 최종 확인 필요 |
 
 백그라운드 위치·연락처·기기 캘린더·마이크·전체 사진 저장소 접근 권한을 요청하지 않습니다. 앱 안에서 직접 입력하는 직원 연락처와 근무표 데이터는 기기 주소록/캘린더 권한과 별개입니다. 자동 백업 및 HTTP 평문 통신을 비활성화했습니다.
 
@@ -41,3 +41,13 @@ node scripts/verify-android-apk.mjs android/app/build/outputs/apk/debug/app-debu
 5. 키보드, 시스템 뒤로가기, 화면 가장자리, PDF/엑셀 내보내기를 확인합니다.
 
 운영 출시 전에는 미지원 기능의 범위를 결정하고 Google Play Billing/FCM, release 서명 및 AAB 배포를 별도 구성해야 합니다. 실제 출시 기능과 SDK의 데이터 전송을 다시 조사한 뒤 Play 데이터 보안 설문을 최종 제출합니다. 현재 임시 저장된 15개 항목을 이 테스트 APK의 확정 신고로 간주하지 않습니다.
+
+## 테스트 업데이트 1.1 (versionCode 2)
+
+월간 보고서 및 과거 마감 보고서의 PDF·엑셀 파일을 Android `ACTION_CREATE_DOCUMENT`로 저장합니다. 생성 중·저장 완료·취소·실패 상태가 표시되며, 중복 터치로 저장 창이 여러 개 열리지 않습니다. 엑셀은 PDF 엔진·글꼴 로딩에 의존하지 않습니다.
+
+월 마감 확인과 마감 기록을 별도 카드로 정리하고 앱 스타일의 버튼·체크박스를 적용했습니다. 금액 집계와 마감 허용 조건은 유지됩니다.
+
+내부 임시 파일은 앱 캐시에 준비한 뒤 사용자가 선택한 문서에 기록하며 취소·완료·실패 시 제거합니다. 대용량 base64 데이터를 Activity 상태에 넣지 않습니다. 새 저장소 권한은 요청하지 않습니다.
+
+검증: 내보내기 동작 테스트 5개 및 바이너리 전달 테스트 1개, 기존 보고서·비용·알림 관련 테스트, staging 보고서의 PDF 생성과 엑셀 6개 시트 금액 확인, Android 컴파일·서명·패키지 검사를 수행합니다. Android 실기기 저장창 확인은 설치 후 필요합니다. 로컬 브라우저 캡처는 실행 환경의 소켓 권한 제한으로 수행하지 못했습니다.
