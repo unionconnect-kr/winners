@@ -34,9 +34,9 @@ long background-session and missing historical-backup checks. These are not pass
    binding, server-side acknowledgement, renewal/refund processing, and entitlement
    enforcement. The Firebase FCM private key is not an Android upload signing key
    and does not itself prove Play Developer API permissions.
-2. Connect the production FCM server identity, deploy the push registration/delivery
-   functions and required database migrations, and enable production delivery only
-   after those connections are verified. Client registration is now complete (below).
+2. Verify the production FCM credential, configure the production enable flag,
+   and then enable/verify the scheduler. Push functions and required database
+   migrations are deployed; client registration is complete (updates below).
 3. Release signing key and production AAB pipeline. Existing release guards remain
    in force while release prerequisites are missing.
 4. Create subscription base plan and one-calendar-month trial after first eligible
@@ -91,3 +91,30 @@ native compilation, APK verification and artifact upload all passed.
 Release build guards remain enabled. APK 1.12 remains the last user-delivered test
 build. Production signing, billing integration, subscriptions and review remain
 unfinished; no additional phone reinstall is needed for this infrastructure work.
+## Production push infrastructure — 2026-10-14 KST
+
+- The user reports saving
+  the dedicated FCM JSON in `MANEE_ANDROID_FCM_SERVICE_ACCOUNT`. The secret value
+  has not been retrieved, and successful Google OAuth/FCM authorization is not yet
+  verified.
+- Applied the five Android push migrations to production, followed by
+  `android_push_scheduler_project_routing`. Stored the production destination in
+  Vault as `manee_android_project_url`. The dispatch credential remains in Vault.
+- Deployed `manee-android-push` and `manee-android-delivery` version 1. Both perform
+  custom authentication: the former validates live owner sessions; the latter
+  checks the separate scheduler credential through a service-only database RPC.
+  No temporary diagnostic function was deployed: automatic approval review
+  rejected that approach and the regular release functions were used instead.
+- Verified production has zero registered Android devices and zero queued
+  deliveries; the scheduler is disabled. Both private tables have RLS and deny
+  direct client access. Anonymous registration and authenticated-user delivery
+  claims are denied; service-role claims remain available to the worker.
+- Live unauthenticated checks: push returns 503 `push_not_ready` while gated;
+  delivery returns 401 `unauthorized`. The production enable secret still needs
+  to be configured/verified before enabling the scheduler. No production push
+  has been sent, and no new APK/AAB has been delivered.
+- Validation: 20 existing Android push tests passed; an additional executed SQL
+  test checks staging/production routing, unknown URL rejection before side
+  effects, and scheduler execution grants. Security advisors report the two
+  deliberately RPC-only private tables as INFO (RLS without policies), plus
+  unrelated existing function/password-protection warnings.
