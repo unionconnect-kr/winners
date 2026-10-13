@@ -19,7 +19,9 @@ const permissions = run('aapt', ['dump', 'permissions', apk]);
 assert.match(permissions, /android\.permission\.ACCESS_FINE_LOCATION/);
 assert.match(permissions, /android\.permission\.ACCESS_COARSE_LOCATION/);
 assert.match(permissions, /android\.permission\.POST_NOTIFICATIONS/);
-assert.doesNotMatch(permissions, /RECORD_AUDIO|READ_CONTACTS|READ_CALENDAR|WRITE_CALENDAR|ACCESS_BACKGROUND_LOCATION|READ_MEDIA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|AD_ID|BILLING/);
+// Play Billing is an explicit release-preparation dependency; verify that it is packaged.
+assert.match(permissions, /com\.android\.vending\.BILLING/);
+assert.doesNotMatch(permissions, /RECORD_AUDIO|READ_CONTACTS|READ_CALENDAR|WRITE_CALENDAR|ACCESS_BACKGROUND_LOCATION|READ_MEDIA|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|AD_ID/);
 const manifest = run('aapt', ['dump', 'xmltree', apk, 'AndroidManifest.xml']);
 assert.match(manifest, /android:allowBackup[^\n]*=\(type 0x12\)0x0/);
 assert.match(manifest, /android:usesCleartextTraffic[^\n]*=\(type 0x12\)0x0/);
@@ -34,5 +36,5 @@ const plugins = JSON.parse(unpack('assets/capacitor.plugins.json'));
 assert.deepEqual(plugins.map(p => p.pkg), ['@capacitor/geolocation', '@capacitor/push-notifications']);
 assert.doesNotMatch(unpack('assets/public/native.js'), /ManeeStoreKit|ios-push|ios-billing/);
 run('apksigner', ['verify', '--verbose', apk]);
-console.log('Verified signed staging APK: Android 7+, target API 36, staging backend, foreground location, FCM opt-in support, no billing/audio/contact/calendar permissions.');
+console.log('Verified signed staging APK: Android 7+, target API 36, staging backend, foreground location, FCM opt-in support, Play Billing transport, no audio/contact/calendar permissions.');
 console.log(permissions.trim());
