@@ -8,7 +8,6 @@ const mobile = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = resolve(mobile, '..');
 const environment = process.argv[2];
 const platform = process.argv[3] || 'ios';
-const androidPushProjectId = platform === 'android' ? androidFirebaseProject(resolve(mobile, 'android/app/google-services.json')) : null;
 if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported native platform.');
 if (platform === 'android' && environment !== 'staging') {
   throw new Error('Android currently supports staging test builds only.');
@@ -16,6 +15,7 @@ if (platform === 'android' && environment !== 'staging') {
 if (!['staging', 'production'].includes(environment)) {
   throw new Error('Specify staging or production explicitly.');
 }
+const androidPushProjectId = platform === 'android' ? androidFirebaseProject(resolve(mobile, 'android/app/google-services.json'), environment) : null;
 const environments = JSON.parse(readFileSync(resolve(root, 'config/environments.json'), 'utf8'));
 const config = environments[environment];
 if (config.environment !== environment || !/^[a-z]{20}$/.test(config.projectRef) ||

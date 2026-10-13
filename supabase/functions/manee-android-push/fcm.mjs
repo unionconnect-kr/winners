@@ -10,7 +10,9 @@ export function firebaseCredentials(raw) {
     return { project: c.project_id, email: c.client_email, key };
   } catch { return null; }
 }
-export function createFcmSender(credentials, fetcher = fetch) {
+export function createFcmSender(credentials, fetcher = fetch, packageName = 'kr.co.manee.app.staging') {
+  if (!['kr.co.manee.app.staging', 'kr.co.manee.app'].includes(packageName)) throw Error('invalid_package');
+  if (packageName === 'kr.co.manee.app' && credentials?.project !== 'manee-production-3eafa') throw Error('invalid_project');
   let cached;
   async function accessToken() {
     const now = Math.floor(Date.now() / 1000);
@@ -40,14 +42,14 @@ export function createFcmSender(credentials, fetcher = fetch) {
       monthly_costs: ['매니 · 월말 비용 확인', '월말 보고서 비용 확인이 필요해요. 앱에서 확인해 주세요.'],
     };
     if (event && (!Object.hasOwn(messages,event.kind) || !/^[0-9a-f-]{36}$/.test(event.id || '') || !Number.isFinite(event.ttl) || event.ttl<1)) throw Error('invalid_event');
-    const [title,body]=event?messages[event.kind]:['매니 테스트','안드로이드 알림이 연결됐어요.'];
+    const [title,body]=event?messages[event.kind]:[packageName === 'kr.co.manee.app' ? '매니 · 알림 연결' : '매니 테스트','안드로이드 알림이 연결됐어요.'];
     const access = await accessToken();
     const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${credentials.project}/messages:send`, {
       method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8000),
       body: JSON.stringify({ message: { token, notification: { title, body },
         data: { storeId, kind: event?.kind || 'test', ...(event?{eventId:event.id}:{}),
           ...(/^\d{4}-(0[1-9]|1[0-2])$/.test(event?.monthKey||'')?{monthKey:event.monthKey}:{}),
-          ...(/^\d{4}-\d{2}-\d{2}$/.test(event?.eventDate||'')?{eventDate:event.eventDate}:{}) }, android: { priority: 'high', ttl: event?`${Math.min(7200,Math.floor(event.ttl))}s`:'60s', restricted_package_name: 'kr.co.manee.app.staging',
+          ...(/^\d{4}-\d{2}-\d{2}$/.test(event?.eventDate||'')?{eventDate:event.eventDate}:{}) }, android: { priority: 'high', ttl: event?`${Math.min(7200,Math.floor(event.ttl))}s`:'60s', restricted_package_name: packageName,
           notification: { channel_id: 'manee_store', icon: 'ic_notification', sound: 'default', visibility: 'PRIVATE', ...(event?{tag:event.id}:{}) } } } }),
     });
     const result = await response.json();

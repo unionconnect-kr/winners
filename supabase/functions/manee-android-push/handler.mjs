@@ -1,5 +1,5 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function createHandler({ client, credentials, send, staging }) {
+export function createHandler({ client, credentials, send, deployment }) {
   return async req => {
     const origin = req.headers.get('origin');
     const allowed = !origin || origin === 'https://localhost';
@@ -10,7 +10,7 @@ export function createHandler({ client, credentials, send, staging }) {
     if (!allowed) return reply(403, { error: 'origin_denied' });
     if (req.method === 'OPTIONS') return reply(200, {});
     if (req.method !== 'POST') return reply(405, { error: 'method_not_allowed' });
-    if (!staging) return reply(503, { error: 'staging_only' });
+    if (!deployment) return reply(503, { error: 'push_not_ready' });
     try {
       const bearer = req.headers.get('authorization');
       if (!/^Bearer [A-Za-z0-9._-]+$/.test(bearer || '')) return reply(401, { error: 'authentication_required' });
@@ -23,7 +23,7 @@ export function createHandler({ client, credentials, send, staging }) {
       if (error || !auth?.user) return reply(401, { error: 'authentication_required' });
       const context = await user.rpc('manee_android_push_context', { p_store_id: body.storeId });
       if (context.error || context.data !== true) return reply(403, { error: 'owner_access_denied' });
-      const ready = !!credentials && body.projectId === credentials.project;
+      const ready = !!credentials && !!send && credentials.project === deployment.projectId && body.projectId === deployment.projectId;
       if (body.action === 'status' || !ready) return reply(200, { ready, projectId: ready ? credentials.project : null });
       const target = await user.rpc('manee_android_push_test_target', { p_store_id: body.storeId });
       if (target.error || typeof target.data !== 'string') return reply(429, { error: 'test_unavailable' });

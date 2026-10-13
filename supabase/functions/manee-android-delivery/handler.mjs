@@ -1,12 +1,12 @@
 // No caller-supplied recipients/content. The DB verifies the scheduler bearer
 // before claiming committed events, then rechecks current device access.
-export function createDeliveryHandler({staging,credentials,client,send,now=Date.now}) {
+export function createDeliveryHandler({deployment,credentials,client,send,now=Date.now}) {
  return async request=>{
   const reply=(status,body)=>Response.json(body,{status});
   if(request.method!=='POST')return reply(405,{error:'method_not_allowed'});
   const token=/^Bearer ([a-f0-9]{64})$/.exec(request.headers.get('authorization')||'')?.[1];
   if(!token)return reply(401,{error:'unauthorized'});
-  if(!staging||credentials?.project!=='manee-staging'||!send)return reply(503,{error:'delivery_unavailable'});
+  if(!deployment||credentials?.project!==deployment.projectId||!send)return reply(503,{error:'delivery_unavailable'});
   try {
    const {data:jobs,error}=await client.rpc('manee_claim_android_deliveries',{p_dispatch_token:token});
    if(error)return reply(error.code==='42501'?403:503,{error:'claim_failed'});

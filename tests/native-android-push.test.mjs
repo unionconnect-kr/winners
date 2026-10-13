@@ -38,7 +38,7 @@ function harness(options={}){
   calls.push([name,args]);
   return {data:name==='manee_android_push_test_target'?'OnlySelf:0123456789_AbCd':!options.denied,error:options.limited&&name==='manee_android_push_test_target'?{}:null};
  }};
- const handler=createHandler({staging:options.production!==true,credentials:options.unconfigured?null:credentials,client:()=>user,send:async(token,sid)=>{calls.push(['send',token,sid]);return {sent:true};}});
+ const handler=createHandler({deployment:options.production?null:{projectId:'manee-test'},credentials:options.unconfigured?null:credentials,client:()=>user,send:async(token,sid)=>{calls.push(['send',token,sid]);return {sent:true};}});
  const req=(body={},headers={})=>new Request('https://test.invalid',{method:'POST',headers:{authorization:'Bearer valid.jwt',...headers},body:JSON.stringify({action:'status',storeId,projectId:'manee-test',...body})});
  return {handler,calls,req};
 }

@@ -104,13 +104,13 @@ test('HTTP worker rejects arbitrary callers and never trusts request recipients 
  const client={rpc:async(name,args)=>{calls.push([name,args]);return name==='manee_claim_android_deliveries'?
   allowed?{data:[{id:id(30),lease_id:id(31),token:device,store_id:store,kind:'report_closed',expires_at:new Date(Date.now()+60000).toISOString()}]}:{error:{code:'42501'}}:{};}};
  const send=async(...args)=>{calls.push(['send',...args]);return {sent:true};};
- const handler=createDeliveryHandler({staging:true,credentials:{project:'manee-staging'},client,send});
+ const handler=createDeliveryHandler({deployment:{projectId:'manee-staging'},credentials:{project:'manee-staging'},client,send});
  const req=token=>new Request('https://example.invalid',{method:'POST',headers:{authorization:token||''},body:JSON.stringify({token:'attacker',title:'attacker'})});
  assert.equal((await handler(req('Bearer jwt'))).status,401);assert.equal(calls.length,0);
  assert.equal((await handler(req('Bearer '+bearer))).status,403);assert.equal(calls.some(c=>c[0]==='send'),false);
  allowed=true;const response=await handler(req('Bearer '+bearer));assert.equal(response.status,200);
  assert.equal((await response.json()).sent,1);assert.equal(calls.find(c=>c[0]==='send')[1],device);
- const production=createDeliveryHandler({staging:false,credentials:{project:'manee-staging'},client,send});
+ const production=createDeliveryHandler({deployment:null,credentials:{project:'manee-staging'},client,send});
  assert.equal((await production(req('Bearer '+bearer))).status,503);
 });
 

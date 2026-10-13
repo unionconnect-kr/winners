@@ -34,8 +34,9 @@ long background-session and missing historical-backup checks. These are not pass
    binding, server-side acknowledgement, renewal/refund processing, and entitlement
    enforcement. The Firebase FCM private key is not an Android upload signing key
    and does not itself prove Play Developer API permissions.
-2. Production Android Firebase app/config and production push registration/delivery.
-   Existing Firebase client/backend is explicitly for `kr.co.manee.app.staging`.
+2. Connect the production FCM server identity, deploy the push registration/delivery
+   functions and required database migrations, and enable production delivery only
+   after those connections are verified. Client registration is now complete (below).
 3. Release signing key and production AAB pipeline. Existing release guards remain
    in force while release prerequisites are missing.
 4. Create subscription base plan and one-calendar-month trial after first eligible
@@ -57,3 +58,36 @@ verification failed because the former test-app checker prohibited BILLING. The
 checker now explicitly requires Google's Billing permission while retaining all
 other permission restrictions and staging isolation. A follow-up run verifies
 the complete package; this is not a store purchase or production release test.
+
+Follow-up run `38431273854` completed successfully: regression/concurrency job,
+native compilation, APK verification and artifact upload all passed.
+
+## Production Firebase preparation — 2026-10-14
+
+- Company account `union71388@gmail.com` was explicitly approved and verified in
+  Firebase. It initially had only `manee-staging`.
+- Created `manee-production`, project ID `manee-production-3eafa`, on the Spark
+  (free) plan. Optional Gemini, Analytics and Developer Program enrollment were
+  not selected.
+- Registered Android package `kr.co.manee.app`, nickname `매니 Android 정식`.
+- Downloaded and validated its client configuration. No private server key was
+  generated, no IAM permission granted, and no production notification sent.
+- Client configuration validator now pins project **and** package per environment.
+  Production requires a configuration; staging may still build without FCM.
+- Server push and scheduled-delivery code now select their project and package
+  from the server deployment. Production additionally requires
+  `MANEE_ANDROID_PRODUCTION_PUSH_ENABLED=true`. A staging credential cannot be
+  used against the production backend, or vice versa. This code is not deployed.
+- Google Cloud's linked service-account page displayed `Site Unavailable / Unable
+  to access this site`, including after one reload. This is a current browser
+  access failure, not evidence of an account ban or global Google outage.
+- Dedicated least-privilege production FCM and Play API identities are still
+  required; do not substitute the broadly privileged Firebase Admin SDK account
+  merely because the IAM screen is inaccessible.
+- Validation: 24 focused push/config/database tests and all 37 mobile tests passed
+  (4 config tests overlap). Nine new tests cover environment isolation and the
+  production payload. This is **not** proof of a live production push or purchase.
+
+Release build guards remain enabled. APK 1.12 remains the last user-delivered test
+build. Production signing, billing integration, subscriptions and review remain
+unfinished; no additional phone reinstall is needed for this infrastructure work.
