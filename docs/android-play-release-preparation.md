@@ -183,3 +183,28 @@ activation or public rollout has occurred. Multi-store billing and live Google
 FCM authorization/delivery remain unverified.
 
 Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
+
+## Play Console and billing status endpoint — 2026-10-14 KST
+
+- User uploaded internal setup AAB code 13, version 1.12. Internal rollout is not
+  confirmed. Product `manee.store1.monthly`, base plan `monthly`, KRW 9,900/month
+  and `trial-1month` (one month, first app subscription only) are activated per
+  user confirmation. Internal/ license tester list contains one account.
+- Dedicated identity `manee-play-billing@manee-production-3eafa.iam.gserviceaccount.com`
+  was created and invited for the MANEE app. Screenshot shows four permissions,
+  but their exact detail is not visible. User reports saving its JSON as
+  `MANEE_GOOGLE_PLAY_SERVICE_ACCOUNT` in production Edge secrets. No secret value
+  has been read or printed. API enablement was instructed, not independently verified.
+- Deployed `manee-android-billing` v1 with platform JWT verification plus live
+  session, current owner membership, banned-user and archived-store checks.
+  Status reads the fixed Play subscription and checks its active monthly Korean
+  base plan. Access is rechecked after Google returns. It never grants entitlement.
+- `prepare` and `verify` remain closed. The current app does not invoke this new
+  endpoint. Actual Google OAuth/Play permission success remains unverified because
+  no authorized owner session was used; anonymous HTTP requests return 401.
+- 25 focused endpoint, verification-core and client coordinator tests pass.
+  The Edge bundle uses an ESM copy of the CJS core, with an exact source parity
+  test (the deployment bundler rejected CJS imports before the successful deploy).
+- Still required: durable token/store binding, renewal/refund processing,
+  multi-store billing design and implementation, client wiring and real sandbox
+  purchase/restore tests. No checkout enablement or public rollout occurred.

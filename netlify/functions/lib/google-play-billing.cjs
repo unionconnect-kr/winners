@@ -45,6 +45,10 @@ function createGooglePlayApi({credentials,fetcher=fetch,now=Date.now}) {
   return method==='GET'?response.json():undefined;
  }
  return {
+  async product(productId){
+   if(!/^[a-z0-9][a-z0-9._]{0,149}$/.test(productId))throw Error('invalid_request');
+   return request('/subscriptions/'+encodeURIComponent(productId));
+  },
   async get(token){if(!validToken(token))throw Error('invalid_request');return request('/purchases/subscriptionsv2/tokens/'+encodeURIComponent(token));},
   async acknowledge(productId,token){
    if(!/^[a-z0-9][a-z0-9._]{0,149}$/.test(productId)||!validToken(token))throw Error('invalid_request');
