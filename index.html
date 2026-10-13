@@ -9272,10 +9272,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       }else{
         await loadReportModel();if(!alive())return;
         if(typeof XLSX==='undefined')throw Error('Excel unavailable');
-        const sheets=window.MANEE_REPORTS.excelRows(closing),wb=XLSX.utils.book_new();
-        for(const [key,name] of [['summary','월말 요약'],['sales','일별 매출'],['expenses','지출 상세'],['daily','날짜별 합계'],['vendors','거래처별 합계'],['fixed','고정비']]){
-          const ws=XLSX.utils.aoa_to_sheet(sheets[key]);styleWorksheet(ws,sheets[key]);XLSX.utils.book_append_sheet(wb,ws,name);
-        }
+        const wb=window.MANEE_REPORTS.excelWorkbook(closing,XLSX);
         bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';extension='xlsx';
       }
       if(!alive())return;phase='save';

@@ -17,7 +17,7 @@ function fixture() {
     db: { rpc: async (name, payload) => { calls.push({ name, payload }); return { data: snapshot }; } },
     loadReportAssets: async () => ({}), loadReportModel: async () => {}, styleWorksheet() {},
     window: {
-      MANEE_REPORTS: { pdfBytes: async () => new Uint8Array([37,80,68,70]), excelRows: () => ({}) },
+      MANEE_REPORTS: { pdfBytes: async () => new Uint8Array([37,80,68,70]), excelWorkbook: () => ({}) },
       MANEE_NATIVE: { saveFile: async file => { files.push(file); return { status: 'saved' }; } },
     },
     XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: () => ({}), book_append_sheet() {} }, write: () => new Uint8Array([80,75,3,4]).buffer },
