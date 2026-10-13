@@ -1,11 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, verify } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { createHandler } from '../supabase/functions/manee-android-push/handler.mjs';
 import { firebaseCredentials, createFcmSender } from '../supabase/functions/manee-android-push/fcm.mjs';
 const storeId='00000000-0000-4000-8000-000000000101';
 const raw=JSON.stringify({type:'service_account',project_id:'manee-test',client_email:'push@manee-test.iam.gserviceaccount.com',private_key:generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({format:'pem',type:'pkcs8'})});
 const credentials=firebaseCredentials(raw);
+test('business FCM content is fixed, expires, and uses a stable notification tag',async()=>{
+ let message;
+ const send=createFcmSender(credentials,async(url,request)=>{
+  if(url.includes('oauth2'))return Response.json({access_token:'fake',expires_in:3600});
+  message=JSON.parse(request.body).message;return Response.json({name:'projects/test/messages/2'});
+ });
+ await send('AbCdEF:0123456789_TestTOKEN',storeId,{id:storeId,kind:'reservation_created',ttl:100,title:'private customer'});
+ assert.equal(message.notification.title,'매니 · 예약 등록');assert.equal(message.android.ttl,'100s');
+ assert.equal(message.android.notification.tag,storeId);assert.equal(JSON.stringify(message).includes('private customer'),false);
+ await assert.rejects(()=>send('AbCdEF:0123456789_TestTOKEN',storeId,{id:storeId,kind:'unknown',ttl:10}));
+});
+test('FCM signing works without a Node global Buffer in the Edge runtime',()=>{
+ const script = `
+  import { generateKeyPairSync } from 'node:crypto';
+  import { firebaseCredentials, createFcmSender } from './supabase/functions/manee-android-push/fcm.mjs';
+  const private_key=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({format:'pem',type:'pkcs8'});
+  const c=firebaseCredentials(JSON.stringify({type:'service_account',project_id:'manee-test',client_email:'push@manee-test.iam.gserviceaccount.com',private_key}));
+  globalThis.Buffer=undefined;
+  let requests=0;
+  const send=createFcmSender(c,async url=>{requests++;return {ok:true,status:200,json:async()=>url.includes('oauth2')?{access_token:'fake',expires_in:3600}:{name:'projects/test/messages/1'}};});
+  const result=await send('AbCdEF:0123456789_TestTOKEN','00000000-0000-4000-8000-000000000101');
+  if(!result.sent||requests!==2)throw Error('Expected OAuth and FCM delivery');
+ `;
+ execFileSync(process.execPath,['--input-type=module','-e',script],{cwd:new URL('../',import.meta.url),stdio:'pipe'});
+});
 function harness(options={}){
  const calls=[];
  const user={auth:{getUser:async()=>({data:options.noAuth?null:{user:{id:'u1'}}})},rpc:async(name,args)=>{

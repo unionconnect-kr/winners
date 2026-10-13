@@ -41,7 +41,7 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.b
 replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>',
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
-  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role}));\n  // END MANEE_ENVIRONMENT');
+  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),openNativeNotification);\n  // END MANEE_ENVIRONMENT');
 replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? '테스트 앱 안내' : '아이폰 구독·알림'}<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
@@ -70,7 +70,7 @@ if (platform === 'android') {
   replaceOnce('  async function refreshPushSubStatus(){', pushAdapter+'  async function refreshPushSubStatus(){\n    return nativeAndroidPushAction("refresh");');
   replaceOnce('  async function subscribeToPush(){', '  async function subscribeToPush(){\n    return nativeAndroidPushAction("enable");');
   replaceOnce('  async function unsubscribeFromPush(){', '  async function unsubscribeFromPush(){\n    return nativeAndroidPushAction("disable");');
-  replaceOnce('출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.', '휴대폰 알림 연결을 확인해요. 현재는 테스트 알림을 준비 중이에요.');
+  replaceOnce('출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.', '출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.');
   // Let Capacitor inset the WebView below system bars and above the keyboard.
   replaceOnce('viewport-fit=cover', 'viewport-fit=contain');
   replaceOnce('  function startVoiceInput(){', '  function startVoiceInput(){\n    showToast("이 테스트 앱은 음성 입력을 지원하지 않아요. 키보드로 입력해 주세요."); return;');

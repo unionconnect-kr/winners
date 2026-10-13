@@ -123,3 +123,44 @@ test('closing a month routes the generated PDF feedback only to the closing card
   assert.equal(f.statuses.current.hidden,true);assert.equal(f.statuses.history.hidden,true);
   assert.equal(closeButton.textContent,'정정하고 새 버전 저장');
 });
+
+function closingFixture(){
+  const f=fixture(),messages=[],button={};
+  f.context.state.store='테스트 매장';
+  f.context.document.getElementById=id=>id==='month-close-confirm'?{checked:true}:id==='month-close-btn'?button:null;
+  f.context.crypto={randomUUID:()=> 'request-1'};
+  f.context.showToast=m=>messages.push(m);f.context.render=()=>{};
+  f.context.loadReportHistory=async()=>{f.context.state.reportHistory=[{id:'closing-1',month_key:'2026-10',revision:1}];};
+  return {...f,messages,button};
+}
+
+test('uncertain closing response retries with the same request id and blocks duplicate taps',async()=>{
+  const f=closingFixture(),requests=[];let finish;
+  const read=f.context.db.rpc;
+  f.context.db.rpc=(name,payload)=>{
+    if(name!=='manee_close_month')return read(name,payload);
+    requests.push(payload.p_request_id);
+    return requests.length===1?new Promise(resolve=>{finish=resolve;}):Promise.resolve({data:{id:'closing-1'}});
+  };
+  const pending=f.context.closeCurrentMonth();
+  await f.context.closeCurrentMonth();assert.equal(requests.length,1);
+  finish({error:{message:'connection lost'}});await pending;
+  assert.equal(f.context.state.closeRequest.id,'request-1');assert.equal(f.files.length,0);assert.equal(f.context.state.monthClosing,false);
+  await f.context.closeCurrentMonth();
+  assert.deepEqual(requests,['request-1','request-1']);assert.equal(f.context.state.closeRequest,null);assert.equal(f.files.length,1);
+});
+
+for(const outcome of ['cancelled','failed'])test('saved closing remains archived when the PDF save is '+outcome,async()=>{
+  const f=closingFixture(),read=f.context.db.rpc;
+  f.context.db.rpc=(name,payload)=>name==='manee_close_month'?Promise.resolve({data:{id:'closing-1'}}):read(name,payload);
+  f.context.window.MANEE_NATIVE.saveFile=async()=>{if(outcome==='failed')throw Error('disk full');return {status:'cancelled'};};
+  await f.context.closeCurrentMonth();
+  assert.equal(f.context.state.reportHistory[0].id,'closing-1');assert.equal(f.context.state.closeRequest,null);
+  assert.equal(f.context.state.monthClosing,false);assert.equal(f.context.state.reportDownloading,false);
+  assert.equal(f.statuses.closing.dataset.kind,outcome==='failed'?'error':'cancelled');
+  assert.ok(f.messages.every(m=>!m.includes('마감하지 못했어요')));
+  f.context.window.MANEE_NATIVE.saveFile=async file=>{f.files.push(file);return {status:'saved'};};
+  await f.context.downloadClosingReport('closing-1','pdf');
+  assert.equal(f.files.length,1);assert.equal(f.statuses.history.dataset.kind,'success');
+  assert.equal(f.calls.at(-1).name,'manee_closed_report');
+});

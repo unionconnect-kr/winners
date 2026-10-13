@@ -417,3 +417,7 @@ enabled = true
 # Auth is verified by getUser plus a live-session owner RPC inside the handler.
 [functions.manee-android-push]
 verify_jwt = false
+
+# Custom scheduler bearer verified against Vault by a service-only DB RPC.
+[functions.manee-android-delivery]
+verify_jwt = false

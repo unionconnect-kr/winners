@@ -14,9 +14,19 @@ function reservationHarness(result){
   const writes=[],messages=[];
   const context={state,Date,console,maneeViewEpoch:0,document:{getElementById:id=>controls[id]},currentStoreId:()=>state.storeIdMap[state.store],monthKey:()=> '2026-10',bizToday:()=> '2026-10-07',showToast:m=>messages.push(m),render(){},formatDateLabel:d=>d,sendReservationPush(){},loadDashboardReservations(){},
     db:{from(table){return {insert(payload){writes.push({table,payload});return {select(){return {single(){return Promise.resolve(typeof result==='function'?result(payload):(result||{data:{id:'r1',...payload},error:null}));}};}};}};}}};
-  vm.createContext(context);vm.runInContext(['businessContextGuard','setReservationBusy','isAttendanceDate','isValidTimeStr','addReservation'].map(fn).join('\n'),context);
+  vm.createContext(context);vm.runInContext(['businessContextGuard','setReservationBusy','isAttendanceDate','isValidTimeStr','reservationTime24','readReservationTime','addReservation'].map(fn).join('\n'),context);
   return {state,controls,writes,messages,context};
 }
+for(const [period,hour,minute,expected] of [['AM','12','00','00:00'],['PM','12','0','12:00'],['PM','7','5','19:05'],['AM','9','30','09:30']])test(`reservation keypad saves ${period} ${hour}:${minute} as ${expected}`,async()=>{
+ const h=reservationHarness();
+ for(const [key,value] of Object.entries({'res-hour-input':hour,'res-minute-input':minute,'res-period-input':period}))h.controls[key]={value,focus(){}};
+ await h.context.addReservation();assert.equal(h.writes[0].payload.time,expected);
+});
+for(const [hour,minute] of [['13','00'],['0','00'],['12','60'],['','30'],['2','']])test(`reservation keypad rejects incomplete/invalid ${hour}:${minute}`,async()=>{
+ const h=reservationHarness();
+ for(const [key,value] of Object.entries({'res-hour-input':hour,'res-minute-input':minute,'res-period-input':'PM'}))h.controls[key]={value,focus(){}};
+ await h.context.addReservation();assert.equal(h.writes.length,0);assert.match(h.messages[0],/예약 시간/);
+});
 test('reservation double tap starts one save and shows its pending state',async()=>{
   const d=deferred(),h=reservationHarness(d.promise),a=h.context.addReservation(),b=h.context.addReservation();
   assert.equal(h.writes.length,1);assert.equal(h.controls['add-reservation-btn'].disabled,true);assert.match(h.controls['add-reservation-btn'].textContent,/등록 중/);
@@ -27,6 +37,12 @@ for(const value of ['-2','0','1.5','2명','2147483648'])test('invalid reservatio
 });
 test('optional reservation fields remain optional',async()=>{
   const h=reservationHarness();h.controls['res-party-input'].value='';h.controls['res-time-input'].value='';await h.context.addReservation();assert.equal(h.writes[0].payload.party_size,null);assert.equal(h.writes[0].payload.time,'');assert.equal(h.state.reservations.length,1);
+});
+test('saving a future reservation updates the upcoming list and closes the completed form',async()=>{
+  const h=reservationHarness();h.controls['res-date-input'].value='2026-10-08';await h.context.addReservation();
+  assert.equal(h.state.reservations.length,0);assert.equal(h.state.upcomingReservations.length,1);
+  assert.equal(h.state.upcomingReservations[0].date,'2026-10-08');assert.equal(h.state.showReservationForm,false);
+  assert.match(h.messages[0],/2026-10-08 예약을 등록했어요/);
 });
 for(const date of ['2026-02-30','2026-10-06'])test('reservation rejects impossible or past date: '+date,async()=>{
   const h=reservationHarness();h.controls['res-date-input'].value=date;await h.context.addReservation();assert.equal(h.writes.length,0);assert.match(h.messages[0],/날짜/);
