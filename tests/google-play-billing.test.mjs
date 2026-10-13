@@ -51,3 +51,8 @@ test('failed persistence never acknowledges and already acknowledged purchases a
  api.get=async()=>resource({acknowledgementState:'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED'});
  await verifyAndPersist({api,context,purchaseToken:'token',now:()=>now,persist:async()=>true});assert.equal(acknowledgements,0);
 });
+test('slow verification retains its start timestamp for stale-write rejection',async()=>{
+ let time=now;let saved;
+ await verifyAndPersist({api:{get:async()=>{time+=30000;return resource();},acknowledge:async()=>{}},context,purchaseToken:'slow',now:()=>time,persist:async r=>{saved=r;return true;}});
+ assert.equal(saved.checkedAt,new Date(now).toISOString());
+});

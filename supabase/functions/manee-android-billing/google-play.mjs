@@ -79,8 +79,12 @@ function verifiedRecord(resource,{purchaseToken,accountId,profileId,productId,ba
 // reject a different owner/store, and supersede linked tokens. Never acknowledge
 // until this durable write succeeds. Every verification re-queries Google.
 async function verifyAndPersist({api,context,purchaseToken,persist,now=Date.now}) {
+ const started=now();
  const resource=await api.get(purchaseToken);
  const record=verifiedRecord(resource,{...context,purchaseToken},now());
+ // Order competing observations by request START, not network completion time.
+ // A slow earlier request must not overwrite a newer cancellation/hold lookup.
+ record.checkedAt=new Date(started).toISOString();
  if(resource.linkedPurchaseToken){
   if(!validToken(resource.linkedPurchaseToken)||resource.linkedPurchaseToken===purchaseToken)throw Error('purchase_mismatch');
   record.linkedPurchaseToken=resource.linkedPurchaseToken;

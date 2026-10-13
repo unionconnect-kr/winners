@@ -1,9 +1,10 @@
+import {createPurchaseVerifier} from './purchase.mjs';
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export const PRODUCT = 'manee.store1.monthly';
 export const BASE_PLAN = 'monthly';
 // Status is a real app endpoint, but checkout stays closed until durable purchase
 // storage, renewal processing and multi-store allocation are implemented.
-export function createHandler({client, api}) {
+export function createHandler({client, api, service=null, sandboxUsers=[]}) {
   return async req => {
     const origin = req.headers.get('origin');
     const allowed = !origin || origin === 'https://localhost';
@@ -21,7 +22,7 @@ export function createHandler({client, api}) {
       if (!/^Bearer [A-Za-z0-9._-]+$/.test(bearer || '')) return reply(401, {error:'authentication_required'});
       const raw = await req.text();
       let body;
-      try { if(raw.length > 2048) throw Error(); body = JSON.parse(raw); }
+      try { if(raw.length > 8192) throw Error(); body = JSON.parse(raw); }
       catch { return reply(400, {error:'invalid_request'}); }
       if (!body || !['status','prepare','verify'].includes(body.action) || !UUID.test(body.storeId || ''))
         return reply(400, {error:'invalid_request'});
@@ -33,6 +34,13 @@ export function createHandler({client, api}) {
       const authorize = () => user.rpc('manee_android_push_context', {p_store_id:body.storeId});
       const context = await authorize();
       if(context.error || context.data !== true) return reply(403, {error:'owner_access_denied'});
+      if(body.action === 'verify' && api && service && sandboxUsers.includes(auth.data.user.id)) {
+        const verify=createPurchaseVerifier({api,service,authorize:async()=>{
+          const current=await authorize();
+          if(current.error || current.data!==true) throw Error('owner_access_denied');
+        }});
+        return reply(200, await verify({userId:auth.data.user.id,storeId:body.storeId,purchaseToken:body.purchaseToken}));
+      }
       if(body.action !== 'status') return reply(503, {error:'billing_not_ready'});
       if(!api) return reply(200, {ready:false, catalogReady:false});
       const product = await api.product(PRODUCT);

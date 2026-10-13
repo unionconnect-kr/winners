@@ -208,3 +208,31 @@ Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
 - Still required: durable token/store binding, renewal/refund processing,
   multi-store billing design and implementation, client wiring and real sandbox
   purchase/restore tests. No checkout enablement or public rollout occurred.
+
+## Durable purchase binding — 2026-10-14 04:04 KST
+
+- Added `android_billing_purchase_binding` migration to staging and production.
+  Private rows bind each Google token to one owner/store/environment. Only the
+  service RPC writes; clients cannot read tokens or write purchase records.
+- Linked tokens are tombstoned atomically, including unseen predecessors. Late
+  restores and stale verification results cannot reactivate an old token.
+  Ownership/binding conflicts fail before acknowledgement. Owner membership,
+  profile status, account ban and archived store are checked at persistence time.
+- Google observation ordering now uses request start time, preventing a slow
+  old response from overwriting a newer cancellation. The informational owner
+  snapshot excludes superseded rows and expires freshness after 15 minutes.
+  It is not yet wired into application-wide entitlement enforcement.
+- Server v2 includes the sandbox-only persistence adapter, with owner checks
+  before verification, before persistence and before returning. Production
+  receipts are rejected before persistence/acknowledgement in this path.
+  Verification requires BOTH `MANEE_ANDROID_BILLING_SANDBOX_ENABLED=true` and
+  explicit owner UUIDs in `MANEE_ANDROID_BILLING_TEST_USERS`; neither was set.
+  `prepare`/checkout remain disabled for everyone.
+- 36 focused tests pass, including real local PostgreSQL-engine cases. Staging
+  and production rollback tests confirm RPC grants, writes, stale rejection and
+  linked replacement. All synthetic remote purchase rows were rolled back.
+  Advisors flag the deliberately private RPC-only table as RLS-without-policy
+  INFO; pre-existing unrelated warnings remain. No new exposed-definer warning.
+- Still not verified: real Google credentials/API permissions, phone purchase or
+  restore, multi-store purchase flow, renewal/refund event delivery. Automatic
+  lifecycle refresh and application entitlement enforcement remain unfinished.

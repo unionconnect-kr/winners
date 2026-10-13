@@ -12,6 +12,10 @@ try {
     api = googlePlay.createGooglePlayApi({credentials});
   }
 } catch { /* Missing or malformed credentials keep billing unavailable. */ }
-Deno.serve(createHandler({api, client:(authorization: string) => createClient(url, key, {
+const sandboxEnabled=Deno.env.get('MANEE_ANDROID_BILLING_SANDBOX_ENABLED')==='true';
+const sandboxUsers=sandboxEnabled ? (Deno.env.get('MANEE_ANDROID_BILLING_TEST_USERS') || '').split(',').map(s=>s.trim()).filter(s=>/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(s)) : [];
+const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const service=sandboxUsers.length && serviceKey ? createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}}) : null;
+Deno.serve(createHandler({api,service,sandboxUsers, client:(authorization: string) => createClient(url, key, {
   global:{headers:{Authorization:authorization}}, auth:{persistSession:false,autoRefreshToken:false},
 })}));

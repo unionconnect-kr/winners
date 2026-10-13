@@ -53,3 +53,14 @@ test('Edge deployment contains the same verification code as the tested server c
  const edge=await readFile(new URL('../supabase/functions/manee-android-billing/google-play.mjs',import.meta.url),'utf8');
  assert.equal(edge,source.replace("'use strict';\nconst {createHash,createPrivateKey,sign}=require('node:crypto');","// Generated from netlify/functions/lib/google-play-billing.cjs; keep parity test passing.\nimport {createHash,createPrivateKey,sign} from 'node:crypto';").replace('module.exports={PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};','export {PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};'));
 });
+test('only explicitly allowed owners can verify sandbox receipts through the endpoint',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';const ids=google.binding(userId,storeId);let saves=0,acks=0;
+ const resource={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async()=>({data:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
+ assert.equal((await createHandler(options)(req({action:'verify',storeId,purchaseToken:'test'}))).status,503);
+ assert.equal(saves,0);assert.equal(acks,0);
+ const handler=createHandler({...options,sandboxUsers:[userId]});
+ const response=await handler(req({action:'verify',storeId,purchaseToken:'test'}));assert.equal(response.status,200);assert.equal((await response.json()).testActive,true);assert.equal(acks,1);
+ delete resource.testPurchase;
+ assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'paid'}))).status,503);assert.equal(saves,1);assert.equal(acks,1);
+});
