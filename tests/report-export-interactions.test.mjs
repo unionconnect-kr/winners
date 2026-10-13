@@ -7,13 +7,16 @@ const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const fn = name => html.match(new RegExp('^  (?:async )?function '+name+'\\([^\\n]*\\n[\\s\\S]*?^  }', 'm'))[0];
 function fixture() {
   const snapshot = { snapshot: { store_name: '테스트/매장' }, month_key: '2026-10', status: 'provisional' };
-  const buttons = [{ setAttribute() {} }, { setAttribute() {} }], status = { dataset: {} }, calls = [], files = [];
+  const buttons = [{ setAttribute() {} }, { setAttribute() {} }], calls = [], files = [];
+  const statuses=Object.fromEntries(['current','closing','history'].map(area=>[area,{dataset:{reportExportStatus:area},hidden:true,textContent:''}]));
+  const status=statuses.current;
   let active = true;
   const context = vm.createContext({
     state: {}, setTimeout, clearTimeout, Blob, Uint8Array, ArrayBuffer,
     canManageBusinessData: () => true, currentStoreId: () => 's1', monthKey: () => '2026-10',
     reportActionGuard: () => () => active,
-    document: { querySelectorAll: s => s === '[data-report-export-status]' ? [status] : buttons, getElementById: () => null },
+    document: { querySelectorAll: s => s === '[data-report-export-status]' ? Object.values(statuses) : buttons, getElementById: () => null },
+    escapeHtml: s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
     db: { rpc: async (name, payload) => { calls.push({ name, payload }); return { data: snapshot }; } },
     loadReportAssets: async () => ({}), loadReportModel: async () => {}, styleWorksheet() {},
     window: {
@@ -22,8 +25,8 @@ function fixture() {
     },
     XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: () => ({}), book_append_sheet() {} }, write: () => new Uint8Array([80,75,3,4]).buffer },
   });
-  for (const name of ['downloadCurrentReport', 'downloadClosingReport', 'downloadReport', 'saveReportFile', 'reportDownloadName', 'setReportExportFeedback', 'syncReportExportButtons']) vm.runInContext(fn(name), context);
-  return { context, buttons, status, calls, files, expire: () => { active = false; } };
+  for (const name of ['downloadCurrentReport', 'downloadClosingReport', 'downloadReport', 'saveReportFile', 'reportDownloadName', 'setReportExportFeedback', 'syncReportExportButtons', 'renderReportExportStatus', 'closeCurrentMonth']) vm.runInContext(fn(name), context);
+  return { context, buttons, status, statuses, calls, files, expire: () => { active = false; } };
 }
 
 test('preview and historical PDF/Excel all await native save with real byte buffers and filenames', async () => {
@@ -35,7 +38,8 @@ test('preview and historical PDF/Excel all await native save with real byte buff
     assert.equal(f.files.length, 1);
     assert.equal(f.files[0].filename, '매니_테스트_매장_2026-10_잠정.' + (type === 'pdf' ? 'pdf' : 'xlsx'));
     assert.deepEqual([...new Uint8Array(f.files[0].bytes)], type === 'pdf' ? [37,80,68,70] : [80,75,3,4]);
-    assert.equal(f.status.dataset.kind, 'success');
+    assert.equal(f.statuses[closed?'history':'current'].dataset.kind, 'success');
+    assert.equal(Object.values(f.statuses).filter(s=>!s.hidden).length,1);
     assert.equal(f.context.state.reportDownloading, false);
     assert.ok(f.buttons.every(b => !b.disabled));
   }
@@ -82,4 +86,40 @@ test('Android missing a native plugin fails visibly instead of silently using bl
   await f.context.downloadCurrentReport('excel');
   assert.equal(f.status.dataset.kind, 'error');
   assert.equal(f.context.state.reportDownloading, false);
+});
+
+test('switching export areas clears old feedback and rerender never repeats it in closing', async () => {
+  const f=fixture();
+  for(const [area,result] of [['current','saved'],['history','cancelled'],['closing','saved']]){
+    let finish;
+    f.context.window.MANEE_NATIVE.saveFile=()=>new Promise(resolve=>{finish=resolve;});
+    const pending=area==='current'?f.context.downloadCurrentReport('excel'):f.context.downloadClosingReport('closed-1','pdf',area);
+    await new Promise(resolve=>setTimeout(resolve,5));
+    assert.equal(f.statuses[area].dataset.kind,'progress');
+    for(const [other,element] of Object.entries(f.statuses)){
+      assert.equal(element.hidden,other!==area);
+      if(other!==area)assert.equal(element.textContent,'');
+      assert.equal(f.context.renderReportExportStatus(other).includes(' hidden'),other!==area);
+    }
+    finish({status:result});await pending;
+    assert.equal(f.statuses[area].dataset.kind,result==='saved'?'success':'cancelled');
+    assert.equal(Object.values(f.statuses).filter(s=>!s.hidden).length,1);
+  }
+  f.context.monthKey=()=> '2026-11';
+  for(const area of Object.keys(f.statuses))assert.match(f.context.renderReportExportStatus(area),/ hidden/);
+});
+
+test('closing a month routes the generated PDF feedback only to the closing card', async () => {
+  const f=fixture(),closeButton={};
+  f.context.document.getElementById=id=>id==='month-close-confirm'?{checked:true}:id==='month-close-btn'?closeButton:null;
+  f.context.crypto={randomUUID:()=> 'request-1'};
+  f.context.showToast=()=>{};f.context.render=()=>{};
+  f.context.loadReportHistory=async()=>{f.context.state.reportHistory=[{month_key:'2026-10',revision:1}];};
+  const rpc=f.context.db.rpc;
+  f.context.db.rpc=async(name,payload)=>name==='manee_close_month'?{data:{id:'closing-1'}}:rpc(name,payload);
+  await f.context.closeCurrentMonth();
+  assert.equal(f.files.length,1);
+  assert.equal(f.statuses.closing.dataset.kind,'success');
+  assert.equal(f.statuses.current.hidden,true);assert.equal(f.statuses.history.hidden,true);
+  assert.equal(closeButton.textContent,'정정하고 새 버전 저장');
 });

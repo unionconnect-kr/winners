@@ -9176,7 +9176,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const key=monthKey(),rows=state.reportHistory||[],current=rows.filter(r=>r.month_key===key),esc=escapeHtml;
     let html='<section class="day-panel report-closing" aria-labelledby="report-closing-title"><div class="report-card-heading"><h3 id="report-closing-title">'+state.monthNum+'월 마감</h3><span class="report-badge">'+(current.length?'마감 버전 '+esc(current[0].revision):'마감 전')+'</span></div><p class="report-description">한 달 내역을 확정해 보관해요. PDF와 엑셀은 같은 마감 내역으로 저장돼요.</p>';
     if(canManageBusinessData())html+='<label class="report-confirm"><input type="checkbox" id="month-close-confirm"><span><strong>이번 달 내역을 모두 확인했어요</strong><small>매출·세후급여·보험료·원천세·지출·고정비를 확인하고, 같은 비용을 중복 입력하지 않았어요.</small></span></label>'+(current.length?'<label class="field-label" for="month-close-reason">정정 이유<input type="text" class="field-input" id="month-close-reason" maxlength="1000" minlength="5" placeholder="변경한 내용을 5자 이상 적어 주세요"></label>':'')+'<button type="button" class="report-button report-button-primary report-close-button" id="month-close-btn"'+(state.monthClosing||state.reportDownloading?' disabled':'')+'>'+(state.monthClosing?'마감하는 중…':current.length?'정정하고 새 버전 저장':'마감하고 PDF 저장')+'</button>';
-    html+=renderReportExportStatus()+'<details class="report-help"><summary>마감 전에 확인해 주세요</summary><p>월말부터 마감할 수 있어요. 영업일의 매출보고와 직원의 실제 세후급여가 모두 입력되어야 해요. 매장 휴무일도 확인해 주세요.</p><p>입력된 지출 기준 예상 수익이며, 실제 순이익과 차이가 날 수 있어요.</p></details></section><section class="day-panel report-history" aria-labelledby="report-history-title"><div class="report-card-heading"><h3 id="report-history-title">마감한 보고서</h3><button type="button" class="report-refresh" id="report-history-retry"'+(state.reportHistoryLoading?' disabled':'')+' aria-label="마감 기록 새로고침">새로고침</button></div>';
+    html+=renderReportExportStatus('closing')+'<details class="report-help"><summary>마감 전에 확인해 주세요</summary><p>월말부터 마감할 수 있어요. 영업일의 매출보고와 직원의 실제 세후급여가 모두 입력되어야 해요. 매장 휴무일도 확인해 주세요.</p><p>입력된 지출 기준 예상 수익이며, 실제 순이익과 차이가 날 수 있어요.</p></details></section><section class="day-panel report-history" aria-labelledby="report-history-title"><div class="report-card-heading"><h3 id="report-history-title">마감한 보고서</h3><button type="button" class="report-refresh" id="report-history-retry"'+(state.reportHistoryLoading?' disabled':'')+' aria-label="마감 기록 새로고침">새로고침</button></div>';
+    html+=renderReportExportStatus('history');
     if(state.reportHistoryFailed)html+='<p class="report-empty" role="alert">마감 기록을 불러오지 못했어요.<br>새로고침을 눌러 다시 확인해 주세요.</p>';
     else if(state.reportHistoryLoading)html+='<p class="report-empty" role="status">마감 기록을 불러오고 있어요.</p>';
     else if(!rows.length)html+='<div class="report-empty"><strong>아직 마감한 보고서가 없어요</strong><p>월 마감을 완료하면 여기에 보관돼요.</p></div>';
@@ -9197,7 +9198,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     state.monthClosing=true;syncReportExportButtons();document.getElementById('month-close-btn').textContent='마감하는 중…';
     try{const r=await db.rpc('manee_close_month',{p_store_id:sid,p_month_key:key,p_request_id:request,p_amendment_reason:reason});
       if(!alive())return;if(r.error||!r.data?.id)throw Error(r.error?.message||'Closing failed');
-      state.closeRequest=null;await loadReportHistory(state.store);if(!alive())return;render();showToast('마감 버전을 저장했어요. PDF를 만들고 있어요.');await downloadClosingReport(r.data.id,'pdf');
+      state.closeRequest=null;await loadReportHistory(state.store);if(!alive())return;render();showToast('마감 버전을 저장했어요. PDF를 만들고 있어요.');await downloadClosingReport(r.data.id,'pdf','closing');
     }catch(e){if(alive())showToast('마감하지 못했어요. 영업일 보고 누락·실제 세후급여·월말 날짜를 확인해 주세요.');}
     finally{state.monthClosing=false;syncReportExportButtons();const button=document.getElementById('month-close-btn');if(button)button.textContent=(state.reportHistory||[]).some(r=>r.month_key===monthKey())?'정정하고 새 버전 저장':'마감하고 PDF 저장';}
   }
@@ -9229,16 +9230,16 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function reportDownloadName(closing,extension){
     const safe=String(closing.snapshot.store_name).replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_');return '매니_'+safe+'_'+closing.month_key+(closing.status==='provisional'?'_잠정':'_v'+closing.revision)+'.'+extension;
   }
-  async function downloadClosingReport(id,type){
-    return downloadReport(type,'manee_closed_report',{p_closing_id:id});
+  async function downloadClosingReport(id,type,area='history'){
+    return downloadReport(type,'manee_closed_report',{p_closing_id:id},area);
   }
-  function renderReportExportStatus(){
-    const feedback=state.reportExportFeedback,active=feedback?.scope===currentStoreId()+':'+monthKey();
-    return '<p class="report-export-status" data-report-export-status data-kind="'+(active?feedback.kind:'')+'" role="status" aria-live="polite"'+(active?'':' hidden')+'>'+(active?escapeHtml(feedback.message):'')+'</p>';
+  function renderReportExportStatus(area='current'){
+    const feedback=state.reportExportFeedback,active=feedback?.scope===currentStoreId()+':'+monthKey()&&feedback.area===area;
+    return '<p class="report-export-status" data-report-export-status="'+escapeHtml(area)+'" data-kind="'+(active?feedback.kind:'')+'" role="status" aria-live="polite"'+(active?'':' hidden')+'>'+(active?escapeHtml(feedback.message):'')+'</p>';
   }
-  function setReportExportFeedback(message,kind='progress'){
-    state.reportExportFeedback={scope:currentStoreId()+':'+monthKey(),message,kind};
-    document.querySelectorAll('[data-report-export-status]').forEach(el=>{el.hidden=false;el.textContent=message;el.dataset.kind=kind;});
+  function setReportExportFeedback(message,kind='progress',area='current'){
+    state.reportExportFeedback={scope:currentStoreId()+':'+monthKey(),area,message,kind};
+    document.querySelectorAll('[data-report-export-status]').forEach(el=>{const active=el.dataset.reportExportStatus===area;el.hidden=!active;el.textContent=active?message:'';el.dataset.kind=active?kind:'';});
     syncReportExportButtons();
   }
   function syncReportExportButtons(){
@@ -9254,11 +9255,11 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
     return {status:'downloaded'};
   }
-  async function downloadReport(type,rpc,payload){
+  async function downloadReport(type,rpc,payload,area='current'){
     if(state.reportDownloading||!['pdf','excel'].includes(type))return;
-    const alive=reportActionGuard(),label=type==='pdf'?'PDF':'엑셀';state.reportDownloading=true;
+    const alive=reportActionGuard(),label=type==='pdf'?'PDF':'엑셀',feedback=(message,kind)=>setReportExportFeedback(message,kind,area);state.reportDownloading=true;
     let phase='load',timer;
-    setReportExportFeedback((type==='pdf'?'PDF를':'엑셀을')+' 만들고 있어요…');
+    feedback((type==='pdf'?'PDF를':'엑셀을')+' 만들고 있어요…');
     try{
       // Allow the progress message to paint before generating a large report.
       await new Promise(resolve=>setTimeout(resolve,0));
@@ -9276,13 +9277,13 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';extension='xlsx';
       }
       if(!alive())return;phase='save';
-      setReportExportFeedback(window.MANEE_NATIVE?.saveFile?'저장할 위치를 선택해 주세요.':'다운로드를 시작하고 있어요…');
+      feedback(window.MANEE_NATIVE?.saveFile?'저장할 위치를 선택해 주세요.':'다운로드를 시작하고 있어요…');
       const result=await saveReportFile(bytes,reportDownloadName(closing,extension),mimeType);
       if(!alive())return;
-      if(result?.status==='cancelled')setReportExportFeedback('저장을 취소했어요.','cancelled');
-      else setReportExportFeedback(result?.status==='saved'?label+' 파일을 저장했어요.':'다운로드를 시작했어요. 다운로드 목록을 확인해 주세요.','success');
+      if(result?.status==='cancelled')feedback('저장을 취소했어요.','cancelled');
+      else feedback(result?.status==='saved'?label+' 파일을 저장했어요.':'다운로드를 시작했어요. 다운로드 목록을 확인해 주세요.','success');
     }catch(e){
-      if(alive())setReportExportFeedback(phase==='load'?'보고서를 불러오지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.':phase==='save'?'파일을 저장하지 못했어요. 저장 공간과 위치를 확인하고 다시 시도해 주세요.':'보고서를 만들지 못했어요. 입력한 매출·비용을 확인하고 다시 시도해 주세요.','error');
+      if(alive())feedback(phase==='load'?'보고서를 불러오지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.':phase==='save'?'파일을 저장하지 못했어요. 저장 공간과 위치를 확인하고 다시 시도해 주세요.':'보고서를 만들지 못했어요. 입력한 매출·비용을 확인하고 다시 시도해 주세요.','error');
     }finally{clearTimeout(timer);state.reportDownloading=false;syncReportExportButtons();}
   }
   function renderMonthlyReport(){
