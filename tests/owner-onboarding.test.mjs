@@ -5,12 +5,13 @@ import fs from 'node:fs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const block=html.slice(html.indexOf('  // Owner signup keeps'),html.indexOf('  function verifyNearStore(){'));
 const checked=html.match(/^  async function checkedBusinessMutation\([^\n]*\n[\s\S]*?^  }/m)[0];
-function harness(){
- const saved=new Map(),calls=[],messages=[];let response={data:[{id:'s1'}]},pending;
+function harness(savedEntries=[]){
+ const saved=new Map(savedEntries),calls=[],messages=[];let response={data:[{id:'s1'}]},pending;
  const state={role:'storeOwner',myUsername:'owner1',store:'A',storeIdMap:{A:'s1',B:'s2'},storeOnboardingMap:{A:false,B:false},storeLocationMap:{},storeCutoffMap:{A:6},storeLaborLimitMap:{A:22},storeFoodLimitMap:{A:40},storeManagerDashboardMap:{},ownerSetupDraft:{},onboardingStep:'location',vendors:[],fixedExpenses:[],items:{},reportDataFailed:new Set(),myStores:['A','B']};
  const q={update(p){calls.push(['update',p]);return this;},insert(p){calls.push(['insert',p]);return this;},eq(...p){calls.push(['eq',...p]);return this;},select(){return pending?new Promise(r=>pending.resolve=r):Promise.resolve(response);}};
  const c={state,localGet:k=>saved.has(k)?{value:saved.get(k)}:null,localSet:(k,v)=>saved.set(k,String(v)),currentStoreId:()=>state.storeIdMap[state.store],canManageBusinessData:()=>true,render(){},showToast:m=>messages.push(m),escapeHtml:s=>String(s??'').replace(/[&<>"']/g,'_'),monthKey:()=> '2026-09',storeCutoffHour:()=>6,laborRatioLimit:()=>22,foodRatioLimit:()=>40,managerDashboardEnabled:()=>false,expenseCategoryLabel:x=>x||'',vendorCategoryOptions:()=>'<option value="food">식자재</option>',vendorCategoryValid:v=>v==='food',db:{from:t=>{calls.push(['from',t]);return q},rpc:async()=>({data:{ok:true}})}};
- vm.createContext(c);vm.runInContext(checked+'\n'+block,c);
+ c.loadAllForStore=async()=>{};c.switchOwnerStore=async store=>{state.store=store;};
+ vm.createContext(c);vm.runInContext(checked+'\n'+block+'\n'+html.match(/^  async function becomeStoreOwner\([^\n]*\n[\s\S]*?^  }/m)[0],c);
  return {c,state,calls,messages,saved,setResponse:r=>response=r,defer:()=>pending={},resolve:r=>pending.resolve(r)};
 }
 test('signup sequence retains memory-only values and blocks unverified username and mismatch',()=>{
@@ -68,4 +69,41 @@ test('setup checklist confirmation cannot mutate a store selected later',async()
 test('setup checklist failed save leaves original template intact',async()=>{
  const h=checklistEditHarness();h.c.callAuthChecklist=async()=>{throw Error('offline')};h.el.onclick();await new Promise(r=>setImmediate(r));
  assert.equal(h.state.items.morning[0].items[0].label,'기존 업무');assert.ok(h.messages.length);
+});
+
+
+test('pausing preparation survives a fresh app runtime and opens home without completing setup',async()=>{
+ const h=harness();h.state.onboardingStep='fixed';h.c.rememberOwnerSetup('fixed','나중에 설정');
+ h.c.pauseOwnerSetup();assert.equal(h.state.onboardingStep,null);assert.equal(h.state.section,'dashboard');assert.equal(h.state.homeStore,'A');
+ assert.equal(h.calls.length,0);assert.equal(h.state.storeOnboardingMap.A,false);
+ const restarted=harness([...h.saved]);restarted.state.onboardingStep=null;
+ await restarted.c.becomeStoreOwner('A');assert.equal(restarted.state.onboardingStep,null);
+ assert.equal(restarted.c.ownerSetupProgress().statuses.fixed,'나중에 설정');assert.equal(restarted.state.storeOnboardingMap.A,false);
+ await restarted.c.resumeOwnerSetup();assert.equal(restarted.state.onboardingStep,'fixed');
+ const resumed=harness([...restarted.saved]);await resumed.c.becomeStoreOwner('A');assert.equal(resumed.state.onboardingStep,'fixed');
+});
+test('paused entry is isolated by owner and store; a new or completed store uses its own entry',async()=>{
+ const h=harness();h.c.pauseOwnerSetup();
+ await h.c.becomeStoreOwner('B');assert.equal(h.state.onboardingStep,'location');
+ h.state.myUsername='owner2';await h.c.becomeStoreOwner('A');assert.equal(h.state.onboardingStep,'location');
+ h.state.myUsername='owner1';await h.c.becomeStoreOwner('A');assert.equal(h.state.onboardingStep,null);
+ h.state.storeOnboardingMap.B=true;await h.c.becomeStoreOwner('B');assert.equal(h.state.onboardingStep,null);
+});
+test('legacy progress resumes saved step; invalid saved progress falls back safely',async()=>{
+ const h=harness();h.saved.set(h.c.ownerSetupKey(),JSON.stringify({step:'vendors',statuses:{location:'확인 완료'}}));
+ await h.c.becomeStoreOwner('A');assert.equal(h.state.onboardingStep,'vendors');
+ h.saved.set(h.c.ownerSetupKey(),'{broken');await h.c.becomeStoreOwner('A');assert.equal(h.state.onboardingStep,'location');
+ h.saved.set(h.c.ownerSetupKey(),JSON.stringify({step:'invalid',paused:'true'}));await h.c.becomeStoreOwner('A');assert.equal(h.state.onboardingStep,'location');
+});
+test('busy setup cannot be paused; failed local persistence does not claim setup completion',()=>{
+ const h=harness();h.state.ownerSetupBusy=true;h.c.pauseOwnerSetup();assert.equal(h.state.onboardingStep,'location');assert.equal(h.saved.size,0);
+ h.state.ownerSetupBusy=false;h.c.localSet=()=>{throw Error('storage unavailable');};h.c.pauseOwnerSetup();
+ assert.equal(h.state.onboardingStep,null);assert.equal(h.state.storeOnboardingMap.A,false);assert.match(h.messages[0],/진행 위치를 저장하지 못/);
+});
+test('resume targets selected home store and ignores a changed owner during the store load',async()=>{
+ const h=harness();h.state.store='B';h.state.onboardingStep='preferences';h.c.pauseOwnerSetup();h.state.store='A';h.state.homeStore='B';
+ await h.c.resumeOwnerSetup();assert.equal(h.state.store,'B');assert.equal(h.state.onboardingStep,'preferences');
+ h.c.pauseOwnerSetup();h.state.store='A';h.state.homeStore='B';
+ h.c.switchOwnerStore=async store=>{h.state.store=store;h.state.myUsername='owner2';};
+ await h.c.resumeOwnerSetup();assert.equal(h.state.onboardingStep,null);h.state.myUsername='owner1';assert.equal(h.c.ownerSetupProgress().paused,true);
 });

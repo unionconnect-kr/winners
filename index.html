@@ -2365,7 +2365,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
             state.myUsername = record.username;
             state.myStores = await computeMyStoresDb(record.username);
             await loadAllForStore(record.store);
-            state.onboardingStep = (state.storeOnboardingMap && !state.storeOnboardingMap[record.store]) ? ownerSetupInitialStep() : null;
+            state.onboardingStep = ownerSetupStartupStep();
             render();
             return;
           }
@@ -2412,7 +2412,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     state.store = storeName;
     await loadAllForStore(storeName);
     if(alive && !alive()) return;   // a newer login/logout took over while the stores were loading
-    state.onboardingStep = (state.storeOnboardingMap && !state.storeOnboardingMap[storeName]) ? ownerSetupInitialStep() : null;
+    state.onboardingStep = ownerSetupStartupStep();
     render();
   }
   async function switchOwnerStore(storeName){
@@ -5820,14 +5820,32 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     }catch(e){}
     return {step:'location',statuses:{}};
   }
-  function rememberOwnerSetup(step,status){
+  function rememberOwnerSetup(step,status,paused=false){
     const p=ownerSetupProgress();
     if(status)p.statuses={...(p.statuses||{}),[state.onboardingStep]:status};
-    p.step=step;try{localSet(ownerSetupKey(),JSON.stringify(p));}catch(e){showToast('이 기기에서 진행 위치를 저장하지 못했어요. 등록한 매장 정보는 유지돼요.');}
+    p.step=step;p.paused=paused;try{localSet(ownerSetupKey(),JSON.stringify(p));}catch(e){showToast('이 기기에서 진행 위치를 저장하지 못했어요. 등록한 매장 정보는 유지돼요.');}
   }
   function ownerSetupInitialStep(){
     const step=ownerSetupProgress().step;
     return OWNER_SETUP_STEPS.includes(step)?step:'location';
+  }
+  function ownerSetupStartupStep(){
+    if(!state.storeOnboardingMap||state.storeOnboardingMap[state.store]||ownerSetupProgress().paused===true)return null;
+    return ownerSetupInitialStep();
+  }
+  function pauseOwnerSetup(){
+    if(state.role!=='storeOwner'||state.ownerSetupBusy)return;
+    rememberOwnerSetup(state.onboardingStep,undefined,true);
+    state.onboardingStep=null;state.section='dashboard';state.homeStore=state.store;render();
+  }
+  async function resumeOwnerSetup(){
+    if(state.role!=='storeOwner'||state.ownerSetupBusy)return;
+    const target=state.homeStore&&state.homeStore!=='__all__'?state.homeStore:state.store;
+    if(!state.myStores.includes(target))return;
+    const sid=state.storeIdMap[target],username=state.myUsername;
+    if(target!==state.store)await switchOwnerStore(target);
+    if(!ownerSetupAlive(sid,username))return;
+    state.ownerSetupDraft=null;state.onboardingStep=ownerSetupInitialStep();rememberOwnerSetup(state.onboardingStep);render();
   }
   function ownerSetupAlive(storeId,username){
     return state.role==='storeOwner' && currentStoreId()===storeId && state.myUsername===username;
@@ -5974,7 +5992,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const bind=(selector,fn)=>{const el=app.querySelector(selector);if(el)el.onclick=fn;};
     bind('[data-setup-next]',()=>nextOwnerSetup());bind('[data-setup-skip]',()=>nextOwnerSetup('나중에 설정'));bind('[data-setup-none]',()=>nextOwnerSetup('해당 없음'));
     bind('[data-setup-back]',()=>{const i=OWNER_SETUP_STEPS.indexOf(state.onboardingStep);state.onboardingStep=OWNER_SETUP_STEPS[Math.max(0,i-1)];rememberOwnerSetup(state.onboardingStep);render();});
-    bind('[data-setup-pause]',()=>{rememberOwnerSetup(state.onboardingStep);state.onboardingStep=null;state.section='dashboard';state.homeStore=state.store;render();});
+    bind('[data-setup-pause]',pauseOwnerSetup);
     app.querySelectorAll('[data-setup-goto]').forEach(el=>el.onclick=()=>{state.onboardingStep=el.dataset.setupGoto;rememberOwnerSetup(state.onboardingStep);render();});
     app.querySelectorAll('[data-setup-add]').forEach(el=>el.onclick=()=>addOwnerSetupRecord(el.dataset.setupAdd));
     bind('[data-setup-retry]',async()=>{const store=state.store;await Promise.all([loadVendors(store),loadFixedExpenses(store,monthKey())]);render();});
@@ -10957,13 +10975,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
 
   function bindOwnerEvents(){
     setReservationBusy();
-    app.querySelectorAll('[data-owner-setup-resume]').forEach(el=>el.onclick=async()=>{
-      const target=state.homeStore&&state.homeStore!=='__all__'?state.homeStore:state.store;
-      if(!state.myStores.includes(target))return;
-      if(target!==state.store)await switchOwnerStore(target);
-      if(state.role!=='storeOwner'||state.store!==target)return;
-      state.ownerSetupDraft=null;state.onboardingStep=ownerSetupInitialStep();render();
-    });
+    app.querySelectorAll('[data-owner-setup-resume]').forEach(el=>el.onclick=resumeOwnerSetup);
     if(state.showOwnerSalesForm) bindSalesReportEvents();
     const notifSummaryToggleBtn = document.getElementById("notif-summary-toggle-btn");
     if(notifSummaryToggleBtn) notifSummaryToggleBtn.addEventListener("click", ()=>{
