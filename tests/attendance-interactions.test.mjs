@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createAndroidGeolocation} from '../mobile/src/android-geolocation.js';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function fn(name){return html.match(new RegExp('^  (?:async )?function '+name+'\\([^\\n]*\\n[\\s\\S]*?^  }','m'))?.[0]||'';}
@@ -22,7 +23,7 @@ function setup(options={}){
       rpc(name,args){calls.push({rpc:name,args});return Promise.resolve(options.rpcResult??{data:saved,error:null});}}
   };
   vm.createContext(context);
-  const names=['businessContextGuard','checkedBusinessMutation','applyStaffAttendance','staffCoordinates','staffAttendanceGuard','setStaffClockBusy','clockAuthStaff','confirmAuthAttendance','requestAuthAttendanceEdit','findOpenAttendance','attendanceMutationGuard','invalidateFinancialViews','mutateAttendance','isValidTimeStr','isAttendanceDate','addManualAttendance','updateAttendanceField','toggleAttendanceConfirm','deleteAttendanceRecord','confirmMyAttendance','bindAttConfirmPrompt'];
+  const names=['businessContextGuard','checkedBusinessMutation','applyStaffAttendance','locationErrorMessage','staffCoordinates','setStoreLocation','staffAttendanceGuard','setStaffClockBusy','clockAuthStaff','confirmAuthAttendance','requestAuthAttendanceEdit','findOpenAttendance','attendanceMutationGuard','invalidateFinancialViews','mutateAttendance','isValidTimeStr','isAttendanceDate','addManualAttendance','updateAttendanceField','toggleAttendanceConfirm','deleteAttendanceRecord','confirmMyAttendance','bindAttConfirmPrompt'];
   vm.runInContext('let maneeViewEpoch=0; const attendanceMutationLocks=new Set();\n'+names.map(fn).join('\n'),context);
   return {context,state,calls,messages,controls,pending};
 }
@@ -94,4 +95,49 @@ test('failed edit request keeps the entered correction and blocks repeated taps'
   const d=deferred(),h=setup({state:{role:'staff',attConfirmPrompt:{attId:'att',editing:true}},rpcResult:d.promise});
   const a=h.context.requestAuthAttendanceEdit('att','10:00','18:00'),b=h.context.requestAuthAttendanceEdit('att','10:00','18:00');assert.equal(h.calls.filter(c=>c.rpc).length,1);
   d.resolve({error:{message:'offline'}});await Promise.all([a,b]);assert.equal(h.state.attConfirmPrompt.editing,true);
+});
+
+
+test('Android approximate or low-quality location blocks both clock actions and leaves records unchanged',async()=>{
+ for(const direction of ['in','out'])for(const mode of ['coarse','inaccurate','denied','timeout']){
+  const h=setup({state:{role:'staff'}});h.state.attendance[0].checkOut=null;
+  const before=JSON.stringify(h.state.attendance);
+  h.context.navigator.geolocation=createAndroidGeolocation({
+   async getCurrentPosition(){
+    if(mode==='denied')throw {code:'OS-PLUG-GLOC-0003'};
+    if(mode==='timeout')throw {code:'OS-PLUG-GLOC-0010'};
+    return {coords:{latitude:37.5,longitude:127,accuracy:mode==='inaccurate'?2000:5}};
+   },
+   async checkPermissions(){return {location:mode==='coarse'?'denied':'granted',coarseLocation:'granted'};}
+  });
+  await h.context.clockAuthStaff(direction);
+  assert.equal(h.calls.some(c=>c.rpc),false);assert.equal(JSON.stringify(h.state.attendance),before);assert.equal(h.state.staffClockBusy,false);
+  assert.match(h.messages[0],mode==='coarse'?/정확한 위치/:mode==='inaccurate'?/오차/:mode==='denied'?/위치 접근/:/시간이 초과/);
+ }
+});
+test('precise Android location keeps server-side clock result authoritative',async()=>{
+ const h=setup({state:{role:'staff'}});
+ h.context.navigator.geolocation=createAndroidGeolocation({
+  async getCurrentPosition(){return {coords:{latitude:37.5,longitude:127,accuracy:10}};},
+  async checkPermissions(){return {location:'granted',coarseLocation:'granted'};}
+ });
+ await h.context.clockAuthStaff('in');
+ const rpc=h.calls.find(c=>c.rpc);assert.equal(rpc.rpc,'clock_in');assert.equal(rpc.args.current_lat,37.5);assert.equal(rpc.args.target_store_id,'s1');
+ assert.equal(h.state.attendance[0].checkInExact,saved.check_in);assert.equal(h.state.staffClockBusy,false);
+});
+
+
+test('store location error or zero-row response never changes the saved location or reports success',async()=>{
+ for(const result of [{error:{message:'offline'},data:null},{data:[],error:null}]){
+  const h=setup({result,state:{storeLocationMap:{A:{lat:35,lng:126}}}});
+  await h.context.setStoreLocation('A');assert.deepEqual(h.state.storeLocationMap.A,{lat:35,lng:126});
+  assert.equal(h.messages.some(m=>m.includes('위치를 저장했어요')),false);
+ }
+});
+test('store location uses the confirmed server row and ignores GPS after an account switch',async()=>{
+ const h=setup({state:{storeLocationMap:{A:{lat:35,lng:126}}},result:{data:[{id:'s1',lat:37.5,lng:127}]}});
+ await h.context.setStoreLocation('A');assert.equal(h.state.storeLocationMap.A.lat,37.5);assert.ok(h.messages.some(m=>m.includes('위치를 저장했어요')));
+ const d=deferred();h.context.staffCoordinates=()=>d.promise;const task=h.context.setStoreLocation('A');const writes=h.calls.filter(c=>c.action).length;
+ h.state.authProfile={user_id:'u2'};h.state.store='B';d.resolve({current_lat:35,current_lng:126});await task;
+ assert.equal(h.calls.filter(c=>c.action).length,writes);assert.equal(h.state.storeLocationMap.A.lat,37.5);
 });

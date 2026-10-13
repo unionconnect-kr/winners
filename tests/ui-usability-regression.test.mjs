@@ -56,7 +56,7 @@ for(const code of ['42501','PGRST301','PGRST302','PGRST303'])test('revoked membe
   const h=navigationHarness({portalError:{code}});await h.context.goToStaffTab('schedule');assert.equal(h.state.role,'landing');assert.equal(h.state.authProfile,null);
 });
 for(const [code,expected]of [[1,/허용/],[2,/위치 기능/],[3,/시간이 초과/]])test('geolocation error '+code+' gets a specific retry instruction',async()=>{
-  const context={navigator:{geolocation:{getCurrentPosition(_,reject){reject({code});}}}};vm.createContext(context);vm.runInContext(fn('staffCoordinates'),context);await assert.rejects(context.staffCoordinates(),expected);
+  const context={navigator:{geolocation:{getCurrentPosition(_,reject){reject({code});}}}};vm.createContext(context);vm.runInContext(fn('locationErrorMessage')+'\n'+fn('staffCoordinates'),context);await assert.rejects(context.staffCoordinates(),expected);
 });
 for(const mode of ['none','failed','valid'])test('expense ratio reports '+mode+' sales accurately',()=>{
   const state={monthYear:2026,monthNum:10,expenseEntries:[{amount:20000}],salesReports:mode==='none'?[]:[{totalSales:100000}],reportDataFailed:new Set(mode==='failed'?['매출']:[])};

@@ -1,21 +1,12 @@
 import { Geolocation } from '@capacitor/geolocation';
 import { registerPlugin } from '@capacitor/core';
 import { reportBytesToBase64 } from './report-file.js';
+import { createAndroidGeolocation } from './android-geolocation.js';
 
 const ReportFiles = registerPlugin('ManeeReportFiles');
 
 // Only foreground, user-initiated location requests. No push token or billing SDK.
-window.MANEE_GEOLOCATION = {
-  getCurrentPosition(success, failure, options = {}) {
-    Geolocation.getCurrentPosition(options).then(success, error => {
-      const code = String(error.code || '');
-      failure?.({
-        code: code === 'OS-PLUG-GLOC-0003' ? 1 : code === 'OS-PLUG-GLOC-0010' ? 3 : 2,
-        message: error.message || '위치를 확인하지 못했습니다.',
-      });
-    });
-  },
-};
+window.MANEE_GEOLOCATION = createAndroidGeolocation(Geolocation);
 
 window.MANEE_NATIVE = {
   async saveFile({ bytes, filename, mimeType }) {

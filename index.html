@@ -1400,22 +1400,16 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
-  function setStoreLocation(storeName){
-    if(!navigator.geolocation){ showToast("이 기기에서는 위치 기능을 지원하지 않아요."); return; }
+  async function setStoreLocation(storeName){
+    const storeId=state.storeIdMap[storeName],alive=businessContextGuard();
+    if(!storeId){showToast('매장 정보를 찾지 못했어요.');return;}
     showToast("현재 위치를 확인하는 중이에요…");
-    navigator.geolocation.getCurrentPosition(async (pos)=>{
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const storeId = state.storeIdMap[storeName];
-      if(!storeId){ showToast("매장 정보를 찾지 못했어요."); return; }
-      try{
-        await db.from('stores').update({ lat, lng }).eq('id', storeId);
-        state.storeLocationMap[storeName] = { lat, lng };
-        render();
-        showToast(storeName+"의 위치를 저장했어요.");
-      }catch(e){ showToast("위치 저장에 실패했어요."); }
-    }, (err)=>{
-      showToast("위치를 가져오지 못했어요. 위치 권한을 허용해 주세요.");
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    try{
+      const pos=await staffCoordinates();if(!alive())return;
+      const saved=await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',storeId).select('id,lat,lng'));
+      if(!alive())return;
+      state.storeLocationMap[storeName]={lat:saved.lat,lng:saved.lng};render();showToast(storeName+'의 위치를 저장했어요.');
+    }catch(e){if(alive())showToast(staffErrorMessage(e));}
   }
   async function submitRenameStore(oldName){
     const input = document.getElementById("rename-store-input");
@@ -1669,14 +1663,19 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(pos<0) state.attendance.push(value); else state.attendance[pos]=value;
     return value;
   }
+  function locationErrorMessage(error){
+    if(error?.reason==='precise-location-required')return '휴대폰 설정 → 앱 → 매니 테스트 → 권한 → 위치에서 정확한 위치 사용을 켜 주세요.';
+    if(error?.reason==='position-inaccurate')return '현재 위치의 오차가 커요. 매장 안의 창가 등 위치를 잘 확인할 수 있는 곳에서 다시 시도해 주세요.';
+    if(error?.code===1)return '위치 접근을 허용한 뒤 다시 시도해 주세요.';
+    if(error?.code===2)return '현재 위치를 확인하지 못했어요. 휴대폰의 위치 기능을 켠 뒤 다시 시도해 주세요.';
+    if(error?.code===3)return '위치 확인 시간이 초과됐어요. 매장 안에서 다시 시도해 주세요.';
+    return '현재 위치를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
   function staffCoordinates(){
     return new Promise((resolve,reject)=>{
       if(!navigator.geolocation){ reject(new Error('이 기기는 위치 확인을 지원하지 않아요.')); return; }
       navigator.geolocation.getCurrentPosition(p=>resolve({current_lat:p.coords.latitude,current_lng:p.coords.longitude}),
-        error=>reject(new Error(error?.code===1?'출퇴근 기록을 위해 위치 접근을 허용해 주세요.':
-          error?.code===2?'현재 위치를 확인하지 못했어요. 휴대폰의 위치 기능을 켠 뒤 다시 시도해 주세요.':
-          error?.code===3?'위치 확인 시간이 초과됐어요. 매장 안에서 다시 시도해 주세요.':
-          '현재 위치를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.')),{enableHighAccuracy:true,timeout:10000});
+        error=>reject(new Error(locationErrorMessage(error))),{enableHighAccuracy:true,timeout:10000});
     });
   }
   function staffAttendanceGuard(){
@@ -6037,7 +6036,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         if(dist <= 100){ resolve({ ok:true }); }
         else{ resolve({ ok:false, reason:"매장에서 너무 멀어요 (약 "+Math.round(dist)+"m 떨어짐). 매장 근처에서 다시 시도해 주세요." }); }
       }, (err)=>{
-        resolve({ ok:false, reason:"위치 권한이 필요해요. 위치 접근을 허용한 후 다시 시도해 주세요." });
+        resolve({ ok:false, reason:locationErrorMessage(err) });
       }, { enableHighAccuracy: true, timeout: 10000 });
     });
   }
