@@ -16,32 +16,36 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        upload {
+            def uploadPath = System.getenv('MANEE_ANDROID_UPLOAD_KEYSTORE')
+            if (uploadPath) storeFile file(uploadPath)
+            storePassword System.getenv('MANEE_ANDROID_UPLOAD_STORE_PASSWORD')
+            keyAlias System.getenv('MANEE_ANDROID_UPLOAD_KEY_ALIAS')
+            keyPassword System.getenv('MANEE_ANDROID_UPLOAD_KEY_PASSWORD')
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix '.staging'
             versionNameSuffix '-android-test'
         }
         release {
+            signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
 
-// This initial Android project is staging-only. Do not package iOS or production assets.
-def verifyStagingAssets = tasks.register('verifyStagingAssets') {
-    doLast {
-        def infoFile = file('src/main/assets/public/build-info.json')
-        if (!infoFile.exists()) throw new GradleException('Run npm run build:android:staging and npm run sync:android first.')
-        def info = new groovy.json.JsonSlurper().parse(infoFile)
-        if (info.environment != 'staging' || info.platform != 'android') {
-            throw new GradleException('Android test APK requires staging Android assets.')
-        }
+// Both variants verify their own backend before assets are packaged.
+// A release without a dedicated upload key must never fall back to debug signing.
+['Debug': 'staging', 'Release': 'production'].each { variantName, environment ->
+    def guard = tasks.register("verify${variantName}Assets", Exec) {
+        workingDir rootProject.projectDir.parentFile
+        commandLine 'node', 'scripts/verify-android-build.mjs', environment
     }
-}
-tasks.named('preBuild').configure { dependsOn verifyStagingAssets }
-androidComponents {
-    beforeVariants(selector().withBuildType('release')) { variant -> variant.enable = false }
+    tasks.matching { it.name == "pre${variantName}Build" }.configureEach { dependsOn guard }
 }
 
 repositories {
@@ -67,6 +71,6 @@ apply from: 'capacitor.build.gradle'
 
 
 // A config-free test APK remains usable without initializing FCM.
-if (file("google-services.json").exists()) {
+if (file("google-services.json").exists() || file("src/release/google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }

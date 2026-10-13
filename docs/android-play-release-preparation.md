@@ -118,3 +118,32 @@ unfinished; no additional phone reinstall is needed for this infrastructure work
   effects, and scheduler execution grants. Security advisors report the two
   deliberately RPC-only private tables as INFO (RLS without policies), plus
   unrelated existing function/password-protection warnings.
+
+## Production activation and internal AAB path — 2026-10-14 02:40 KST
+
+- The user set `MANEE_ANDROID_PRODUCTION_PUSH_ENABLED=true`. The live push
+  endpoint now returns authentication-required rather than push-not-ready.
+- The production delivery worker accepted its existing scheduler credential and
+  returned HTTP 200 with claimed/sent/retry/expired/unrecorded all zero. This
+  verifies credential parsing, production routing and worker DB access, NOT
+  Google OAuth/FCM authorization or delivery to a handset. There are zero devices.
+- Enabled cron job 2 (`manee-android-business-push`) at one-minute intervals.
+- Added an explicitly internal-only production-backend AAB build path. Debug and
+  release check their respective backend/Firebase assets before packaging.
+  Release requires a dedicated upload keystore and never uses debug signing.
+- Added a manual `android-internal-bundle.yml` workflow with the
+  `android-play-internal` environment. It builds and verifies the bundle but
+  does not upload to Play, enable checkout or publish a release.
+- Required CI secrets: `MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64`,
+  `MANEE_ANDROID_UPLOAD_STORE_PASSWORD`, `MANEE_ANDROID_UPLOAD_KEY_ALIAS`,
+  `MANEE_ANDROID_UPLOAD_KEY_PASSWORD`, `MANEE_ANDROID_FIREBASE_PRODUCTION_JSON`.
+  Required public environment variable: `MANEE_ANDROID_UPLOAD_CERT_SHA256`.
+  The keystore/passwords have NOT been generated or registered by this change.
+- `npm run build:android:internal` and Capacitor sync succeeded against the
+  existing production Firebase client configuration. The release verifier
+  correctly stopped at the missing upload keystore. No signed AAB exists yet.
+- Play server identity, durable purchase adapter, renewal processing and
+  per-store entitlement enforcement remain unfinished. Existing Play code
+  restores any owned matching product, so it cannot yet sell that same product
+  separately to another store. Do not activate checkout or represent the
+  internal setup bundle as the completed public paid app.

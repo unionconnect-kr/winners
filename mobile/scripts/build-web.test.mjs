@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import vm from 'node:vm';
@@ -38,7 +38,7 @@ test('build isolates environments and leaves canonical web/backend sources untou
   canonicalPaths.forEach((p, i) => assert.equal(readFileSync(resolve(root, p), 'utf8'), original[i]));
 });
 
-test('Android only builds staging and cannot invoke Apple billing or APNs', () => {
+test('Android production requires explicit internal setup; staging cannot invoke Apple services', () => {
   assert.notEqual(spawnSync(process.execPath, ['scripts/build-web.mjs', 'production', 'android'], { cwd: mobile }).status, 0);
   assert.notEqual(spawnSync(process.execPath, ['scripts/build-web.mjs', 'staging', 'unknown'], { cwd: mobile }).status, 0);
   execFileSync(process.execPath, ['scripts/build-web.mjs', 'staging', 'android'], { cwd: mobile });
@@ -65,5 +65,33 @@ test('Android only builds staging and cannot invoke Apple billing or APNs', () =
   }
   for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
     if (match[1].trim()) new vm.Script(match[1]);
+  }
+});
+
+
+test('explicit Play internal setup bundles production Firebase and backend without test UI', () => {
+  const path = resolve(mobile, 'android/app/src/release/google-services.json');
+  const existed = existsSync(path);
+  if (!existed) {
+    mkdirSync(dirname(path), {recursive:true});
+    writeFileSync(path, JSON.stringify({project_info:{project_id:'manee-production-3eafa',project_number:'123456'},
+      client:[{client_info:{mobilesdk_app_id:'1:123456:android:fixture',android_client_info:{package_name:'kr.co.manee.app'}},
+        api_key:[{current_key:'fixture-only'}]}]}));
+  }
+  try {
+    execFileSync(process.execPath, ['scripts/build-android-internal.mjs'], {cwd:mobile});
+    const info=JSON.parse(read('www/build-info.json'));
+    assert.equal(info.environment,'production');
+    assert.equal(info.androidPushProjectId,'manee-production-3eafa');
+    assert.equal(info.releasePurpose,'play-internal-setup');
+    assert.equal(info.billingEnabled,false);
+    assert.doesNotMatch(read('www/index.html'),/매니 Android 테스트 · 테스트 데이터만 입력해 주세요|테스트 앱 안내/);
+    assert.doesNotMatch(read('www/native.js'),/ManeeStoreKit|ios-billing|ios-push|매니 테스트 앱/);
+    for (const match of read('www/index.html').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+      if (match[1].trim()) new vm.Script(match[1]);
+    }
+  } finally {
+    if (!existed) rmSync(path);
+    execFileSync(process.execPath, ['scripts/build-web.mjs','staging','android'], {cwd:mobile});
   }
 });

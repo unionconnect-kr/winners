@@ -30,12 +30,12 @@ window.MANEE_NATIVE = {
     const dialog = document.createElement('dialog');
     dialog.id = 'manee-android-info';
     dialog.style.cssText = 'max-width:360px;width:85%;border:0;border-radius:20px;padding:24px;line-height:1.7';
-    dialog.innerHTML = `<h2>매니 테스트 앱</h2>
-      <p>테스트용 계정과 매장을 사용해 주세요. 실제 운영 데이터와 분리되어 있습니다.</p>
-      <p>로그인·직원 관리·출퇴근 위치 확인·사진 첨부를 확인하는 버전입니다.</p>
+    dialog.innerHTML = `<h2>${ANDROID_PRODUCTION ? '매니' : '매니 테스트 앱'}</h2>
+      ${ANDROID_PRODUCTION ? '<p>우리가게 매니저 매니</p>' : '<p>테스트용 계정과 매장을 사용해 주세요. 실제 운영 데이터와 분리되어 있습니다.</p>'}
+      <p>직원 관리·출퇴근·매출·지출·보고서를 한곳에서 관리하세요.</p>
       <p>PDF·엑셀은 저장 위치를 선택해 휴대폰에 저장할 수 있습니다.</p>
       <p>${ANDROID_FIREBASE_PROJECT ? "휴대폰 알림은 더보기 > 매장 설정에서 연결해 주세요. 출퇴근·예약·월말 보고서 알림을 받을 수 있습니다." : "휴대폰 알림은 연결 준비 중입니다. 앱 안의 알림은 계속 확인할 수 있습니다."}</p>
-      <p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>
+      ${ANDROID_PRODUCTION ? '<p>구독 결제는 준비 중입니다.</p>' : '<p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>'}
       <p id="android-push-result" role="status"></p>
       ${ANDROID_FIREBASE_PROJECT ? '<button type="button" id="android-test-push" style="width:100%;padding:12px">테스트 알림 보내기</button>' : ""}
       <button type="button" id="android-info-close" style="width:100%;padding:12px">확인</button>`;
