@@ -1,6 +1,9 @@
 name: Android Play internal setup bundle
 on:
   workflow_dispatch:
+  push:
+    branches: ['codex/android-push-location-20261013']
+    paths: ['.github/workflows/android-internal-bundle.yml']
 permissions:
   contents: read
 concurrency:
