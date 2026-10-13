@@ -1,0 +1,43 @@
+# Android 테스트 빌드
+
+이 프로젝트는 첫 Android 기기 검증용입니다. 운영 배포 및 Google Play 제출은 아직 구성하지 않았습니다.
+
+## 빌드
+
+Node 22 이상, JDK 21, Android SDK Platform 36 및 Build Tools 36.0.0이 필요합니다.
+
+```sh
+cd mobile
+npm ci
+npm test
+npm run apk:staging
+node scripts/verify-android-apk.mjs android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`ANDROID_HOME`은 SDK 경로, `JAVA_HOME`은 JDK 21 경로로 설정합니다. 결과는 `android/app/build/outputs/apk/debug/app-debug.apk`입니다. Debug 서명이며 Play 업로드용 AAB가 아닙니다.
+
+앱 이름은 **매니 테스트**, 설치 ID는 `kr.co.manee.app.staging`입니다. 운영 앱의 계정·로컬 저장 공간과 구분되고 `config/environments.json`의 staging 프로젝트에 연결됩니다. 테스트 계정과 가상 데이터만 사용합니다. Android production 웹 빌드와 Gradle release variant는 현재 비활성화했습니다. Gradle은 복사된 웹 자산의 플랫폼·환경을 확인하여 iOS/운영 자산의 혼입을 차단합니다.
+
+## 지원 범위
+
+| 기능 | 이번 버전 |
+| --- | --- |
+| 로그인·직원·급여·근무표 관리 | 기존 웹 기능을 staging DB에 연결; 실제 기기 확인 필요 |
+| 출퇴근 위치 | 사용자 동작 시 Capacitor 위치 요청; 허용/거부/대략적 위치 모두 실제 확인 필요 |
+| 사진 첨부 | Android WebView 파일 선택기 사용; 실제 사진 선택 및 저장 확인 필요 |
+| AI·영수증 자동 인식 | staging API 미구성으로 사용 중단 안내 |
+| 음성 입력 | 사용 중단 안내, 마이크 권한 없음 |
+| 푸시·구독 결제 | 미구현; APNs/StoreKit/Firebase 푸시 플러그인 미포함 |
+| PDF·엑셀 내보내기 | 기존 브라우저 다운로드 방식, Android 저장 동작 미검증 |
+
+백그라운드 위치·연락처·기기 캘린더·마이크·전체 사진 저장소 접근 권한을 요청하지 않습니다. 앱 안에서 직접 입력하는 직원 연락처와 근무표 데이터는 기기 주소록/캘린더 권한과 별개입니다. 자동 백업 및 HTTP 평문 통신을 비활성화했습니다.
+
+## 휴대폰 확인 순서
+
+1. APK 설치 후 `매니 테스트`가 별도 앱으로 표시되는지 확인합니다.
+2. 테스트 계정으로 로그인하고 매장을 선택합니다. 앱 종료/재실행, 로그아웃을 확인합니다.
+3. 출퇴근 위치 권한 허용·거부를 각각 확인합니다. 정확한 위치를 거부했을 때 잘못된 출근 기록이 저장되지 않아야 합니다.
+4. 테스트 직원·근무표를 작성하고 사진 한 장을 첨부한 뒤 다시 열어 저장 결과를 확인합니다.
+5. 키보드, 시스템 뒤로가기, 화면 가장자리, PDF/엑셀 내보내기를 확인합니다.
+
+운영 출시 전에는 미지원 기능의 범위를 결정하고 Google Play Billing/FCM, release 서명 및 AAB 배포를 별도 구성해야 합니다. 실제 출시 기능과 SDK의 데이터 전송을 다시 조사한 뒤 Play 데이터 보안 설문을 최종 제출합니다. 현재 임시 저장된 15개 항목을 이 테스트 APK의 확정 신고로 간주하지 않습니다.

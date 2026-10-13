@@ -107,3 +107,7 @@ npm --prefix mobile test
 [정책 없는 RLS 안내](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)는 이 구조에서 예상되는 정보 항목입니다.
 기존 public RPC 3개의 SECURITY DEFINER 경고와 유출 암호 차단 비활성 경고는 이번 변경 이전 영역으로, 이 작업에서 변경하지 않았습니다.
 [RPC 권한 안내](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) · [암호 보호 설정](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## Android 테스트 앱
+
+Android 프로젝트와 APK 빌드·기기 확인 순서는 [ANDROID.md](ANDROID.md)를 참고하세요.

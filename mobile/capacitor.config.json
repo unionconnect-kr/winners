@@ -2,6 +2,7 @@
   "appId": "kr.co.manee.app",
   "appName": "매니",
   "webDir": "www",
+  "android": { "includePlugins": ["@capacitor/geolocation"], "allowMixedContent": false },
   "ios": { "contentInset": "automatic" },
   "plugins": { "CapacitorHttp": { "enabled": true } }
 }

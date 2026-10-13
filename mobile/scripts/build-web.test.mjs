@@ -37,3 +37,29 @@ test('build isolates environments and leaves canonical web/backend sources untou
   }
   canonicalPaths.forEach((p, i) => assert.equal(readFileSync(resolve(root, p), 'utf8'), original[i]));
 });
+
+test('Android only builds staging and cannot invoke Apple billing or APNs', () => {
+  assert.notEqual(spawnSync(process.execPath, ['scripts/build-web.mjs', 'production', 'android'], { cwd: mobile }).status, 0);
+  assert.notEqual(spawnSync(process.execPath, ['scripts/build-web.mjs', 'staging', 'unknown'], { cwd: mobile }).status, 0);
+  execFileSync(process.execPath, ['scripts/build-web.mjs', 'staging', 'android'], { cwd: mobile });
+  const info = JSON.parse(read('www/build-info.json'));
+  assert.equal(info.environment, 'staging');
+  assert.equal(info.platform, 'android');
+  const native = read('www/native.js');
+  assert.doesNotMatch(native, /ManeeStoreKit|ios-billing|ios-push|manee_ios_push|PushNotifications/);
+  assert.match(native, /Geolocation/);
+  const html = read('www/index.html');
+  assert.match(html, /테스트 앱 안내/);
+  assert.doesNotMatch(html, /아이폰 구독·알림/);
+  for (const name of ['askApp', 'startVoiceInput', 'autoFillFromPhoto']) {
+    // Exercise the generated functions: unsupported services must return before any I/O.
+    const start = html.indexOf(`function ${name}(){`);
+    const guard = html.slice(start, html.indexOf('return;', start) + 7) + '}';
+    const messages = [];
+    vm.runInNewContext(`${guard}; ${name}();`, { showToast: message => messages.push(message) });
+    assert.equal(messages.length, 1);
+  }
+  for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+    if (match[1].trim()) new vm.Script(match[1]);
+  }
+});

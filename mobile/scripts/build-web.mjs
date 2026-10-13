@@ -6,6 +6,11 @@ import { build } from 'esbuild';
 const mobile = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = resolve(mobile, '..');
 const environment = process.argv[2];
+const platform = process.argv[3] || 'ios';
+if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported native platform.');
+if (platform === 'android' && environment !== 'staging') {
+  throw new Error('Android currently supports staging test builds only.');
+}
 if (!['staging', 'production'].includes(environment)) {
   throw new Error('Specify staging or production explicitly.');
 }
@@ -35,11 +40,19 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
   '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store}));\n  // END MANEE_ENVIRONMENT');
-replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', '<div class="owner-menu"><button id="native-settings-btn">아이폰 구독·알림<span>›</span></button><button data-owner-setup-resume>');
+replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? '테스트 앱 안내' : '아이폰 구독·알림'}<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
   "        await window.MANEE_NATIVE.prepareLogout();\n        const { error } = await db.auth.signOut({ scope: 'local' });");
 html = html.replaceAll('navigator.geolocation', 'window.MANEE_GEOLOCATION');
+if (platform === 'android') {
+  // Let Capacitor inset the WebView below system bars and above the keyboard.
+  replaceOnce('viewport-fit=cover', 'viewport-fit=contain');
+  replaceOnce('  function startVoiceInput(){', '  function startVoiceInput(){\n    showToast("이 테스트 앱은 음성 입력을 지원하지 않아요. 키보드로 입력해 주세요."); return;');
+  replaceOnce('  async function askApp(){', '  async function askApp(){\n    showToast("이 테스트 앱은 AI 연결을 준비 중이에요."); return;');
+  replaceOnce('  async function autoFillFromPhoto(){', '  async function autoFillFromPhoto(){\n    showToast("이 테스트 앱은 영수증 자동 인식을 준비 중이에요. 직접 입력해 주세요."); return;');
+  replaceOnce('\n<body>\n', '\n<body>\n<div role="status" style="position:fixed;top:0;left:0;right:0;z-index:99999;text-align:center;background:#fef3c7;color:#713f12;font-size:12px;padding:3px;pointer-events:none">매니 Android 테스트 · 테스트 데이터만 입력해 주세요</div>\n');
+}
 // WKWebView web push is not APNs. Avoid waiting forever for an unregistered worker.
 html = html.replaceAll('"serviceWorker" in navigator', 'false /* Native APNs uses separate authenticated settings */');
 replaceOnce("location.origin+'/'", JSON.stringify(publicOrigin + '/'));
@@ -56,8 +69,8 @@ for (const asset of ['owner-ui.css', 'report-assets', 'icons', 'manifest.json'])
 }
 cpSync(resolve(mobile, 'node_modules/xlsx-js-style/dist/xlsx.bundle.js'), resolve(output, 'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), resolve(output, 'vendor/supabase.js'));
-await build({ entryPoints: [resolve(mobile, 'src/native.js')], bundle: true,
+await build({ entryPoints: [resolve(mobile, platform === 'android' ? 'src/native-android.js' : 'src/native.js')], bundle: true,
   define: {NATIVE_SERVICES_ORIGIN:JSON.stringify(functionsOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},
-  outfile: resolve(output, 'native.js'), format: 'iife', target: 'safari15', minify: true });
-writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, projectRef: config.projectRef }, null, 2) + '\n');
+  outfile: resolve(output, 'native.js'), format: 'iife', target: platform === 'android' ? 'chrome100' : 'safari15', minify: true });
+writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef }, null, 2) + '\n');
 console.log(`Prepared ${environment} native web assets (${config.projectRef}).`);
