@@ -11389,9 +11389,12 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   async function syncAuthAcrossTabs(){
     const shownUser = state.authProfile && state.authProfile.user_id;
     if(!shownUser || state.role === "landing") return;
+    const alive = maneeLoadGuard('auth-tab-sync');
     let uid = null;
     try{
-      const { data } = await db.auth.getSession();
+      const { data, error } = await db.auth.getSession();
+      // A failed refresh is not evidence of logout. An older lookup must never clear a new login.
+      if(error || !alive() || state.role === "landing") return;
       uid = data && data.session && data.session.user ? data.session.user.id : null;
     }catch(e){ return; }
     if(uid === shownUser) return;
