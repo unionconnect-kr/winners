@@ -27,7 +27,7 @@ node scripts/verify-android-apk.mjs android/app/build/outputs/apk/debug/app-debu
 | 사진 첨부 | Android WebView 파일 선택기 사용; 실제 사진 선택 및 저장 확인 필요 |
 | AI·영수증 자동 인식 | staging API 미구성으로 사용 중단 안내 |
 | 음성 입력 | 사용 중단 안내, 마이크 권한 없음 |
-| 푸시 알림 | FCM 연결 준비; Firebase 설정 없는 APK는 연결하지 않음 |
+| 푸시 알림 | 1.7에 Firebase 테스트 앱 설정 반영; 서버 인증 정보 연결과 실제 기기 수신 확인 필요 |
 | 구독 결제 | 미구현; Android에 APNs/StoreKit 미포함 |
 | PDF·엑셀 내보내기 | Android 시스템 저장 위치 선택창 사용; 실제 기기 최종 확인 필요 |
 
@@ -93,3 +93,9 @@ Android FCM 등록·해제·권한 확인·토큰 갱신·로그아웃 정리와
 이 APK에는 Firebase 앱 설정이 없으므로 **실제 휴대폰 푸시 수신은 아직 지원하지 않습니다.** Firebase 연결 후 새 APK를 빌드하고 실기기 수신을 확인해야 합니다. 출퇴근·예약·월말 이벤트 자동 발송은 아직 Android 발송 경로에 연결하지 않았습니다. 설정 절차는 [ANDROID_PUSH.md](ANDROID_PUSH.md)를 참고하세요.
 
 검증: 모바일 20개, 위치·준비 과정·Android DB 권한·FCM 서버 50개 테스트 통과(합계 70개). Android 컴파일, 패키지/권한 검사 및 설치된 1.5와 동일한 서명을 확인했습니다. staging에 Android 전용 테이블/RPC/Edge Function을 반영했고 인증 없는 요청의 401 거절을 확인했습니다. 운영 DB·운영 웹·iOS 푸시 발송 경로는 배포하지 않았습니다.
+
+## 테스트 업데이트 1.7 (versionCode 8)
+
+회사 계정의 Firebase `manee-staging` 프로젝트에 Android 테스트 앱을 등록하고 해당 앱의 구성 파일을 적용했습니다. 1.6에서 확인한 매장 위치 저장 안내와 기존 테스트 데이터를 유지하는 업데이트입니다. 서버의 푸시 발송 인증 정보가 연결되기 전에는 알림 활성화를 준비 중으로 표시합니다. 실제 푸시 수신 성공을 의미하지 않으며, 서버 연결 후 실제 기기에서 확인해야 합니다.
+
+검증: 모바일 테스트 20개, Firebase 구성 파일의 프로젝트·패키지 일치 검사, Android clean 빌드, 서명 및 패키지/권한 검사를 통과했습니다. FCM HTTP v1 API 활성화를 확인했습니다. 서버 키 발급 승인과 Supabase 보안 설정 등록은 아직 완료되지 않았습니다.

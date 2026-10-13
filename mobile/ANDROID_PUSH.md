@@ -1,6 +1,16 @@
 # Android push setup (staging only)
 
-The 1.6 APK prepares native FCM support. It does not contain Firebase configuration and does not request notification permission until both client and server configuration agree. The web and iOS paths stay separate. In-app badge counts remain pending task groups, independent of phone notification delivery.
+The 1.7 build includes Android client configuration for the company-owned Firebase project `manee-staging`. The preceding 1.6 APK had no Firebase client configuration. Notification permission is requested only when both client and server configuration agree. The web and iOS paths stay separate. In-app badge counts remain pending task groups, independent of phone notification delivery.
+
+## Connection checkpoint — 2026-10-13
+
+- Created `manee-staging` under the Union Connect company Google account on the Spark plan. Google Analytics and Gemini were not enabled during project setup.
+- Registered Android package `kr.co.manee.app.staging`, app ID `1:539826260421:android:fdd950d3e1aeb974ece3ac`, project number `539826260421`.
+- Downloaded the client configuration from Firebase Console and validated it before placing it in the gitignored app configuration path.
+- Confirmed Firebase Cloud Messaging HTTP v1 is enabled in Firebase Console. Mobile tests (20), a clean signed Android debug build, and the APK package/permission check passed with this client configuration.
+- Server service-account credentials have **not** been connected yet. A configured client alone must not report push delivery as ready. Physical-device receipt and automatic event delivery remain unverified.
+- Browser key generation requires explicit user approval. The available Firebase service account is `firebase-adminsdk-fbsvc@manee-staging.iam.gserviceaccount.com`; it is an Admin SDK account, not a verified send-only account. Google Cloud IAM returned “Site Unavailable” in this browser, including after one reload, so its exact roles could not be inspected or narrowed. Do not describe its key as push-only.
+- The staging Supabase Secrets page redirects to sign-in in this browser. Complete secure company-account sign-in before writing `MANEE_ANDROID_FCM_SERVICE_ACCOUNT`; do not paste the key into chat or source files.
 
 ## Required external configuration
 
