@@ -31,7 +31,13 @@ jobs:
           set -euo pipefail
           if ! test -x "$PGBIN/pg_ctl"; then
             sudo apt-get update -qq
-            sudo apt-get install -y postgresql-17 postgresql-contrib-17
+            sudo apt-get install -y curl ca-certificates
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+            . /etc/os-release
+            printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/manee-pgdg.list
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-17
           fi
           for tool in postgres initdb pg_ctl psql pg_dump pg_restore; do
             test -x "$PGBIN/$tool"
