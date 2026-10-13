@@ -46,6 +46,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Install workbook test dependencies
+        run: npm --prefix mobile ci
       - name: Ensure database and PDF inspection tools
         run: |
           sudo apt-get update -qq
