@@ -165,3 +165,21 @@ unfinished; no additional phone reinstall is needed for this infrastructure work
   No public rollout, Play upload, subscription activation or checkout occurred.
 - Production cron has now executed successfully on consecutive minutes. This
   does not change the unverified Google OAuth/FCM or handset-delivery status.
+
+## Signed internal bundle completed — 2026-10-14 03:10 KST
+
+The user registered five repository secrets and the public certificate variable.
+The first run reported a missing keystore value; after the user corrected it,
+run 38443746525 attempt 2 succeeded: 41 mobile tests, production web build,
+Gradle release bundle signing, AAB asset/certificate verification and artifact
+upload all passed. No signing values were printed or committed.
+
+Artifact `manee-play-internal-setup-aab` (11837147648) contains the signed AAB.
+Downloaded artifact ZIP SHA-256:
+`72d5229cb67b62a803873b1500b22174292bd74e1736d6928619ff2137e045c4`.
+This is a production-backend bundle for Play internal setup only. Checkout is
+still disabled. No Play Console upload, subscription creation, billing-server
+activation or public rollout has occurred. Multi-store billing and live Google
+FCM authorization/delivery remain unverified.
+
+Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
