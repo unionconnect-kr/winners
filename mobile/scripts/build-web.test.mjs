@@ -54,7 +54,7 @@ test('Android production requires explicit internal setup; staging cannot invoke
   assert.match(html, /테스트 앱 안내/);
   assert.match(html, /native-subscription-btn/);
   assert.match(html, /error\?\.code==="P4402"/);
-  assert.match(native, /매장 이용권 확인 필요/);
+  assert.match(native, /manee-subscription-status/);
   assert.match(html, /return nativeAndroidPushAction\("enable"\)/);
   assert.match(html, /return nativeAndroidPushAction\("disable"\)/);
   assert.doesNotMatch(html, /아이폰 구독·알림/);
