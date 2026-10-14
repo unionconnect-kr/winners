@@ -17,7 +17,8 @@ export function createRefreshHandler({client,api}) {
      await verifyAndPersist({api,purchaseToken:job.purchase_token,
       context:{...binding(job.user_id,job.store_id),productId:job.product_id,basePlanId:'monthly'},
       persist:async record=>{
-       if(record.environment!=='Sandbox')return false;
+       if(!['Sandbox','Production'].includes(job.environment??'Sandbox') ||
+        record.environment!==(job.environment??'Sandbox'))return false;
        const saved=await client.rpc('manee_android_billing_save',{p_user_id:job.user_id,p_store_id:job.store_id,p_record:record});
        return !saved.error&&saved.data===true;
       }});

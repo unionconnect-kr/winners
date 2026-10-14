@@ -29,7 +29,7 @@ test('notifications enqueue tokens only; bad identity/package/subscription and D
  const denied=createNotificationHandler({authenticate:async()=>{throw Error();},subscription,client:null});assert.equal((await denied(request())).status,401);
 });
 const user='11111111-1111-4111-8111-111111111111',store='22222222-2222-4222-8222-222222222222',ids=binding(user,store);
-const job={purchase_token:'receipt',user_id:user,store_id:store,lease_id:'lease',product_id:'manee.store1.monthly'};
+const job={purchase_token:'receipt',user_id:user,store_id:store,lease_id:'lease',product_id:'manee.store1.monthly',environment:'Sandbox'};
 const google={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_EXPIRED',acknowledgementState:'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:'manee.store1.monthly',offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()-1000).toISOString()}]};
 const refreshRequest=()=>new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer '+'a'.repeat(64)}});
 test('refresh queries Google afresh; expired subscriptions persist without acknowledgement',async()=>{
@@ -51,4 +51,19 @@ test('renewal worker verifies the persisted product of an additional store',asyn
  return{data:true};
  }}});
  assert.equal((await(await handler(refreshRequest())).json()).refreshed,1);assert.equal(saved,'manee.store2.monthly');
+});
+
+test('production renewal is refreshed only when the claimed environment matches Google',async()=>{
+ const paid=structuredClone(google);delete paid.testPurchase;
+ paid.subscriptionState='SUBSCRIPTION_STATE_ACTIVE';paid.acknowledgementState='ACKNOWLEDGEMENT_STATE_PENDING';
+ paid.lineItems[0].expiryTime=new Date(Date.now()+86400000).toISOString();
+ let saved=0,ack=0,lastSuccess;
+ const handler=createRefreshHandler({api:{get:async()=>paid,acknowledge:async()=>{assert.equal(saved,1);ack++;}},client:{rpc:async(name,args)=>{
+  if(name==='manee_billing_claim')return{data:[{...job,environment:'Production'}]};
+  if(name==='manee_android_billing_save'){assert.equal(args.p_record.environment,'Production');saved++;return{data:true};}
+  lastSuccess=args.p_success;return{data:true};
+ }}});
+ assert.equal((await(await handler(refreshRequest())).json()).refreshed,1);assert.equal(lastSuccess,true);assert.equal(ack,1);
+ paid.testPurchase={};saved=0;ack=0;
+ assert.equal((await(await handler(refreshRequest())).json()).retry,1);assert.equal(saved,0);assert.equal(ack,0);assert.equal(lastSuccess,false);
 });

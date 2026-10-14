@@ -65,3 +65,16 @@ The downloaded artifact checksum and packaged version/UI code were verified.
 AAB SHA-256: `36e9d064a7c96d25fb03abccb40a6d463835aec4f691897d73273e77127150b0`.
 The AAB is ready for the operator to upload to Play internal testing; upload,
 installation and on-device confirmation of 1.15 are not yet claimed.
+
+## Production receipt reconciliation groundwork (2026-10-14)
+
+The refresh worker now accepts a claimed Production receipt only when Google's
+fresh `subscriptionsv2.get` result has no `testPurchase` marker; Sandbox jobs
+likewise require that marker. A mismatched environment is retried without saving
+or acknowledging. The database claim and minute dispatcher select both ledger
+environments and include the immutable environment and product ID in each job.
+The purchase endpoint still rejects Production receipts, the Android UI is
+`testOnly`, no store is enrolled in write enforcement, and this change alone
+cannot start a paid checkout. Google recommends verifying current state from the
+Developer API and processing RTDN updates; the existing event queue wakes the
+poller, while the five-minute refresh bounds stale entitlement.

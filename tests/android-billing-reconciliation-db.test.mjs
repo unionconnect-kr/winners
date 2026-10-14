@@ -44,17 +44,23 @@ create function cron.schedule(n text,s text,c text) returns bigint language plpg
 create function cron.alter_job(bigint,active boolean) returns void language sql as $$select$$;
 create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds int) returns bigint language sql as $$select 1::bigint$$;`);
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261013191756_android_billing_reconciliation.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014040120_android_billing_product_allocation.sql',import.meta.url),'utf8'));
+await db.query('insert into private.android_billing_allocations values($1,$2,$3)',[owner,store,'manee.store1.monthly']);
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014100100_production_billing_refresh.sql',import.meta.url),'utf8'));
 const dispatch='ab'.repeat(32);
 async function claim(token=dispatch){await service();return (await db.query('select public.manee_billing_claim($1) jobs',[token])).rows[0].jobs;}
 const finish=async(j,success)=>{await service();return (await db.query('select public.manee_billing_finish($1,$2,$3) done',[j.purchase_token,j.lease_id,success])).rows[0].done;};
 const event=async(id,token)=>{await service();return db.query('select public.manee_billing_enqueue($1,$2)',[id,token]);};
-test('only service plus dedicated scheduler secret can claim; production receipts excluded',async()=>{
+test('only service plus dedicated scheduler secret can claim each ledger environment',async()=>{
  await save(record('paid'));await save(record('sandbox',{environment:'Sandbox'}));
  await role(owner);await assert.rejects(()=>db.query('select public.manee_billing_claim($1)',[dispatch]));
  await assert.rejects(()=>claim('00'.repeat(32)),/Dispatch access denied/);
- const jobs=await claim();assert.equal(jobs.length,1);assert.equal(jobs[0].purchase_token,'sandbox');
- assert.deepEqual(await claim(),[]);assert.equal(await finish({...jobs[0],lease_id:owner},true),false);
- assert.equal(await finish(jobs[0],true),true);assert.equal(await finish(jobs[0],true),false);
+ const jobs=await claim();assert.equal(jobs.length,2);
+ assert.deepEqual(jobs.map(j=>[j.purchase_token,j.environment,j.product_id]).sort(),[
+  ['paid','Production','manee.store1.monthly'],['sandbox','Sandbox','manee.store1.monthly']]);
+ assert.deepEqual(await claim(),[]);
+ assert.equal(await finish({...jobs[0],lease_id:owner},true),false);
+ for(const j of jobs){assert.equal(await finish(j,true),true);assert.equal(await finish(j,true),false);}
 });
 test('duplicate notifications enqueue once and arrival during a lease is not lost',async()=>{
  await event('100','sandbox');let jobs=await claim();assert.equal(jobs.length,1);
