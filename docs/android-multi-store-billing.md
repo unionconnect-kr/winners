@@ -5,7 +5,7 @@ Existing single-product receipts are backfilled without changing their store or
 purchase binding. An owner-scoped advisory lock serializes allocations across
 stores. Slots are never recycled automatically. New slots remain unavailable until
 an operator registers and enables a matching, verified Play Console subscription.
-Only the existing first product is currently enabled.
+The first two products are now enabled for internal testing (see the live evidence below).
 
 The endpoint selects catalog and receipt verification products from the database,
 not from request parameters. The SQL persistence function rejects wrong products,
@@ -22,12 +22,41 @@ Validation: 37 focused endpoint, SQL allocation, webhook/renewal, purchase and
 mobile coordinator/offer tests pass. This includes migration of a historical
 receipt and a synthetic second product. Live schema migration was checked for
 legacy owner conflicts first. Production billing endpoint v7 and refresh worker v3
-are deployed; purchases remain sandbox-only. No second Play product or actual
-second-store purchase is claimed as verified. Actual concurrency, production
-receipts, iOS parity and full app paid rollout remain release gates.
+are deployed; purchases remain sandbox-only. The second Play product and separate
+store purchases were subsequently verified as recorded below. Simultaneous first
+checkout races, production receipts, iOS parity and full app paid rollout remain
+release gates.
 
-Next Console setup for the second internal test slot: product ID
+Console setup for the second internal test slot: product ID
 `manee.store2.monthly`, base plan `monthly`, monthly auto-renewing KRW 9,900 in KR.
 Keep pricing consistent with the existing first slot. Free-trial eligibility must
 follow the agreed offer policy and be verified in Play. Registering the SKU alone
 does not enable it in the server catalog; enable only after catalog validation.
+
+## Live internal test — 2026-10-14 KST
+
+- The operator created and activated `manee.store2.monthly`, base plan `monthly`,
+  monthly auto-renewing KRW 9,900 in Korea. Server slot 2 was registered.
+- Hoga Sinchon purchased the second product; the server persisted a Sandbox
+  ACTIVE receipt. The 17:25 handset screenshot after restart/restore showed
+  successful server verification and no checkout button.
+- The existing first test subscription had expired. The tester's explicit
+  store permission was moved back to Saengsaeng Songcheon for a new first-product
+  purchase; the 17:28 screenshot showed verification success.
+- A server read at 17:29:37 confirmed both products ACTIVE, not superseded, with
+  future expiry times (store 1: 17:33:07; store 2: 17:32:52). Both had been checked
+  by the refresh worker at 17:29:00, with zero retry attempts. The second product's
+  expiry advanced from 17:27:52, confirming a renewal while the first was active.
+- Store/product allocations remained separate. This demonstrates two simultaneous
+  Sandbox subscriptions for one owner, not simultaneous checkout requests.
+- Test permission remains one explicit owner/store pair, currently Saengsaeng
+  Songcheon, with its original 2026-10-28 10:44 KST expiry. No broad tester grant,
+  production receipt acceptance or production write gate was enabled.
+
+The purchase-success screenshot also exposed a UI issue: offers stayed visible
+until the dialog was reopened, although the checkout coordinator already rejected
+another checkout for an active subscription. The source now hides all purchase
+offers immediately on active purchase/restore or already-active results, including
+restore completion before product loading. Seventeen focused UI/client tests pass.
+This UI correction has not yet been packaged into a new signed build; the installed
+1.14 / code 15 build retains the old immediate-success display behavior.
