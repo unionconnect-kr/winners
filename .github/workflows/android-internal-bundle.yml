@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/android-push-location-20261013']
-    paths: ['.github/workflows/android-internal-bundle.yml', 'mobile/src/android-billing*.mjs', 'mobile/android/app/build.gradle']
+    paths: ['.github/workflows/android-internal-bundle.yml', 'mobile/src/android-billing*.mjs', 'mobile/src/store-subscription.mjs', 'mobile/src/native-android.js', 'mobile/scripts/build-web.mjs', 'mobile/android/app/build.gradle']
 permissions:
   contents: read
 concurrency:

@@ -8,6 +8,7 @@ import { createNotificationNavigation } from './android-notification-navigation.
 
 import {createAndroidBillingClient} from './android-billing.mjs';
 import {openAndroidBilling} from './android-billing-ui.mjs';
+import {subscriptionView} from './store-subscription.mjs';
 const playBilling=registerPlugin('ManeePlayBilling');
 const billing=createAndroidBillingClient({playBilling,getContext:()=>getContext(),request:async(c,_name,body)=>{
  const {data:auth,error:authError}=await c.db.auth.getSession();
@@ -36,6 +37,42 @@ window.MANEE_NATIVE = {
   push(action) { return notifications.action(action); },
   refresh() { void navigation.start().then(()=>navigation.flush()).catch(()=>{}); },
   async prepareLogout() { navigation.clear();await notifications.prepareLogout(); },
+  openSubscriptionStatus() {
+    if (document.getElementById('manee-subscription-status')) return;
+    const c=getContext();if(c?.role!=='storeOwner'||!c.storeId||!c.userId)return;
+    const dialog=document.createElement('dialog');dialog.id='manee-subscription-status';
+    dialog.style.cssText='max-width:420px;width:90%;border:0;border-radius:20px;padding:24px;line-height:1.6;color:#18352a';
+    const heading=document.createElement('h2');heading.textContent='매장 이용권';dialog.append(heading);
+    const store=document.createElement('p');store.textContent=c.storeName||'선택한 매장';dialog.append(store);
+    const title=document.createElement('strong');title.textContent='상태를 확인하고 있어요…';dialog.append(title);
+    const message=document.createElement('p');message.setAttribute('role','status');dialog.append(message);
+    const sandbox=document.createElement('p');sandbox.hidden=true;dialog.append(sandbox);
+    const action=(label,fn)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.style.cssText='width:100%;padding:13px;margin:8px 0';button.onclick=fn;dialog.append(button);return button;};
+    const test=action('Google Play 결제 테스트·구매 복원',()=>{dialog.close();openAndroidBilling({billing,getContext,document});});test.hidden=true;
+    const refresh=action('상태 새로고침',()=>void load());
+    action('닫기',()=>dialog.close());
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+    let seq=0;
+    const same=()=>{const next=getContext();return dialog.isConnected&&next?.userId===c.userId&&next?.storeId===c.storeId;};
+    async function load(){
+      const current=++seq;refresh.disabled=true;title.textContent='상태를 확인하고 있어요…';message.textContent='';sandbox.hidden=true;test.hidden=true;
+      try{
+        const [accessResult,billingResult]=await Promise.allSettled([
+          c.db.rpc('manee_store_billing_access',{p_store_id:c.storeId}),billing.status(),
+        ]);
+        if(current!==seq||!same())return;
+        const access=accessResult.status==='fulfilled'&&!accessResult.value.error?accessResult.value.data:null;
+        const bill=billingResult.status==='fulfilled'?billingResult.value:null;
+        const view=subscriptionView(access,bill);
+        title.textContent=view.title;message.textContent=view.message;
+        if(view.testActive){sandbox.hidden=false;sandbox.textContent='이 매장의 Google Play 테스트 구매가 확인되었습니다. 테스트 이용권은 정식 결제와 구분됩니다.';}
+        test.hidden=bill?.testOnly!==true;
+      }catch{if(same())message.textContent='잠시 후 새로고침해 주세요.';}
+      finally{if(current===seq&&same())refresh.disabled=false;}
+    }
+    void load();
+  },
+  subscriptionDenied() { this.openSubscriptionStatus(); },
   openSettings() {
     if (document.getElementById('manee-android-info')) return;
     const dialog = document.createElement('dialog');

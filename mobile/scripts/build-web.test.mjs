@@ -52,6 +52,9 @@ test('Android production requires explicit internal setup; staging cannot invoke
   assert.match(native, /manee-android-push/);
   const html = read('www/index.html');
   assert.match(html, /테스트 앱 안내/);
+  assert.match(html, /native-subscription-btn/);
+  assert.match(html, /error\?\.code==="P4402"/);
+  assert.match(native, /매장 이용권 확인 필요/);
   assert.match(html, /return nativeAndroidPushAction\("enable"\)/);
   assert.match(html, /return nativeAndroidPushAction\("disable"\)/);
   assert.doesNotMatch(html, /아이폰 구독·알림/);
@@ -86,6 +89,8 @@ test('explicit Play internal setup bundles production Firebase and backend witho
     assert.equal(info.releasePurpose,'play-internal-setup');
     assert.equal(info.billingEnabled,false);
     assert.doesNotMatch(read('www/index.html'),/매니 Android 테스트 · 테스트 데이터만 입력해 주세요|테스트 앱 안내/);
+    assert.match(read('www/index.html'),/native-subscription-btn/);
+    assert.match(read('www/index.html'),/error\?\.code==="P4402"/);
     assert.doesNotMatch(read('www/native.js'),/ManeeStoreKit|ios-billing|ios-push|매니 테스트 앱/);
     for (const match of read('www/index.html').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
       if (match[1].trim()) new vm.Script(match[1]);

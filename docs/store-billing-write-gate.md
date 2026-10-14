@@ -31,6 +31,16 @@ production billing or production write enforcement.
 Live recheck on 2026-10-14: staging still has 17 write-gate triggers and 0 enrolled
 stores. Production has no enrollment table and no billing write-gate triggers.
 
+Android 1.16 adds an owner-facing per-store 이용권 screen to the native 더보기 menu.
+It reads the authenticated membership-checked access RPC and displays sandbox
+purchases separately from write entitlement. When the database rejects a direct
+business mutation with P4402, the owner is shown that status screen; staff are
+directed to the owner. An unavailable RPC is an unknown state, never an access
+grant. This is an internal setup build. Production has no access RPC yet and
+therefore shows a connection-pending status; no store is newly restricted. The
+status screen does not offer a real purchase until production receipt validation
+and the broader gate are complete.
+
 Security advisor review: the new private deny-by-default table reports informational
 RLS-without-policy, intentionally with all client grants revoked. Unrelated staging
 warnings remain for public SECURITY DEFINER ratio/snapshot RPCs and disabled leaked
