@@ -68,13 +68,21 @@ installation and on-device confirmation of 1.15 are not yet claimed.
 
 ## Production receipt reconciliation groundwork (2026-10-14)
 
-The refresh worker now accepts a claimed Production receipt only when Google's
+The refresh worker source is prepared to accept a claimed Production receipt only when Google's
 fresh `subscriptionsv2.get` result has no `testPurchase` marker; Sandbox jobs
 likewise require that marker. A mismatched environment is retried without saving
-or acknowledging. The database claim and minute dispatcher select both ledger
+or acknowledging. The staged database claim and minute dispatcher select both ledger
 environments and include the immutable environment and product ID in each job.
 The purchase endpoint still rejects Production receipts, the Android UI is
 `testOnly`, no store is enrolled in write enforcement, and this change alone
 cannot start a paid checkout. Google recommends verifying current state from the
 Developer API and processing RTDN updates; the existing event queue wakes the
 poller, while the five-minute refresh bounds stale entitlement.
+
+Deployment boundary on 2026-10-14: the new SQL is installed only in staging,
+where there are zero purchase rows, zero enrolled stores and no active billing
+refresh cron. The production refresh Edge Function remains version 3, and its
+claim/dispatch functions remain Sandbox-only. The production deployment was
+blocked by automatic approval review because it changes a live service-role
+and Google Play credential-bearing payment worker. Do not apply the production
+SQL ahead of its paired worker. Production checkout remains unavailable.
