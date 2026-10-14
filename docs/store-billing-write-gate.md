@@ -16,28 +16,32 @@ observations; Sandbox/Production separation; staff access restoration; supersede
 receipts and revoked owner membership. Staging deployment confirms 17 triggers,
 0 enrolled stores, no anonymous status grant and no client enrollment/probe grant.
 
-This is an Android pilot, not complete paid rollout. Production database is not
-modified. No actual store is enrolled. Attendance remains available to avoid
+This is an Android pilot, not complete paid rollout. On 2026-10-14, the existing
+explicit-enrollment migration was applied to Production with zero enrolled stores.
+No live store is restricted. Attendance remains available to avoid
 stranding an employee mid-shift; identity/account recovery, notifications, crew
 profile changes, indirect child records and storage are outside this first gate.
 Full account-erasure/cascade behavior, iOS entitlements, production-receipt
-refresh behavior, UI access-state integration and a signed device build containing
-that integration must be verified before production enrollment. Per-store Android
+refresh behavior, the remaining write surfaces, and on-device expiry behavior
+must be verified before production enrollment. Per-store Android
 product allocation, product-aware receipt verification and refresh are now
 implemented. Two separate Play products were verified simultaneously active in
 Sandbox on 2026-10-14; see `android-multi-store-billing.md`. This does not enable
 production billing or production write enforcement.
 
-Live recheck on 2026-10-14: staging still has 17 write-gate triggers and 0 enrolled
-stores. Production has no enrollment table and no billing write-gate triggers.
+Live recheck on 2026-10-14: staging and production each have 17 write-gate triggers
+and 0 enrolled stores. The authenticated access RPC exists in Production; anonymous
+callers cannot execute it. Three known owner stores still evaluate as write-entitled
+because none is enrolled.
 
 Android 1.16 adds an owner-facing per-store 이용권 screen to the native 더보기 menu.
 It reads the authenticated membership-checked access RPC and displays sandbox
 purchases separately from write entitlement. When the database rejects a direct
 business mutation with P4402, the owner is shown that status screen; staff are
 directed to the owner. An unavailable RPC is an unknown state, never an access
-grant. This is an internal setup build. Production has no access RPC yet and
-therefore shows a connection-pending status; no store is newly restricted. The
+grant. This is an internal setup build. Before the status migration, Production
+showed a connection-pending status; after refresh it reports the store as
+unenrolled and unrestricted. The
 status screen does not offer a real purchase until production receipt validation
 and the broader gate are complete.
 
@@ -47,7 +51,8 @@ claims write access. Android 1.16 / code 17 was rebuilt from commit
 `ce4e14cd7b9f9326b9379bef0e288763ddbe0520`: Actions run `38541291146`
 passed mobile tests, signed bundle verification and artifact upload. Final AAB
 SHA-256: `82355b47d77637d46802ff05b657960f42d6e1d44aea4cdb8e27c2373ade569e`.
-Play Console upload and on-device confirmation remain pending.
+On-device screenshots confirm the owner screen opens for two selected stores;
+the refreshed Production RPC display remains to be checked on device.
 
 Security advisor review: the new private deny-by-default table reports informational
 RLS-without-policy, intentionally with all client grants revoked. Unrelated staging
