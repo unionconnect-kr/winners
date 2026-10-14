@@ -90,3 +90,33 @@ the refresh cron active, claim/dispatch capable of Production records, and
 Songcheon/Hoga stores still write-entitled. The separate purchase Edge Function
 remains version 7 with its explicit Sandbox-only record guard; enabling paid
 checkout is a separate future step.
+
+## Paid receipt and checkout preparation — 2026-10-14
+
+The review branch `codex/billing-paid-acceptance-20261014` adds an exact
+owner/store Production permission to the purchase verifier. It accepts only
+Google receipts without a `testPurchase` marker, and checks ownership again
+before persistence. No permission pair is configured in Production, and the
+deployed purchase endpoint is still version 7.
+
+The same branch adds an owner/store/product checkout lease. A second device
+receives a conflict during a live 15-minute claim; explicit cancellation or a
+verified purchase releases the matching checkout ID. An interrupted or pending
+purchase remains restorable, and verification does not depend on the lease.
+The additive migration was applied to Staging, with zero claims and no direct
+table writes by an authenticated client. Production migration application
+returned an `invalid or expired requestState` connector error; a read afterward
+confirmed that the checkout table and RPC were absent. No Production store is
+enrolled, and no Production receipts exist.
+
+Paid preparation also requires Play's Korean regional base-plan price to be
+exactly KRW 9,900/month. Sandbox readiness is separate. Focused billing tests
+pass (70/70). The existing Android dialog still explicitly permits test
+purchases only, so this source branch does not display a paid checkout.
+
+Draft PR #22 targets `main` and includes 58 accumulated commits. Before paid
+rollout, verify Play Console's free-trial offer and both products on a real
+device, apply and inspect the Production lease migration, deploy a gated
+purchase endpoint and paid-capable app, then exercise restore, cancellation,
+renewal and write-entitlement behavior with an explicitly selected pilot.
+The duplicate-checkout HTTP 409 display improvement is not in this branch.
