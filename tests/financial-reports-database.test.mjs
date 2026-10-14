@@ -87,6 +87,14 @@ test('financial RPC endpoints are invoker wrappers; private cores preserve expli
  assert.equal(rows.length,12);for(const r of rows){assert.equal(r.prosecdef,r.nspname==='private');assert.equal(r.anon_execute,false);if(r.nspname==='private')assert.ok(r.definition.includes('auth.uid() is null'));}
 });
 
+test('closing a future month is rejected without creating an archived revision',async()=>{
+ await role(owner);
+ const future=(await db.query("select to_char((now() at time zone 'Asia/Seoul')+interval '1 month','YYYY-MM') as month")).rows[0].month;
+ const before=(await db.query('select public.manee_report_history($1) as r',[store])).rows[0].r.length;
+ await assert.rejects(()=>db.query('select public.manee_close_month($1,$2,$3,null)',[store,future,id(405)]),/Month has not ended/);
+ assert.equal((await db.query('select public.manee_report_history($1) as r',[store])).rows[0].r.length,before);
+});
+
 test('SQL floors each shift including seconds and overnight, matching JS in owner/franchise reports',async()=>{
  await db.exec('reset role');
  const s=id(501),c=id(502);

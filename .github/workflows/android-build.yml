@@ -9,6 +9,11 @@ on:
       - 'owner-ui.css'
       - 'report-assets/**'
       - 'config/**'
+      - 'security/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/android-build.yml'
 
 permissions:
@@ -19,7 +24,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  regression:
+    name: App regression and concurrent database checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local_ci_only
+          POSTGRES_DB: manee_code_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MANEE_TEST_DATABASE_URL: postgresql://postgres:local_ci_only@127.0.0.1:5432/manee_code_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Install workbook test dependencies
+        run: npm --prefix mobile ci
+      - name: Ensure database and PDF inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client poppler-utils
+      - name: Check concurrent requests on the disposable database
+        run: |
+          set -euo pipefail
+          test -n "$MANEE_TEST_DATABASE_URL"
+          # Cluster roles are shared, so bootstrap suites sequentially.
+          # Each suite still sends competing requests concurrently.
+          node --test --test-reporter=tap security/store-code-concurrency.test.mjs | tee /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/new-staff-self-profile-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/attendance-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --input-type=module - <<'JS'
+          import { readFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const log = readFileSync('/tmp/android-concurrency.txt', 'utf8');
+          // A skipped suite must never allow an APK through this gate.
+          assert.equal([...log.matchAll(/^# tests 1$/gm)].length, 3);
+          assert.equal([...log.matchAll(/^# pass 1$/gm)].length, 3);
+          assert.equal([...log.matchAll(/^# skipped 0$/gm)].length, 3);
+          JS
+      - name: Check app and security regressions
+        run: |
+          set -euo pipefail
+          # Real concurrency ran above. Backup rehearsals have separate requirements.
+          env -u MANEE_TEST_DATABASE_URL node --test --test-concurrency=2 security/*.test.mjs tests/*.test.mjs | tee /tmp/android-regression.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee-android-regression-results
+          path: /tmp/android-*.txt
+          retention-days: 14
   apk:
+    needs: regression
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -37,6 +100,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
       - run: npm test

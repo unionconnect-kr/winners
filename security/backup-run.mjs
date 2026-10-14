@@ -189,7 +189,7 @@ function cmd_rehearse(dir){
   const cluster=path.join(work,'pgdata');const HOST='127.0.0.1';
   const env={...cleanEnv(),PGHOST:HOST,PGPORT:port,PGUSER:'postgres',PGCONNECT_TIMEOUT:'10'};   // no inherited PG*/MANEE_* variable can point this at a real database
   let r=run(bin('initdb'),['-D',cluster,'-U','postgres','-A','trust','-E','UTF8'],env);need(r.code===0,'initdb failed');
-  r=run(bin('pg_ctl'),['-D',cluster,'-o','-p '+port+' -c listen_addresses='+HOST,'-l',path.join(work,'pg.log'),'-w','start'],env,{stdio:'ignore'});need(r.code===0,'local server did not start');
+  r=run(bin('pg_ctl'),['-D',cluster,'-o','-p '+port+' -c unix_socket_directories= -c listen_addresses='+HOST,'-l',path.join(work,'pg.log'),'-w','start'],env,{stdio:'ignore'});need(r.code===0,'local server did not start');
   try{
     need(env.PGHOST===HOST,'restore target must be the local rehearsal server');
     run(bin('psql'),['-d','postgres','-qc','create database restored'],env);

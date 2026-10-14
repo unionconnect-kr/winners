@@ -364,6 +364,7 @@
   /* Staging only: the banner is a flex item of <body>; stack it above the app instead of squeezing the app beside it. */
 body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:center}
 .environment-banner{width:100%;max-width:480px;margin:0 auto;padding:8px 12px;text-align:center;background:#fff3cd;color:#674c00;font-size:12px;}
+.reservation-time-fields{display:grid;grid-template-columns:90px minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center}.reservation-time-fields .field-input{min-width:0;width:100%;box-sizing:border-box}.reservation-time-fields input{text-align:center}
 </style>
 <link rel="stylesheet" href="/owner-ui.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>
@@ -1537,7 +1538,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function clearStaffAuthView(){
     maneeViewEpoch++;   // in-flight lookups of the previous account are discarded when they arrive
     state.ownerReportHomeNotices=null;
-    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;
+    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;state.ownerSetupLocationResult=null;
     state.staffClockBusy=null;state.staffAttendanceBusy=null;
     state.reservationSaving=null;state.checklistLoadFailed=false;state.homeChecklistFailed=false;
     state.salesReportSaving=null;
@@ -3895,6 +3896,42 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const button=document.getElementById('add-reservation-btn');
     if(button){button.disabled=busy;button.textContent=busy?'등록 중…':'예약 등록';}
   }
+  function reservationTime24(period,hour,minute){
+    if(!hour&&!minute)return '';
+    if(!['AM','PM'].includes(period)||!/^\d{1,2}$/.test(hour)||!/^\d{1,2}$/.test(minute))return null;
+    const h=Number(hour),m=Number(minute);
+    if(h<1||h>12||m<0||m>59)return null;
+    return String(h%12+(period==='PM'?12:0)).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  function readReservationTime(){
+    const hour=document.getElementById('res-hour-input');
+    if(!hour)return document.getElementById('res-time-input')?.value||'';
+    return reservationTime24(document.getElementById('res-period-input').value,hour.value,document.getElementById('res-minute-input').value);
+  }
+  function renderReservationTimeInput(){
+    const d=state.reservationDraft||{},parts=(d.time||'').split(':'),h=parts.length===2?Number(parts[0]):null;
+    const period=d.period||(h!==null&&h<12?'AM':'PM');
+    const hour=d.hour??(h===null?'':String(h%12||12)),minute=d.minute??parts[1]??'';
+    return '<div style="margin-top:8px"><span class="field-label">시간</span><div class="reservation-time-fields" role="group" aria-label="예약 시간">'+
+      '<select id="res-period-input" class="field-input" aria-label="오전 오후"><option value="AM"'+(period==='AM'?' selected':'')+'>오전</option><option value="PM"'+(period==='PM'?' selected':'')+'>오후</option></select>'+
+      '<input id="res-hour-input" class="field-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="시" aria-label="예약 시, 1부터 12" autocomplete="off" value="'+escapeHtml(hour)+'">'+
+      '<span aria-hidden="true">:</span><input id="res-minute-input" class="field-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="분" aria-label="예약 분, 0부터 59" autocomplete="off" value="'+escapeHtml(minute)+'">'+
+      '<input id="res-time-input" type="hidden" value="'+escapeHtml(d.time||'')+'"></div></div>';
+  }
+  function bindReservationTimeInputs(){
+    const hour=document.getElementById('res-hour-input'),minute=document.getElementById('res-minute-input'),period=document.getElementById('res-period-input');
+    if(!hour||!minute||!period)return;
+    const sync=()=>{
+      state.reservationDraft=state.reservationDraft||{};
+      Object.assign(state.reservationDraft,{hour:hour.value,minute:minute.value,period:period.value,time:readReservationTime()||''});
+      document.getElementById('res-time-input').value=state.reservationDraft.time;
+    };
+    [hour,minute].forEach(input=>{
+      input.addEventListener('input',()=>{input.value=input.value.replace(/[^0-9]/g,'').slice(0,2);sync();});
+      input.addEventListener('blur',()=>{if(input===minute&&/^\d$/.test(input.value))input.value=input.value.padStart(2,'0');sync();});
+    });
+    period.addEventListener('change',sync);
+  }
   async function addReservation(){
     if(state.reservationSaving?.storeId===currentStoreId()&&state.reservationSaving?.userId===state.authProfile?.user_id)return;
     const dateInp = document.getElementById("res-date-input");
@@ -3909,9 +3946,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const storeId = currentStoreId();
     if(!storeId){ showToast("매장 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요."); return; }
     const resDate = (dateInp && dateInp.value) ? dateInp.value : bizToday();
-    const time=timeInp?.value||'',partyRaw=String(partyInp?.value||'').trim();
+    const time=readReservationTime(),partyRaw=String(partyInp?.value||'').trim();
     if(!isAttendanceDate(resDate)||resDate<bizToday()){showToast('예약 날짜는 오늘 이후의 올바른 날짜로 입력해 주세요.');dateInp?.focus();return;}
-    if(time&&!isValidTimeStr(time)){showToast('예약 시간을 확인해 주세요.');timeInp?.focus();return;}
+    if(time===null||(time&&!isValidTimeStr(time))){showToast('예약 시간은 1~12시, 분은 0~59로 입력해 주세요.');(document.getElementById('res-hour-input')||timeInp)?.focus();return;}
     if(partyRaw&&(!/^\d+$/.test(partyRaw)||!Number.isSafeInteger(Number(partyRaw))||Number(partyRaw)<1||Number(partyRaw)>2147483647)){
       showToast('예약 인원은 1명 이상의 정수로 입력해 주세요.');partyInp?.focus();return;
     }
@@ -3942,7 +3979,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       state.reservationDraft = {};
       state.showReservationForm = false;
       render();
-      showToast(isToday ? "예약을 등록했어요." : (formatDateLabel(resDate)+" 예약을 등록했어요. 그날 알림이 갈 거예요."));
+      showToast(isToday ? "예약을 등록했어요." : (formatDateLabel(resDate)+" 예약을 등록했어요."));
       if(isToday) sendReservationPush(res, storeId);
       if(state.role === "storeOwner" && state.myStores && state.myStores.length > 1) loadDashboardReservations();
     }catch(e){
@@ -5538,7 +5575,15 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     Promise.all([ loadShifts(state.store, monthKey()), loadAttendance(state.store, monthKey()), loadSalesReports(state.store, monthKey()), loadExpenseEntries(state.store, monthKey()), loadFixedExpenses(state.store, monthKey()), loadChecklistLog(state.store, monthKey()), loadPayAdjustments(state.store, monthKey()), loadMonthlyNetPayroll(state.store, monthKey()), loadMonthlyCostReview(state.store,monthKey()) ]).then(render);
   }
 
+  function setCrewCreateBusy(){
+    const pending=state.crewCreating;
+    const busy=!!(pending&&pending.storeId===currentStoreId()&&pending.userId===state.authProfile?.user_id);
+    const button=document.getElementById('add-crew-btn');
+    if(button){button.disabled=busy;button.textContent=busy?'등록 중…':'추가 완료';}
+  }
   async function addCrewMember(){
+    if(!canManageBusinessData())return;
+    if(state.crewCreating?.storeId===currentStoreId()&&state.crewCreating?.userId===state.authProfile?.user_id)return;
     const nameInput = document.getElementById("crew-name-input");
     const wageInput = document.getElementById("crew-wage-input");
     const wageTypeSelect = document.getElementById("crew-wagetype-select");
@@ -5558,8 +5603,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const healthCertInput = document.getElementById("crew-healthcert-input");
     const contractSignedBtn = document.getElementById("crew-contract-yes");
     const notesInput = document.getElementById("crew-notes-input");
+    if(!nameInput||!wageInput)return;
     const name = (nameInput.value||"").trim();
-    const wage = parseInt(wageInput.value||"0",10);
+    const wageRaw=String(wageInput.value||'').trim(),wage=Number(wageRaw);
     const wageType = wageTypeSelect ? wageTypeSelect.value : "hourly";
     const phone = (phoneInput.value||"").trim();
     const position = posSelect ? posSelect.value : "홀";
@@ -5577,25 +5623,33 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const healthCertExpiry = healthCertInput ? healthCertInput.value : "";
     const contractSigned = contractSignedBtn ? contractSignedBtn.classList.contains("active") : false;
     const notes = notesInput ? notesInput.value.trim() : "";
-    if(!name || !wage){ showToast("이름과 급여를 입력해 주세요."); return; }
+    if(!name){showToast('직원 이름을 입력해 주세요.');nameInput.focus();return;}
+    if(!/^\d+$/.test(wageRaw)||!Number.isSafeInteger(wage)||wage<1||wage>2147483647){showToast('급여는 1원 이상의 정수로 입력해 주세요.');wageInput.focus();return;}
     const storeId = state.storeIdMap[state.store];
-    const uniqueJoinCode = MANEE_STAFF_AUTH_ENABLED ? null : await genUniqueCode();
+    if(!storeId){showToast('매장 정보를 불러온 뒤 다시 시도해 주세요.');return;}
     const payload = {
       store_id: storeId, name, wage, wage_type: wageType, phone, position, is_manager: isManager, sales_access: salesAccess,
       tax33, weekly_allowance: weeklyAllowance, insurance4, insurance2, probation,
-      hire_date: hireDate || null, resign_date: resignDate || null, join_code: uniqueJoinCode,
+      hire_date: hireDate || null, resign_date: resignDate || null, join_code: null,
       work_condition: workCondition, weekly_hours: weeklyHours,
       health_cert_expiry: healthCertExpiry || null, contract_signed: contractSigned, notes
     };
+    const token={storeId,userId:state.authProfile?.user_id},alive=businessContextGuard();
+    state.crewCreating=token;setCrewCreateBusy();
     try{
+      if(!MANEE_STAFF_AUTH_ENABLED)payload.join_code=await genUniqueCode();
+      if(!alive())return;
       const { data, error } = await db.from('crew').insert(payload).select().single();
-      if(error) throw error;
+      if(error||!data?.id)throw error||new Error('Employee save was not confirmed');
+      if(!alive())return;
       state.crew.push(rowToCrew(data));
       nameInput.value=""; wageInput.value=""; phoneInput.value=""; if(weeklyHoursInput) weeklyHoursInput.value="";
       state.showAddCrewForm = false;
+      invalidateFinancialViews();
       render();
       showToast(name+"님을 추가했어요.");
-    }catch(e){ showToast("스텝 저장에 실패했어요."); }
+    }catch(e){if(alive())showToast("스텝 저장에 실패했어요.");}
+    finally{if(state.crewCreating===token){state.crewCreating=null;setCrewCreateBusy();}}
   }
   async function toggleProbation(id, val){
     return updateCrewRow(id,{probation:!!val});
@@ -5862,6 +5916,30 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const draft=state.ownerSetupDraft?.[id];
     return '<label class="setup-field">'+label+'<input data-setup-draft id="'+id+'" type="'+type+'" value="'+escapeHtml(draft??value??'')+'"'+(type==='number'?' inputmode="decimal"':'')+'></label>';
   }
+  function ownerSetupLocationFeedback(){
+    const result=state.ownerSetupLocationResult;
+    if(!result||result.storeId!==currentStoreId()||result.username!==state.myUsername)return '';
+    return '<p class="setup-note" role="status" aria-live="polite">'+escapeHtml(result.message)+'</p>';
+  }
+  async function saveOwnerSetupLocation(){
+    await ownerSetupMutation(async(sid,alive)=>{
+      const store=state.store,username=state.myUsername;
+      const feedback=message=>{if(alive())state.ownerSetupLocationResult={storeId:sid,username,message};};
+      feedback('현재 위치를 확인하는 중이에요…');render();
+      try{
+        const pos=await staffCoordinates();if(!alive())return;
+        feedback('매장 위치를 저장하는 중이에요…');render();
+        const saved=await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id,lat,lng'));
+        if(!alive())return;
+        if(saved.id!==sid||!Number.isFinite(saved.lat)||Math.abs(saved.lat)>90||!Number.isFinite(saved.lng)||Math.abs(saved.lng)>180)throw new Error('저장된 위치를 확인하지 못했어요. 다시 시도해 주세요.');
+        state.storeLocationMap[store]={lat:saved.lat,lng:saved.lng};
+        feedback('현재 위치로 저장했어요. 다음 단계로 진행해 주세요.');
+      }catch(e){
+        if(alive())feedback(staffErrorMessage(e));
+        throw new Error(staffErrorMessage(e));
+      }
+    });
+  }
   function ownerSetupSummary(){
     const statuses=ownerSetupProgress().statuses||{};
     const failed=state.reportDataFailed||new Set();
@@ -5873,7 +5951,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const step=state.onboardingStep,i=OWNER_SETUP_STEPS.indexOf(step),busy=!!state.ownerSetupBusy;
     let html='<div class="owner-setup"><p class="setup-eyebrow">'+escapeHtml(state.store)+' · 매장 준비 '+(i+1)+' / '+OWNER_SETUP_STEPS.length+'</p><progress max="'+OWNER_SETUP_STEPS.length+'" value="'+(i+1)+'" aria-label="매장 준비 진행"></progress><h2>'+OWNER_SETUP_LABELS[step]+'</h2><fieldset class="setup-fields"'+(busy?' disabled':'')+'>';
     if(step==='location'){
-      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>현재 위치를 매장 위치로 등록</button>';
+      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>'+(busy?'위치 등록 중…':'현재 위치를 매장 위치로 등록')+'</button>'+ownerSetupLocationFeedback();
     }else if(step==='cutoff'){
       html+='<p>이 시간 전까지의 매출·출퇴근·체크리스트를 전날 영업일로 묶어요.</p><label class="setup-field">영업일 기준 시간<select id="setup-cutoff" data-setup-draft>';
       const hour=Number(state.ownerSetupDraft?.['setup-cutoff']??storeCutoffHour(state.store));
@@ -5995,10 +6073,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     app.querySelectorAll('[data-setup-goto]').forEach(el=>el.onclick=()=>{state.onboardingStep=el.dataset.setupGoto;rememberOwnerSetup(state.onboardingStep);render();});
     app.querySelectorAll('[data-setup-add]').forEach(el=>el.onclick=()=>addOwnerSetupRecord(el.dataset.setupAdd));
     bind('[data-setup-retry]',async()=>{const store=state.store;await Promise.all([loadVendors(store),loadFixedExpenses(store,monthKey())]);render();});
-    bind('[data-setup-location]',async()=>{
-      const sid=currentStoreId(),user=state.myUsername;
-      await ownerSetupMutation(async(_,alive)=>{const pos=await staffCoordinates();if(!alive()||!ownerSetupAlive(sid,user))return;await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id'));if(alive())state.storeLocationMap[state.store]={lat:pos.current_lat,lng:pos.current_lng};});
-    });
+    bind('[data-setup-location]',saveOwnerSetupLocation);
     bind('[data-setup-code]',()=>ownerSetupMutation(async(sid,alive)=>{const access=await staffPortal('owner_list',{store_id:sid});if(alive())state.ownerStaffAccess={...access,storeId:sid};}));
     bind('[data-setup-copy]',()=>{const a=state.ownerStaffAccess;if(a?.storeId===currentStoreId()&&a.store_join_code)copyCode(a.store_join_code);});
     bind('[data-setup-share]',async()=>{const a=state.ownerStaffAccess;if(a?.storeId!==currentStoreId()||!a.store_join_code)return;const text=state.store+' 매니 직원 초대\n직원으로 가입 후 매장코드 '+a.store_join_code+'를 입력해 주세요.\n'+location.origin+'/';try{if(navigator.share)await navigator.share({title:'매니 직원 초대',text});else copyCode(text);}catch(e){if(e.name!=='AbortError')showToast('공유하지 못했어요. 코드 복사를 이용해 주세요.');}});
@@ -6608,15 +6683,21 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     let html='<h2>더보기</h2>';
     return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
   }
+  function renderOwnerStorePicker(){
+    const stores=state.myStores||[],group=ownerRouteGroup();
+    if(stores.length===1)return '<div class="owner-picker" style="justify-content:flex-start">'+navIcon('store')+'<span>'+escapeHtml(stores[0])+'</span></div>';
+    let html='<label class="owner-picker">'+navIcon('store')+'<span class="sr-only">매장 선택</span><select id="owner-store-select" aria-label="매장 선택">';
+    if(group==='home')html+='<option value="__all__"'+(state.homeStore==='__all__'||!stores.includes(state.homeStore)?' selected':'')+'>내 매장 전체 · '+stores.length+'곳</option>';
+    stores.forEach(s=>html+='<option value="'+escapeHtml(s)+'"'+((group!=='home'&&s===state.store)||(group==='home'&&s===state.homeStore)?' selected':'')+'>'+escapeHtml(s)+'</option>');
+    return html+'</select><svg class="owner-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>';
+  }
   function renderOwnerShell(){
+    if(state.myStores?.length===1&&state.store===state.myStores[0])state.homeStore=state.myStores[0];
     const group=ownerRouteGroup();
     const noticeCount=state.dashboardData?getNotifGroups().length:0;
     let html='<header class="owner-header"><div class="owner-topline"><div class="owner-logo"><img src="'+MASCOT_IMG_DATA+'" alt="매니"></div><div class="owner-header-right"><span class="owner-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 6 4 5 5-7 5 7 4-5-2 13H5Z"/></svg>사장님</span>'+
       '<button class="crew-code-btn owner-bell" id="owner-alert-shortcut" aria-label="'+(noticeCount?'전체 매장 확인할 일 '+noticeCount+'건':'알림 모아보기')+'">'+navIcon('bell')+(noticeCount?'<span class="owner-notice-count" aria-hidden="true">'+noticeCount+'</span>':'')+'</button></div></div>'+
-      '<label class="owner-picker">'+navIcon('store')+'<span class="sr-only">매장 선택</span><select id="owner-store-select" aria-label="매장 선택">';
-    if(group==='home') html+='<option value="__all__"'+(state.homeStore==='__all__'||!state.myStores.includes(state.homeStore)?' selected':'')+'>내 매장 전체 · '+state.myStores.length+'곳</option>';
-    state.myStores.forEach(s=>html+='<option value="'+escapeHtml(s)+'"'+((group!=='home'&&s===state.store)||(group==='home'&&s===state.homeStore)?' selected':'')+'>'+escapeHtml(s)+'</option>');
-    html+='</select><svg class="owner-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></label></header><main>';
+      renderOwnerStorePicker()+'</header><main>';
     if(!state.dashboardData&&!state.dashboardLoading) setTimeout(()=>{if(!state.dashboardData&&!state.dashboardLoading)loadDashboardData();},0);
     if(state.showAddStoreForm) html+=renderAddStoreForm();
     else if(state.showOwnerSalesForm) html+='<div class="owner-sales-form">'+renderSalesReportForm()+'</div>';
@@ -6639,8 +6720,53 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};
     });
   }
+  async function openNativeNotification(data,isCurrent=()=>true){
+    if(state.loading||!state.splashDone||!state.authProfile?.user_id)return 'pending';
+    if(state.role!=='storeOwner')return 'rejected';
+    const store=(state.myStores||[]).find(name=>state.storeIdMap[name]===data.storeId);
+    if(!store){showToast('이 알림의 매장에 접근할 수 없어요.');return 'rejected';}
+    const kinds=['test','attendance_in','attendance_out','reservation_created','reservation_cancelled','reservation_upcoming','reservation_due','report_closed','monthly_costs'];
+    if(!kinds.includes(data.kind))return 'rejected';
+    const alive=maneeLoadGuard('notificationNavigation'),valid=()=>alive()&&isCurrent();
+    const go=async()=>{
+      try{
+        if(!valid())return;
+        const permission=await db.rpc('manee_android_push_context',{p_store_id:data.storeId});
+        if(!valid())return;
+        if(permission.error||permission.data!==true){showToast('알림을 열 수 없어요. 로그인과 매장 접근 권한을 확인해 주세요.');render();return;}
+        state.showOwnerSalesForm=false;state.showReservationForm=false;state.reservationDraft={};state.showAddStoreForm=false;
+        state.salesEditingId=null;state.salesEditDate=null;state.expenseEditDraft=null;state.editingExpenseEntryId=null;
+        state.ownerStoreChoice=null;state.costEditKey=null;state.costLinkKey=null;state.costAddRequest=null;
+        state.store=store;state.homeStore=store;
+        if(data.kind.startsWith('reservation_'))state.section='reservations';
+        else if(data.kind.startsWith('attendance_')){
+          state.section='schedule';state.scheduleTab='attendance';
+          state.selectedDate=isAttendanceDate(data.eventDate)?data.eventDate:bizToday();
+          [state.monthYear,state.monthNum]=state.selectedDate.split('-').slice(0,2).map(Number);
+        }else if(data.kind==='report_closed'||data.kind==='monthly_costs'){
+          const key=/^\d{4}-(0[1-9]|1[0-2])$/.test(data.monthKey||'')?data.monthKey:bizToday().slice(0,7);
+          [state.monthYear,state.monthNum]=key.split('-').map(Number);
+          state.section='sales';state.salesSectionTab='report';state.showVatDetail=false;state.vatData=null;
+          state.costReviewOpen=data.kind==='monthly_costs';
+        }else state.section='settings';
+        await loadAllForStore(store);
+        if(valid()){render();window.scrollTo(0,0);}
+      }catch(e){if(valid()){state.loading=false;render();showToast('알림 화면을 불러오지 못했어요. 다시 시도해 주세요.');}}
+    };
+    if(state.pendingConfirm)return 'pending';
+    if(state.showOwnerSalesForm||state.showReservationForm||state.expenseEditDraft||state.showAddStoreForm||state.costEditKey||state.costAddRequest){
+      askConfirm('작성 중인 내용을 닫고 알림 화면으로 이동할까요? 저장하지 않은 입력은 반영되지 않아요.',go);
+      return 'handled';
+    }
+    await go();return 'handled';
+  }
   function ownerNavigateFromOverview(section,go){
     const needsStore=!['dashboard','more','alerts'].includes(section);
+    if(needsStore&&state.myStores?.length===1){
+      const sole=state.myStores[0];
+      if(state.store===sole){state.homeStore=sole;go();return;}
+      state.ownerStoreChoice={section,go};return chooseOwnerWorkStore(sole);
+    }
     if(needsStore&&state.homeStore==='__all__'){
       state.ownerStoreChoice={section,go};render();
       return;
@@ -7466,7 +7592,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       html += '<button id="show-reservation-form-btn" style="width:100%;margin-top:10px;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:800;cursor:pointer;background:var(--brick);color:#fff;">+ 예약 등록</button>';
     }else{
       html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">';
-      html += '<div class="row2"><div><label class="field-label">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+bizToday()+'" min="'+bizToday()+'"></div><div><label class="field-label">시간</label><input id="res-time-input" type="time" class="field-input"></div></div>';
+      html += '<div><label class="field-label" for="res-date-input">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div>'+renderReservationTimeInput();
       html += '<div style="margin-top:8px;"><label class="field-label">인원</label><input id="res-party-input" type="number" min="1" placeholder="인원수" class="field-input"></div>';
       html += '<div class="row2" style="margin-top:8px;"><div><label class="field-label">예약자명</label><input id="res-name-input" type="text" placeholder="이름" class="field-input"></div><div><label class="field-label">연락처</label><input id="res-phone-input" type="text" placeholder="선택" class="field-input"></div></div>';
       html += '<div style="margin-top:8px;"><label class="field-label">메모</label><input id="res-memo-input" type="text" placeholder="선택 (창가자리, 알러지 등)" class="field-input"></div>';
@@ -8716,7 +8842,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function renderOwnerReservations(){
     let html="";
-      const isMultiStore = state.myStores && state.myStores.length > 1;
+      const isMultiStore = state.myStores && state.myStores.length > 1 && state.homeStore==='__all__';
       html += '<div class="day-panel" style="margin-bottom:14px;">';
       html += '<h3 style="margin:0 0 6px;display:flex;align-items:center;gap:8px;"><span style="width:26px;height:26px;border-radius:50%;background:var(--brick);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none">'+navIcon('calendar')+'</svg></span>예약</h3>';
       if(isMultiStore){
@@ -8739,6 +8865,15 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         }else{
           html += '<p class="crew-code-hint" style="margin-bottom:8px;">오늘 등록된 예약이 없어요 · '+escapeHtml(state.store)+'</p>';
         }
+        const upcomingRes = (state.upcomingReservations||[]).filter(r=>r.date>bizToday()).slice().sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+        if(upcomingRes.length){
+          html += '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">';
+          html += '<p class="crew-code-hint" style="margin-bottom:8px;">다가오는 예약 '+upcomingRes.length+'건</p>';
+          upcomingRes.forEach(r=>{
+            html += '<div class="pay-list-item"><span class="d">'+escapeHtml(formatDateLabel(r.date))+' '+escapeHtml(r.time||'--:--')+' '+escapeHtml(r.customerName||'예약')+'</span><span style="display:flex;align-items:center;gap:8px;">'+(r.partySize?r.partySize+'명':'')+'<button class="crew-del" data-cancelres="'+escapeHtml(String(r.id))+'">취소</button></span></div>';
+          });
+          html += '</div>';
+        }
       }
       if(!state.showReservationForm){
         html += '<button id="show-reservation-form-btn" style="width:100%;margin-top:10px;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:800;cursor:pointer;background:var(--brick);color:#fff;">+ 예약 등록</button>';
@@ -8750,7 +8885,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
           html += '</select></div>';
           html += '<p class="crew-code-hint" style="margin-bottom:8px;">지금 "'+escapeHtml(state.store)+'" 매장에 등록돼요.</p>';
         }
-        html += '<div class="row2"><div><label class="field-label">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div><div><label class="field-label">시간</label><input id="res-time-input" type="time" class="field-input" value="'+escapeHtml(state.reservationDraft.time||"")+'"></div></div>';
+      html += '<div><label class="field-label" for="res-date-input">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div>'+renderReservationTimeInput();
         html += '<div style="margin-top:8px;"><label class="field-label">인원</label><input id="res-party-input" type="number" min="1" placeholder="인원수" class="field-input" value="'+escapeHtml(state.reservationDraft.party||"")+'"></div>';
         html += '<div class="row2" style="margin-top:8px;"><div><label class="field-label">예약자명</label><input id="res-name-input" type="text" placeholder="이름" class="field-input" value="'+escapeHtml(state.reservationDraft.name||"")+'"></div><div><label class="field-label">연락처</label><input id="res-phone-input" type="text" placeholder="선택" class="field-input" value="'+escapeHtml(state.reservationDraft.phone||"")+'"></div></div>';
         html += '<div style="margin-top:8px;"><label class="field-label">메모</label><input id="res-memo-input" type="text" placeholder="선택 (창가자리, 알러지 등)" class="field-input" value="'+escapeHtml(state.reservationDraft.memo||"")+'"></div>';
@@ -10446,6 +10581,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     bindVendorExpenseDefault('quick-');
     const addQuickExpenseBtn = document.getElementById("add-quick-expense-btn");
     if(addQuickExpenseBtn) addQuickExpenseBtn.addEventListener("click", addQuickExpenseEntry);
+    bindReservationTimeInputs();
     const addReservationBtn = document.getElementById("add-reservation-btn");
     if(addReservationBtn) addReservationBtn.addEventListener("click", addReservation);
     const showReservationFormBtn = document.getElementById("show-reservation-form-btn");
@@ -10618,6 +10754,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     });
     const addCrewBtn = document.getElementById("add-crew-btn");
     if(addCrewBtn) addCrewBtn.addEventListener("click", addCrewMember);
+    setCrewCreateBusy();
     const showAddCrewBtn = document.getElementById("show-add-crew-btn");
     if(showAddCrewBtn) showAddCrewBtn.addEventListener("click", ()=>{ state.showAddCrewForm = true; render(); });
     const cancelAddCrewBtn = document.getElementById("cancel-add-crew-btn");
@@ -10973,6 +11110,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
 
   function bindOwnerEvents(){
+    bindReservationTimeInputs();
     setReservationBusy();
     app.querySelectorAll('[data-owner-setup-resume]').forEach(el=>el.onclick=resumeOwnerSetup);
     if(state.showOwnerSalesForm) bindSalesReportEvents();
@@ -11251,9 +11389,12 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   async function syncAuthAcrossTabs(){
     const shownUser = state.authProfile && state.authProfile.user_id;
     if(!shownUser || state.role === "landing") return;
+    const alive = maneeLoadGuard('auth-tab-sync');
     let uid = null;
     try{
-      const { data } = await db.auth.getSession();
+      const { data, error } = await db.auth.getSession();
+      // A failed refresh is not evidence of logout. An older lookup must never clear a new login.
+      if(error || !alive() || state.role === "landing") return;
       uid = data && data.session && data.session.user ? data.session.user.id : null;
     }catch(e){ return; }
     if(uid === shownUser) return;

@@ -89,14 +89,15 @@ test('calcCrewPayFrom: a REAL recorded hireDate in a past month is unaffected by
 
 // ---------- 2) renderMonthlyReport: 입력된 자료 없음 vs 조회 실패 vs real negative profit ----------
 function reportHarness(state){
-  const ctx=vm.createContext({state,console,now:new Date(2026,8,19),calcCrewPayFrom:()=>({pay:0,hours:0,days:0}),
+  const ctx=vm.createContext({state,console,currentStoreId:()=>state.store,now:new Date(2026,8,19),calcCrewPayFrom:()=>({pay:0,hours:0,days:0}),
     escapeHtml:s=>String(s),daysInMonth:()=>30,
     computeVendorBreakdown:()=>[],calcCrewPay:(c,y,m)=>({pay:0,hours:0,days:0}),
     navIcon:()=>'',renderRoleAvatar:()=>'',ownerRouteButton:()=>'',pad:n=>String(n).padStart(2,'0'),
     renderMonthlyReportActions:()=>'',renderMonthlyCostReview:()=>'',renderFixedExpenseManage:()=>'',labelWithIcon:(i,l)=>l,renderSalesReportRows:()=>'',renderVatSummaryCard:()=>'',
     canManageBusinessData:()=>true,MANEE_STAFF_AUTH_ENABLED:false,formatLimit:n=>String(n)});
   vm.runInContext([line(/  const DEFAULT_LABOR_RATIO_LIMIT[^\n]*\n/),line(/  const FOOD_LIMIT_UNKNOWN_TEXT[^\n]*\n/),
-    ...['renderClosingControls','getTaxRate', 'getTaxLabel', 'computeNetPay', 'payrollAdjustmentSnapshot', 'settleNetPayroll', 'crewSettlementFrom', 'summarizeNetPayroll'].map(fnText),
+    line(/  function monthKey\([^\n]*\n/),
+    ...['renderClosingControls','renderReportExportStatus','getTaxRate', 'getTaxLabel', 'computeNetPay', 'payrollAdjustmentSnapshot', 'settleNetPayroll', 'crewSettlementFrom', 'summarizeNetPayroll'].map(fnText),
     ...['summarizeSalesFigures','foodRatioLimit','laborRatioLimit','foodRatioVerdict','laborRatioVerdict','foodRatioColor','foodRatioNote','renderMonthlyReport'].map(fnText),
     ';this.render=renderMonthlyReport;'].join('\n'),ctx);
   return ctx.render;

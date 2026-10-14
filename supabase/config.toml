@@ -413,3 +413,11 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Auth is verified by getUser plus a live-session owner RPC inside the handler.
+[functions.manee-android-push]
+verify_jwt = false
+
+# Custom scheduler bearer verified against Vault by a service-only DB RPC.
+[functions.manee-android-delivery]
+verify_jwt = false

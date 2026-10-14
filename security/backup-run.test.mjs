@@ -59,7 +59,7 @@ function pg(){
   const work=fs.mkdtempSync(path.join(os.tmpdir(),'manee-bkt-'));const port=String(57000+Math.floor(Math.random()*900));
   const env={...process.env};for(const k of Object.keys(env))if(/^PG|^MANEE_/.test(k))delete env[k];Object.assign(env,{PGHOST:'127.0.0.1',PGPORT:port,PGUSER:'postgres'});
   assert.equal(spawnSync(bin('initdb'),['-D',path.join(work,'d'),'-U','postgres','-A','trust','-E','UTF8'],{env}).status,0);
-  assert.equal(spawnSync(bin('pg_ctl'),['-D',path.join(work,'d'),'-o','-p '+port+' -c listen_addresses=127.0.0.1 -c timezone=Pacific/Auckland','-l',path.join(work,'l'),'-w','start'],{env,stdio:'ignore'}).status,0);
+  assert.equal(spawnSync(bin('pg_ctl'),['-D',path.join(work,'d'),'-o','-p '+port+' -c unix_socket_directories= -c listen_addresses=127.0.0.1 -c timezone=Pacific/Auckland','-l',path.join(work,'l'),'-w','start'],{env,stdio:'ignore'}).status,0);
   const psql=(db,sql)=>{const r=spawnSync(bin('psql'),['-d',db,'-qAt','-v','ON_ERROR_STOP=1','-c',sql],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
   psql('postgres','create database src');
   const seed=`create schema auth;create schema private;create extension pgcrypto;
@@ -159,7 +159,7 @@ function pgWithPassword(pw){
   const clean={...process.env};for(const k of Object.keys(clean))if(/^PG|^MANEE_/.test(k))delete clean[k];
   fs.writeFileSync(path.join(work,'pw.txt'),pw);
   assert.equal(spawnSync(bin('initdb'),['-D',path.join(work,'d'),'-U','postgres','-A','scram-sha-256','--pwfile='+path.join(work,'pw.txt'),'-E','UTF8'],{env:clean}).status,0);
-  assert.equal(spawnSync(bin('pg_ctl'),['-D',path.join(work,'d'),'-o','-p '+port+' -c listen_addresses=127.0.0.1','-l',path.join(work,'l'),'-w','start'],{env:clean,stdio:'ignore'}).status,0);
+  assert.equal(spawnSync(bin('pg_ctl'),['-D',path.join(work,'d'),'-o','-p '+port+' -c unix_socket_directories= -c listen_addresses=127.0.0.1','-l',path.join(work,'l'),'-w','start'],{env:clean,stdio:'ignore'}).status,0);
   const env={...clean,PGHOST:'127.0.0.1',PGPORT:port,PGUSER:'postgres',PGPASSWORD:pw};
   const psql=(db,sql)=>{const r=spawnSync(bin('psql'),['-d',db,'-qAt','-v','ON_ERROR_STOP=1','-c',sql],{env,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
   psql('postgres','create database src');

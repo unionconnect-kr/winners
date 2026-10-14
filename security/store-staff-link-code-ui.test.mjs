@@ -67,6 +67,7 @@ test('Pending employee sees an explicit owner-approval waiting message',()=>{
 });
 test('Auth UI hides employee codes and does not generate them for new employee records',()=>{
   assert.ok(html.includes('if(!MANEE_STAFF_AUTH_ENABLED) html += \'<div class="crew-code-row"'));
-  assert.ok(html.includes('const uniqueJoinCode = MANEE_STAFF_AUTH_ENABLED ? null : await genUniqueCode();'));
+  assert.ok(html.includes('if(!MANEE_STAFF_AUTH_ENABLED)payload.join_code=await genUniqueCode();'));
+  // Executed payload/code-generation coverage lives in crew-create-interactions.test.mjs.
   assert.ok(html.includes("staffAuthButton('regenerate-store-code','재발급')"));
 });
