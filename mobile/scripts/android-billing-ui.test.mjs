@@ -3,7 +3,7 @@ import {testOffers,openAndroidBilling} from '../src/android-billing-ui.mjs';
 const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M',recurrenceMode:1};
 const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-1month',offerToken:'trial',phases:[{...phase,amountMicros:0,cycles:1,recurrenceMode:2},phase]}]};
 test('only eligible fixed monthly offers use the actual Play price and free phase',()=>{
- const offers=testOffers([product]);assert.equal(offers.length,2);assert.equal(offers[0].label,'₩9,900 (1개월)');assert.equal(offers[1].label,'무료 (1개월) → ₩9,900 (1개월)');
+ const offers=testOffers([product]);assert.equal(offers.length,1);assert.equal(offers[0].label,'무료 (1개월) → ₩9,900 (1개월)');assert.equal(offers[0].offerToken,'trial');
  for(const change of [p=>p.productId='wrong',p=>p.offers.forEach(o=>o.basePlanId='annual'),p=>p.offers.forEach(o=>o.phases.at(-1).currency='USD'),p=>p.offers.forEach(o=>o.phases.at(-1).amountMicros=19900000000)]){const p=structuredClone(product);change(p);assert.deepEqual(testOffers([p]),[]);}
 });
 test('trial offer requires exactly one free calendar month before the monthly price',()=>{
@@ -49,7 +49,7 @@ function dialogFixture(overrides={}){
  return {billing,document,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&/ · (테스트 구매|구독 시작)$/.test(e.textContent))};
 }
 test('successful checkout immediately hides all offers but keeps close and restore usable',async()=>{
- const f=dialogFixture();await settle();assert.equal(f.visibleOffers().length,2);
+ const f=dialogFixture();await settle();assert.equal(f.visibleOffers().length,1);
  await f.visibleOffers()[0].onclick();
  assert.equal(f.visibleOffers().length,0);
  for(const label of ['닫기','구매 복원'])assert.equal(f.buttons().find(b=>b.textContent===label).disabled,false);
@@ -58,7 +58,7 @@ test('cancelled and pending checkout keep offers while server-confirmed existing
  const f=dialogFixture();await settle();
  for(const status of ['cancelled','pending']){
   f.billing.purchase=async()=>({status});
-  await f.visibleOffers()[0].onclick();assert.equal(f.visibleOffers().length,2);
+  await f.visibleOffers()[0].onclick();assert.equal(f.visibleOffers().length,1);
  }
  f.billing.purchase=async()=>({status:'alreadyActive',testActive:true});
  await f.visibleOffers()[0].onclick();assert.equal(f.visibleOffers().length,0);
@@ -80,7 +80,7 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
  assert.match(copy,/1개월 무료 체험/);
  assert.match(copy,/월 9,900원/);
  assert.match(copy,/Play 스토어 구독 관리/);
- assert.equal(f.visibleOffers().length,2);
+ assert.equal(f.visibleOffers().length,1);
  assert.match(f.visibleOffers()[0].textContent,/구독 시작$/);
  await f.visibleOffers()[0].onclick();
  assert.equal(f.visibleOffers().length,0);

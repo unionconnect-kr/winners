@@ -112,6 +112,17 @@ test('a pending or uncertain paid purchase keeps its lease for restoration',asyn
   assert.deepEqual(seen,['prepare']);
  }
 });
+test('Play item unavailable releases the checkout lease for a later attempt',async()=>{
+ const seen=[];
+ const s=setup({request:async(_c,_n,b)=>{
+  seen.push({action:b.action,checkoutId:b.checkoutId});
+  return {ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,checkoutId:b.checkoutId};
+ },playBilling:{purchase:async()=>{throw Object.assign(Error('구입하려는 항목을 찾을 수 없습니다.'),{code:'PLAY_4'});}}});
+ await assert.rejects(s.client.purchase(selection),/항목을 찾을 수/);
+ assert.deepEqual(seen.map(x=>x.action),['prepare','release']);
+ assert.equal(seen[0].checkoutId,seen[1].checkoutId);
+ assert.equal(s.client.isBusy(),false);
+});
 test('paid purchase cannot start when the server has not issued a lease',async()=>{
  const s=setup({request:async()=>({ready:true,...selection,accountId:'a',profileId:'b',testOnly:false})});
  await assert.rejects(s.client.purchase(selection),/다시 시도/);

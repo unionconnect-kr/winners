@@ -53,7 +53,10 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
       const claimed=info.testOnly===false && info.checkoutId===checkoutId;
       const release=async()=>{if(claimed)try{await call(c,{action:'release',checkoutId});}catch{/* Lease expires if the network is unavailable. */}};
       if(info.testOnly===false && !allowPaid){await release();throw Error('이 앱은 유료 결제를 지원하지 않아요. 앱을 업데이트해 주세요.');}
-      if (!info.ready || !info.productId || !info.accountId || !info.profileId) throw Error('구독 연결을 준비하고 있어요.');
+      if (!info.ready || !info.productId || !info.accountId || !info.profileId) {
+        await release();
+        throw Error('구독 연결을 준비하고 있어요.');
+      }
       if (info.active===true || (info.testOnly===true && info.testActive===true)){
         await release();
         return {status: 'alreadyActive',testActive:info.testOnly===true&&info.testActive===true};
@@ -80,7 +83,14 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
         if (!results.length) throw Error('구매 확인이 지연되고 있어요. 구매 복원을 눌러 주세요.');
         await release();
         return {status: 'purchased', results};
-      }catch(error){if(!playStarted)await release();throw error;}
+      }catch(error){
+        // These native errors do not produce a purchase. Keep the lease for
+        // ambiguous failures so a delayed Play result can still be restored.
+        const noPurchase = new Set(['PRODUCT_UNAVAILABLE','OFFER_CHANGED','INVALID_PURCHASE',
+          'INVALID_PRODUCT','PURCHASE_BUSY','PLAY_4','PLAY_5']);
+        if(!playStarted || noPurchase.has(error?.code))await release();
+        throw error;
+      }
     }),
     restore: () => run(async c => {
       const info=await call(c,{action:'status'});

@@ -2,7 +2,7 @@
 export function testOffers(products,productId='manee.store1.monthly') {
  if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
  const product=products?.find(p=>p.productId===productId);
- return (product?.offers||[]).filter(o=>o.basePlanId==='monthly' && o.offerToken &&
+ const offers=(product?.offers||[]).filter(o=>o.basePlanId==='monthly' && o.offerToken &&
   (o.offerId==='trial-1month' ? o.phases?.length===2 &&
     Number(o.phases[0].amountMicros)===0 && o.phases[0].period==='P1M' &&
     o.phases[0].cycles===1 && o.phases[0].recurrenceMode===2 :
@@ -10,7 +10,9 @@ export function testOffers(products,productId='manee.store1.monthly') {
   o.phases.every(p=>p.currency==='KRW') &&
   o.phases.at(-1).period==='P1M' && o.phases.at(-1).recurrenceMode===1 &&
   Number(o.phases.at(-1).amountMicros)===9900000000
- ).map(o=>({productId:product.productId,offerToken:o.offerToken,
+ );
+ const trial=offers.find(o=>o.offerId==='trial-1month');
+ return (trial?[trial]:offers).map(o=>({productId:product.productId,offerToken:o.offerToken,
   label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':p.period})`).join(' → ')}));
 }
 export function openAndroidBilling({billing,getContext,document}) {
