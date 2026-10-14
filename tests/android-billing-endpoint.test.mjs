@@ -64,6 +64,35 @@ test('only explicitly allowed owners can verify sandbox receipts through the end
  delete resource.testPurchase;
  assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'paid'}))).status,503);assert.equal(saves,1);assert.equal(acks,1);
 });
+test('production receipts require an exact owner/store permission and a live recheck',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';
+ const ids=google.binding(userId,storeId);
+ let permitted=true,saves=0,acks=0;
+ const resource={subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',
+  externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},
+  lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
+  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+  api:{product:async()=>product,get:async()=>resource,acknowledge:async()=>acks++},
+  service:{rpc:async()=>{saves++;return{data:true};}},testAccess:async()=>false,
+  productionAccess:async({userId:u,storeId:s})=>permitted&&u===userId&&s===storeId};
+ const handler=createHandler(options);
+ const status=await(await handler(req())).json();assert.equal(status.ready,true);assert.equal(status.testOnly,false);
+ const prep=await(await handler(req({action:'prepare',storeId}))).json();assert.equal(prep.testOnly,false);
+ const response=await handler(req({action:'verify',storeId,purchaseToken:'paid'}));
+ assert.equal(response.status,200);assert.equal((await response.json()).active,true);assert.equal(saves,1);assert.equal(acks,1);
+ permitted=false;
+ assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'paid-again'}))).status,503);
+ assert.equal(saves,1);assert.equal(acks,1);
+ permitted=true;
+ resource.testPurchase={};
+ assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'sandbox'}))).status,503);
+ assert.equal(saves,1);assert.equal(acks,1);
+ delete resource.testPurchase;
+ options.api.get=async()=>{permitted=false;return resource;};
+ assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'revoked'}))).status,503);
+ assert.equal(saves,1);assert.equal(acks,1);
+});
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';let access=true,checks=0;

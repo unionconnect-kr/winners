@@ -3,9 +3,10 @@ import {binding} from './google-play.mjs';
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export const PRODUCT = 'manee.store1.monthly';
 export const BASE_PLAN = 'monthly';
-// Only an approved owner/store pair can open sandbox checkout. Production
-// receipts remain blocked until entitlement and multi-store billing ship.
-export function createHandler({client, api, service=null, testAccess=async()=>false}) {
+// Environment-specific eligibility is checked again after the Google lookup.
+// Production eligibility defaults to false, independent of sandbox access.
+export function createHandler({client, api, service=null, testAccess=async()=>false,
+  productionAccess=async()=>false}) {
   return async req => {
     const origin = req.headers.get('origin');
     const allowed = !origin || origin === 'https://localhost';
@@ -35,8 +36,11 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const authorize = () => user.rpc('manee_android_push_context', {p_store_id:body.storeId});
       const context = await authorize();
       if(context.error || context.data !== true) return reply(403, {error:'owner_access_denied'});
-      const permitted=async()=>await testAccess({user,storeId:body.storeId})===true;
-      const eligible=!!api && !!service && await permitted();
+      const permitted=async environment=>await (environment==='Production'?productionAccess:testAccess)(
+        {user,userId:auth.data.user.id,storeId:body.storeId})===true;
+      const sandboxEligible=!!api && !!service && await permitted('Sandbox');
+      const paidEligible=!!api && !!service && await permitted('Production');
+      const eligible=sandboxEligible||paidEligible;
       let productId=PRODUCT;
       if(eligible){
         const allocation=await user.rpc('manee_android_billing_product',{p_store_id:body.storeId});
@@ -49,10 +53,12 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
         if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))throw Error('billing_allocation_invalid');
       }
       if(body.action === 'verify' && eligible) {
-        const verify=createPurchaseVerifier({api,service,productId,authorize:async()=>{
+        const verify=createPurchaseVerifier({api,service,productId,
+          allowEnvironment:environment=>environment==='Sandbox'||environment==='Production',
+          authorize:async environment=>{
           const current=await authorize();
           if(current.error || current.data!==true) throw Error('owner_access_denied');
-          if(!await permitted()) throw Error('billing_not_ready');
+          if(environment && !await permitted(environment)) throw Error('billing_not_ready');
         }});
         return reply(200, await verify({userId:auth.data.user.id,storeId:body.storeId,purchaseToken:body.purchaseToken}));
       }
@@ -72,10 +78,12 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
         plan.regionalConfigs?.some(r => r.regionCode === 'KR' && r.newSubscriberAvailability === true) === true;
       const recheck = await authorize();
       if(recheck.error || recheck.data !== true) return reply(403, {error:'owner_access_denied'});
-      const ready=eligible && !!catalogReady && await permitted();
+      const readySandbox=eligible && !!catalogReady && await permitted('Sandbox');
+      const readyPaid=eligible && !!catalogReady && await permitted('Production');
+      const ready=readySandbox||readyPaid;
       if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
       return reply(200, {ready, catalogReady:!!catalogReady, productId, basePlanId:BASE_PLAN,...entitlement,
-        ...(ready?{testOnly:true,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
+        ...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };
 }
