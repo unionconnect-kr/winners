@@ -58,5 +58,10 @@ until the dialog was reopened, although the checkout coordinator already rejecte
 another checkout for an active subscription. The source now hides all purchase
 offers immediately on active purchase/restore or already-active results, including
 restore completion before product loading. Seventeen focused UI/client tests pass.
-This UI correction has not yet been packaged into a new signed build; the installed
-1.14 / code 15 build retains the old immediate-success display behavior.
+Android 1.15 / code 16 packages this correction. Build commit
+`20e72e44ef7951a960f58457a417b855591af4df` completed in Actions run `38536158476`:
+48 mobile tests passed; bundle signing and internal-only backend guards passed.
+The downloaded artifact checksum and packaged version/UI code were verified.
+AAB SHA-256: `36e9d064a7c96d25fb03abccb40a6d463835aec4f691897d73273e77127150b0`.
+The AAB is ready for the operator to upload to Play internal testing; upload,
+installation and on-device confirmation of 1.15 are not yet claimed.
