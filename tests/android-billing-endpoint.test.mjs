@@ -72,9 +72,11 @@ test('production receipts require an exact owner/store permission and a live rec
  const resource={subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',
   externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},
   lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
+ const paidProduct=structuredClone(product);
+ paidProduct.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900'};
  const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
   rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true})}),
-  api:{product:async()=>product,get:async()=>resource,acknowledge:async()=>acks++},
+  api:{product:async()=>paidProduct,get:async()=>resource,acknowledge:async()=>acks++},
   service:{rpc:async()=>{saves++;return{data:true};}},testAccess:async()=>false,
   productionAccess:async({userId:u,storeId:s})=>permitted&&u===userId&&s===storeId};
  const handler=createHandler(options);
@@ -107,8 +109,10 @@ test('paid prepare permits one checkout, returns conflict for another, and relea
   }
   return{data:true};
  };
+ const paidProduct=structuredClone(product);
+ paidProduct.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900'};
  const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc}),
-  api:{product:async()=>product},service:{},productionAccess:async()=>true});
+  api:{product:async()=>paidProduct},service:{},productionAccess:async()=>true});
  assert.equal((await handler(req({action:'prepare',storeId}))).status,400);
  const first=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
  assert.equal(first.checkoutId,checkoutId);
@@ -119,6 +123,25 @@ test('paid prepare permits one checkout, returns conflict for another, and relea
  status='active';
  const active=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
  assert.equal(active.active,true);assert.equal(active.checkoutId,undefined);
+});
+test('paid preparation refuses wrong or missing Korean price while sandbox readiness is separate',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';
+ const catalog=structuredClone(product);
+ let claims=0;
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
+  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:
+   name==='manee_android_billing_status'?{subscriptions:[]}:
+   name==='manee_android_billing_checkout_claim'?(claims++,{status:'claimed'}):true})}),
+  api:{product:async()=>catalog},service:{},productionAccess:async()=>true});
+ for(const price of [undefined,{currencyCode:'KRW',units:'19800'},{currencyCode:'USD',units:'9900'},
+  {currencyCode:'KRW',units:'9900',nanos:1}]){
+  catalog.basePlans[0].regionalConfigs[0].price=price;
+  assert.equal((await(await handler(req())).json()).ready,false);
+  assert.equal((await handler(req({action:'prepare',storeId,checkoutId}))).status,503);
+ }
+ assert.equal(claims,0);
+ catalog.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900',nanos:0};
+ assert.equal((await(await handler(req())).json()).ready,true);
 });
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{

@@ -80,13 +80,17 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       if(!api) return reply(200, {ready:false, catalogReady:false,...entitlement});
       const product = await api.product(productId);
       const plan = product?.basePlans?.find(p => p.basePlanId === BASE_PLAN);
+      const krPlan=plan?.regionalConfigs?.find(r=>r.regionCode==='KR' && r.newSubscriberAvailability===true);
       const catalogReady = product?.packageName === 'kr.co.manee.app' && product.productId === productId &&
         plan?.state === 'ACTIVE' && plan.autoRenewingBasePlanType?.billingPeriodDuration === 'P1M' &&
-        plan.regionalConfigs?.some(r => r.regionCode === 'KR' && r.newSubscriberAvailability === true) === true;
+        !!krPlan;
+      // Play's regional base-plan Money is the authoritative paid price.
+      const paidPriceReady=krPlan?.price?.currencyCode==='KRW' &&
+        String(krPlan.price.units)==='9900' && (krPlan.price.nanos??0)===0;
       const recheck = await authorize();
       if(recheck.error || recheck.data !== true) return reply(403, {error:'owner_access_denied'});
       const readySandbox=eligible && !!catalogReady && await permitted('Sandbox');
-      const readyPaid=eligible && !!catalogReady && await permitted('Production');
+      const readyPaid=eligible && !!catalogReady && paidPriceReady && await permitted('Production');
       const ready=readySandbox||readyPaid;
       if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
       let checkout={};
