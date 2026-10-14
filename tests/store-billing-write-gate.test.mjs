@@ -27,8 +27,10 @@ const helpers=fs.readFileSync(new URL('../supabase/migrations/20260916070000_sta
 await db.exec(helpers.slice(helpers.indexOf('create or replace function private.is_live_manee_session()'),helpers.indexOf('create or replace function private.current_crew_id')));
 const tables=['sales_reports','expense_entries','fixed_expenses','fixed_schedules','shifts','vendors','reservations','announcements','checklist_templates','checklist_checks','checklist_log','crew_pay_adjustments','monthly_net_payroll','monthly_cost_checks','monthly_cost_reviews','monthly_report_closings','recurring_cost_templates','store_business_calendar'];
 for(const t of tables)await db.exec(`create table public.${t}(id integer primary key,store_id uuid,value integer);grant select,insert,update,delete on public.${t} to authenticated;`);
+await db.exec('create table public.sales_report_photos(id integer primary key,sales_report_id integer references public.sales_reports(id) on delete cascade,value integer);grant select,insert,update,delete on public.sales_report_photos to authenticated;')
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014035157_store_billing_write_gate.sql',import.meta.url),'utf8'));
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014093800_monthly_net_payroll_billing_gate.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014095000_sales_report_photo_billing_gate.sql',import.meta.url),'utf8'));
 async function admin(){await db.exec("reset role;select set_config('request.jwt.claim.sub','',false)");}
 async function as(user){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[user,JSON.stringify({sub:user,session_id:user})]);await db.exec('set role authenticated');}
 async function access(s=a){return(await db.query('select public.manee_store_billing_access($1) as x',[s])).rows[0].x;}
@@ -39,6 +41,8 @@ async function receipt(environment='Production',state='SUBSCRIPTION_STATE_ACTIVE
 const insert=(s=a)=>db.query('insert into public.expense_entries values(1,$1,1)',[s]);
 test('deployment enrolls nobody; clients cannot enroll themselves or query policy internals',async()=>{
  await as(owner);assert.deepEqual(await access(),{enforced:false,canWrite:true});await insert();
+ await db.query('insert into public.sales_reports values(10,$1,1),(11,$2,1)',[a,b]);
+ await db.exec('insert into public.sales_report_photos values(1,10,1)');
  await assert.rejects(()=>db.exec("insert into private.store_billing_enforcement values('"+a+"','Production',now())"));
  await assert.rejects(()=>db.query('select private.manee_store_write_entitled($1)',[a]));
  await as(outsider);await assert.rejects(()=>access(),/Store access denied/);
@@ -53,6 +57,16 @@ test('expired enrolled store blocks every installed business trigger, including 
  await db.query('insert into public.expense_entries values(2,$1,1)',[b]);
  await assert.rejects(()=>db.query('update public.expense_entries set store_id=$1 where id=2',[a]),e=>e.code==='P4402');
  await assert.rejects(()=>db.query('update public.expense_entries set store_id=$1 where id=1',[b]),e=>e.code==='P4402');
+});
+test('photo records follow both parent store keys without blocking reads or another store',async()=>{
+ await as(owner);
+ await assert.rejects(()=>db.exec('insert into public.sales_report_photos values(2,10,1)'),e=>e.code==='P4402');
+ await assert.rejects(()=>db.exec('update public.sales_report_photos set value=2 where id=1'),e=>e.code==='P4402');
+ await assert.rejects(()=>db.exec('delete from public.sales_report_photos where id=1'),e=>e.code==='P4402');
+ await db.exec('insert into public.sales_report_photos values(3,11,1)');
+ await assert.rejects(()=>db.exec('update public.sales_report_photos set sales_report_id=10 where id=3'),e=>e.code==='P4402');
+ await assert.rejects(()=>db.exec('update public.sales_report_photos set sales_report_id=11 where id=1'),e=>e.code==='P4402');
+ assert.equal((await db.exec('select * from public.sales_report_photos'))[0].rows.length,2);
 });
 test('active, grace and canceled-until-expiry allow writes; other states and stale observations deny',async()=>{
  for(const state of ['ACTIVE','IN_GRACE_PERIOD','CANCELED']){await receipt('Production','SUBSCRIPTION_STATE_'+state);assert.equal((await access()).canWrite,true);await db.exec('update public.expense_entries set value=value+1 where id=1');}

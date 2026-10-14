@@ -65,3 +65,11 @@ Follow-up migration `20261014093800_monthly_net_payroll_billing_gate.sql` adds
 OLD/NEW store checks; unenrolled stores remain unrestricted, and reads remain
 available. Staging confirms 18 gates, zero enrolled stores and an unrestricted sample store.
 This does not enroll a store or initiate a charge.
+
+The follow-up migration `20261014095000_sales_report_photo_billing_gate.sql`
+resolves a photo record's parent sales report on both sides of a mutation.
+This covers insert/update/delete of the child table while preserving reads;
+announcement read acknowledgements and attendance remain accessible. There
+are no configured Storage buckets in the connected staging or production
+projects as of this audit, so this migration adds no Storage policy.
+No store is enrolled or charged by this change.
