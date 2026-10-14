@@ -79,3 +79,15 @@ Production has 18 direct-key triggers and one photo-child trigger, zero enrolled
 stores, and the two sampled owner stores remain write-entitled. The Android
 staging regression workflow for commit `a6b078edbd2cc68abfc0b731a3bda5ecb8ec71e1`
 passed the app/security regression job before production deployment.
+
+Account deletion/cascade audit (2026-10-14): the existing billing triggers
+intentionally bypass writes only when `auth.uid()` is null, as in backend
+maintenance. An isolated regression now verifies that an expired enrolled
+store rejects a member's sales-report deletion, while backend deletion of the
+same parent cascades to its photo record. Database foreign keys from Android
+billing allocations and receipts to `auth.users` are `ON DELETE CASCADE`.
+The application repository has no identified user-facing account deletion
+request in the current web/native source. This regression confirms the gate
+boundary, not a complete self-service account-erasure workflow. Do not treat
+account erasure as complete for paid rollout until that workflow is defined and
+run end to end in a disposable environment.

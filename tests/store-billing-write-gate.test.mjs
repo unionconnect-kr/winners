@@ -74,6 +74,16 @@ test('active, grace and canceled-until-expiry allow writes; other states and sta
  await receipt('Production','SUBSCRIPTION_STATE_CANCELED',"now()-interval '1 second'");assert.equal((await access()).canWrite,false);
  await receipt('Production','SUBSCRIPTION_STATE_ACTIVE',"now()+interval '1 day'","now()-interval '16 minutes'");assert.equal((await access()).canWrite,false);
 });
+test('expired store denies member deletion while backend cleanup removes parent and photo together',async()=>{
+ await admin();await db.exec(`update public.store_memberships set status='active' where user_id='${owner}' and store_id='${a}'`);
+ await as(owner);
+ await assert.rejects(()=>db.exec('delete from public.sales_reports where id=10'),e=>e.code==='P4402');
+ assert.equal((await db.exec('select count(*)::int n from public.sales_report_photos where sales_report_id=10'))[0].rows[0].n,1);
+ await admin();
+ await db.exec('delete from public.sales_reports where id=10');
+ assert.equal((await db.exec('select count(*)::int n from public.sales_reports where id=10'))[0].rows[0].n,0);
+ assert.equal((await db.exec('select count(*)::int n from public.sales_report_photos where sales_report_id=10'))[0].rows[0].n,0);
+});
 test('sandbox never unlocks production; restoring a valid receipt unlocks the same store for staff',async()=>{
  await receipt('Sandbox');assert.equal((await access()).canWrite,false);
  await receipt();await as(staff);assert.equal((await access()).canWrite,true);
