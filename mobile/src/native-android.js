@@ -14,7 +14,8 @@ const billing=createAndroidBillingClient({playBilling,getContext:()=>getContext(
  const {data:auth,error:authError}=await c.db.auth.getSession();
  if(authError||auth?.session?.user?.id!==c.userId)throw Error('다시 로그인해 주세요.');
  const {data,error}=await c.db.functions.invoke('manee-android-billing',{body:{...body,storeId:c.storeId},signal:AbortSignal.timeout(30000)});
- if(error)throw Error('결제 서버 연결 또는 테스트 권한을 확인하지 못했어요.');
+ if(error?.context?.status===409)throw Error('다른 기기에서 이 매장의 결제를 진행 중이에요. 잠시 후 구매 복원을 눌러 확인해 주세요.');
+ if(error)throw Error('결제 서버 연결 또는 이용 권한을 확인하지 못했어요.');
  return data;
 }});
 
@@ -48,14 +49,14 @@ window.MANEE_NATIVE = {
     const message=document.createElement('p');message.setAttribute('role','status');dialog.append(message);
     const sandbox=document.createElement('p');sandbox.hidden=true;dialog.append(sandbox);
     const action=(label,fn)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.style.cssText='width:100%;padding:13px;margin:8px 0';button.onclick=fn;dialog.append(button);return button;};
-    const test=action('Google Play 결제 테스트·구매 복원',()=>{dialog.close();openAndroidBilling({billing,getContext,document});});test.hidden=true;
+    const billingAction=action('Google Play 결제 테스트·구매 복원',()=>{dialog.close();openAndroidBilling({billing,getContext,document});});billingAction.hidden=true;
     const refresh=action('상태 새로고침',()=>void load());
     action('닫기',()=>dialog.close());
     dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
     let seq=0;
     const same=()=>{const next=getContext();return dialog.isConnected&&next?.userId===c.userId&&next?.storeId===c.storeId;};
     async function load(){
-      const current=++seq;refresh.disabled=true;title.textContent='상태를 확인하고 있어요…';message.textContent='';sandbox.hidden=true;test.hidden=true;
+      const current=++seq;refresh.disabled=true;title.textContent='상태를 확인하고 있어요…';message.textContent='';sandbox.hidden=true;billingAction.hidden=true;
       try{
         const [accessResult,billingResult]=await Promise.allSettled([
           c.db.rpc('manee_store_billing_access',{p_store_id:c.storeId}),billing.status(),
@@ -67,7 +68,8 @@ window.MANEE_NATIVE = {
         const view=subscriptionView(access,bill,unconfigured);
         title.textContent=view.title;message.textContent=view.message;
         if(view.testActive){sandbox.hidden=false;sandbox.textContent='이 매장의 Google Play 테스트 구매가 확인되었습니다. 테스트 이용권은 정식 결제와 구분됩니다.';}
-        test.hidden=bill?.testOnly!==true;
+        billingAction.hidden=bill?.ready!==true||typeof bill.testOnly!=='boolean';
+        billingAction.textContent=bill?.testOnly===false?'매장 이용권 구독·구매 복원':'Google Play 결제 테스트·구매 복원';
       }catch{if(same())message.textContent='잠시 후 새로고침해 주세요.';}
       finally{if(current===seq&&same())refresh.disabled=false;}
     }
@@ -84,8 +86,8 @@ window.MANEE_NATIVE = {
       <p>직원 관리·출퇴근·매출·지출·보고서를 한곳에서 관리하세요.</p>
       <p>PDF·엑셀은 저장 위치를 선택해 휴대폰에 저장할 수 있습니다.</p>
       <p>${ANDROID_FIREBASE_PROJECT ? "휴대폰 알림은 더보기 > 매장 설정에서 연결해 주세요. 출퇴근·예약·월말 보고서 알림을 받을 수 있습니다." : "휴대폰 알림은 연결 준비 중입니다. 앱 안의 알림은 계속 확인할 수 있습니다."}</p>
-      ${ANDROID_PRODUCTION ? '<p>구독 결제는 준비 중입니다.</p>' : '<p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>'}
-      ${ANDROID_PRODUCTION && getContext()?.role==='storeOwner' ? '<button type="button" id="android-billing-test" style="width:100%;padding:12px">결제 테스트·구매 복원</button>' : ''}
+      ${ANDROID_PRODUCTION ? '<p>매장 이용권에서 구독 가능 여부를 확인할 수 있습니다.</p>' : '<p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>'}
+      ${ANDROID_PRODUCTION && getContext()?.role==='storeOwner' ? '<button type="button" id="android-billing-test" style="width:100%;padding:12px">매장 이용권·구매 복원</button>' : ''}
       <p id="android-push-result" role="status"></p>
       ${ANDROID_FIREBASE_PROJECT ? '<button type="button" id="android-test-push" style="width:100%;padding:12px">테스트 알림 보내기</button>' : ""}
       <button type="button" id="android-info-close" style="width:100%;padding:12px">확인</button>`;
