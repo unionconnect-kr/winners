@@ -65,10 +65,13 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
       return {status: 'purchased', results};
     }),
     restore: () => run(async c => {
+      const info=await call(c,{action:'status'});
+      if(!info.ready || !info.productId)throw Error('이 매장의 구독 연결을 준비하고 있어요.');
       const current = await playBilling.purchases();
       unchanged(c);
-      const results = await verify(c, current.purchases);
-      return {status: results.length ? 'restored' : current.purchases?.some(p => p.state === 'pending') ? 'pending' : 'empty', results};
+      const relevant=(current.purchases||[]).filter(p=>p.productIds?.includes(info.productId));
+      const results = await verify(c, relevant);
+      return {status: results.length ? 'restored' : relevant.some(p => p.state === 'pending') ? 'pending' : 'empty', results};
     }),
     isBusy: () => busy,
   };

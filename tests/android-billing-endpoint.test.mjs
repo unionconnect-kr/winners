@@ -56,7 +56,7 @@ test('Edge deployment contains the same verification code as the tested server c
 test('only explicitly allowed owners can verify sandbox receipts through the endpoint',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';const ids=google.binding(userId,storeId);let saves=0,acks=0;
  const resource={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
  assert.equal((await createHandler(options)(req({action:'verify',storeId,purchaseToken:'test'}))).status,503);
  assert.equal(saves,0);assert.equal(acks,0);
  const handler=createHandler({...options,testAccess:async()=>true});
@@ -67,7 +67,7 @@ test('only explicitly allowed owners can verify sandbox receipts through the end
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';let access=true,checks=0;
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
  api:{product:async()=>product},service:{},testAccess:async({storeId:s})=>{checks++;return access&&s===storeId;}};
  const h=createHandler(options);
  const ready=await(await h(req())).json();assert.equal(ready.ready,true);assert.equal(ready.testOnly,true);
@@ -98,7 +98,7 @@ test('store status is read with caller authorization and sandbox never becomes p
  let subscriptions=[{environment:'Sandbox',testActive:true,active:true,purchaseToken:'must-not-leak'}];
  let failed=false;const calls=[];
  const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async(name,args)=>{
- calls.push({name,args});return name==='manee_android_billing_status'?{data:{subscriptions},error:failed?{}:null}:{data:true};
+ calls.push({name,args});return name==='manee_android_billing_product'?{data:PRODUCT}:name==='manee_android_billing_status'?{data:{subscriptions},error:failed?{}:null}:{data:true};
  }}),api:{product:async()=>product},service:{},testAccess:async()=>true});
  let r=await(await handler(req())).json();assert.equal(r.active,false);assert.equal(r.testActive,true);assert.ok(!JSON.stringify(r).includes('must-not-leak'));
  assert.ok(calls.some(c=>c.name==='manee_android_billing_status'&&c.args.p_store_id===storeId));
@@ -107,4 +107,12 @@ test('store status is read with caller authorization and sandbox never becomes p
  subscriptions=[{environment:'Sandbox',testActive:false}];
  r=await(await handler(req())).json();assert.equal(r.active,false);assert.equal(r.testActive,false);
  failed=true;assert.equal((await handler(req({action:'prepare',storeId}))).status,503);
+});
+
+test('catalog and preparation use server allocation, never a client-supplied product',async()=>{
+ let sku='manee.store2.monthly';let queried;
+ const h=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async name=>({data:name==='manee_android_billing_product'?sku:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{product:async id=>{queried=id;return {...product,productId:id};}},service:{},testAccess:async()=>true});
+ const r=await(await h(req({action:'prepare',storeId,productId:'attacker'}))).json();assert.equal(r.productId,sku);assert.equal(queried,sku);
+ sku=null;assert.equal((await(await h(req())).json()).reason,'additional_store_not_ready');
+ assert.equal((await h(req({action:'prepare',storeId}))).status,503);
 });

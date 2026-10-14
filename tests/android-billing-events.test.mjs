@@ -29,7 +29,7 @@ test('notifications enqueue tokens only; bad identity/package/subscription and D
  const denied=createNotificationHandler({authenticate:async()=>{throw Error();},subscription,client:null});assert.equal((await denied(request())).status,401);
 });
 const user='11111111-1111-4111-8111-111111111111',store='22222222-2222-4222-8222-222222222222',ids=binding(user,store);
-const job={purchase_token:'receipt',user_id:user,store_id:store,lease_id:'lease'};
+const job={purchase_token:'receipt',user_id:user,store_id:store,lease_id:'lease',product_id:'manee.store1.monthly'};
 const google={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_EXPIRED',acknowledgementState:'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:'manee.store1.monthly',offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()-1000).toISOString()}]};
 const refreshRequest=()=>new Request('https://example.com',{method:'POST',headers:{authorization:'Bearer '+'a'.repeat(64)}});
 test('refresh queries Google afresh; expired subscriptions persist without acknowledgement',async()=>{
@@ -42,4 +42,13 @@ test('invalid scheduler cannot query Google and transient failures are retried',
  const denied=createRefreshHandler({api,client:{rpc:async()=>({error:{code:'42501'}})}});assert.equal((await denied(refreshRequest())).status,403);assert.equal(queried,0);
  const retry=createRefreshHandler({api,client:{rpc:async(name,args)=>{if(name==='manee_billing_claim')return {data:[job]};finished=args.p_success;return {data:true};}}});
  assert.equal((await (await retry(refreshRequest())).json()).retry,1);assert.equal(finished,false);
+});
+test('renewal worker verifies the persisted product of an additional store',async()=>{
+ const resource=structuredClone(google);resource.lineItems[0].productId='manee.store2.monthly';let saved;
+ const handler=createRefreshHandler({api:{get:async()=>resource},client:{rpc:async(name,args)=>{
+ if(name==='manee_billing_claim')return{data:[{...job,product_id:'manee.store2.monthly'}]};
+ if(name==='manee_android_billing_save')saved=args.p_record.productId;
+ return{data:true};
+ }}});
+ assert.equal((await(await handler(refreshRequest())).json()).refreshed,1);assert.equal(saved,'manee.store2.monthly');
 });

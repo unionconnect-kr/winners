@@ -37,8 +37,19 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       if(context.error || context.data !== true) return reply(403, {error:'owner_access_denied'});
       const permitted=async()=>await testAccess({user,storeId:body.storeId})===true;
       const eligible=!!api && !!service && await permitted();
+      let productId=PRODUCT;
+      if(eligible){
+        const allocation=await user.rpc('manee_android_billing_product',{p_store_id:body.storeId});
+        if(allocation.error)throw Error('billing_allocation_unavailable');
+        productId=allocation.data;
+        if(!productId){
+          if(body.action!=='status')return reply(503,{error:'additional_store_not_ready'});
+          return reply(200,{ready:false,catalogReady:false,reason:'additional_store_not_ready'});
+        }
+        if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))throw Error('billing_allocation_invalid');
+      }
       if(body.action === 'verify' && eligible) {
-        const verify=createPurchaseVerifier({api,service,authorize:async()=>{
+        const verify=createPurchaseVerifier({api,service,productId,authorize:async()=>{
           const current=await authorize();
           if(current.error || current.data!==true) throw Error('owner_access_denied');
           if(!await permitted()) throw Error('billing_not_ready');
@@ -54,16 +65,16 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const entitlement={active:subscriptions.some(s=>s.environment==='Production'&&s.active===true),
         testActive:subscriptions.some(s=>s.environment==='Sandbox'&&s.testActive===true)};
       if(!api) return reply(200, {ready:false, catalogReady:false,...entitlement});
-      const product = await api.product(PRODUCT);
+      const product = await api.product(productId);
       const plan = product?.basePlans?.find(p => p.basePlanId === BASE_PLAN);
-      const catalogReady = product?.packageName === 'kr.co.manee.app' && product.productId === PRODUCT &&
+      const catalogReady = product?.packageName === 'kr.co.manee.app' && product.productId === productId &&
         plan?.state === 'ACTIVE' && plan.autoRenewingBasePlanType?.billingPeriodDuration === 'P1M' &&
         plan.regionalConfigs?.some(r => r.regionCode === 'KR' && r.newSubscriberAvailability === true) === true;
       const recheck = await authorize();
       if(recheck.error || recheck.data !== true) return reply(403, {error:'owner_access_denied'});
       const ready=eligible && !!catalogReady && await permitted();
       if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
-      return reply(200, {ready, catalogReady:!!catalogReady, productId:PRODUCT, basePlanId:BASE_PLAN,...entitlement,
+      return reply(200, {ready, catalogReady:!!catalogReady, productId, basePlanId:BASE_PLAN,...entitlement,
         ...(ready?{testOnly:true,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };

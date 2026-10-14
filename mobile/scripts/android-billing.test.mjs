@@ -63,7 +63,7 @@ test('staff cannot access owner billing and mismatched displayed products cannot
 });
 test('restoring pending purchases does not verify them',async()=>{
   const s=setup({playBilling:{purchases:async()=>({purchases:[{...paid,state:'pending'}]})}});
-  assert.equal((await s.client.restore()).status,'pending');assert.deepEqual(s.calls,[]);
+  assert.equal((await s.client.restore()).status,'pending');assert.deepEqual(s.calls,['status']);
 });
 
 test('server-confirmed active subscription prevents another checkout even with empty device cache',async()=>{
@@ -73,4 +73,13 @@ test('server-confirmed active subscription prevents another checkout even with e
  }
  const s=setup({request:async(_c,_n,b)=>b.action==='verify'?{verified:true}:{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,testActive:true}});
  assert.equal((await s.client.purchase(selection)).status,'purchased');
+});
+
+test('restore verifies only the selected store product while leaving other store receipts alone',async()=>{
+ const seen=[];const second={...paid,purchaseToken:'second',productIds:['manee.store2.monthly']};
+ const s=setup({playBilling:{purchases:async()=>({purchases:[paid,second]})},request:async(_c,_n,b)=>{
+ if(b.action==='status')return{ready:true,productId:'manee.store2.monthly'};
+ seen.push(b.purchaseToken);return{verified:true,testActive:true};
+ }});
+ assert.equal((await s.client.restore()).status,'restored');assert.deepEqual(seen,['second']);
 });

@@ -1,6 +1,7 @@
 // Only offers returned as eligible by Google Play are shown. Never invent prices.
-export function testOffers(products) {
- const product=products?.find(p=>p.productId==='manee.store1.monthly');
+export function testOffers(products,productId='manee.store1.monthly') {
+ if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
+ const product=products?.find(p=>p.productId===productId);
  return (product?.offers||[]).filter(o=>o.basePlanId==='monthly' && o.offerToken &&
   (o.offerId==='trial-1month'||!o.offerId) && o.phases?.length &&
   o.phases.every(p=>p.currency==='KRW') &&
@@ -30,11 +31,11 @@ export function openAndroidBilling({billing,getContext,document}) {
  document.body.append(sheet);sheet.showModal();
  void(async()=>{try{
   const info=await billing.status();if(!same())return;
-  if(info.ready!==true||info.testOnly!==true){status.textContent='이 계정·매장은 결제 테스트 대상으로 등록되지 않았거나 상품 연결이 준비되지 않았어요.';return;}
+  if(info.ready!==true||info.testOnly!==true){status.textContent=info.reason==='additional_store_not_ready'?'추가 매장 구독 상품을 준비하고 있어요. 기존 매장의 구독은 유지됩니다.':'이 계정·매장은 결제 테스트 대상으로 등록되지 않았거나 상품 연결이 준비되지 않았어요.';return;}
   button('구매 복원',async()=>show(await billing.restore()));
   const data=await billing.products();if(!same())return;
-  const offers=testOffers(data.products);
-  status.textContent=offers.length?'아래 상품을 선택하면 Google Play 결제창이 열립니다.':'현재 구매 가능한 상품이 없어요. Play 설치 계정과 내부 테스트 참여 상태를 확인해 주세요.';
-  for(const offer of offers)button(offer.label+' · 테스트 구매',async()=>show(await billing.purchase(offer)));
+  const offers=testOffers(data.products,info.productId);
+  status.textContent=info.testActive===true?'이 매장의 테스트 구독을 이용 중이에요.':offers.length?'아래 상품을 선택하면 Google Play 결제창이 열립니다.':'현재 구매 가능한 상품이 없어요. Play 설치 계정과 내부 테스트 참여 상태를 확인해 주세요.';
+  if(info.active!==true&&info.testActive!==true)for(const offer of offers)button(offer.label+' · 테스트 구매',async()=>show(await billing.purchase(offer)));
  }catch(e){if(same())status.textContent=e.message||'상품 연결을 확인하지 못했어요.';}})();
 }
