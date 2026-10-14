@@ -41,10 +41,10 @@ therefore shows a connection-pending status; no store is newly restricted. The
 status screen does not offer a real purchase until production receipt validation
 and the broader gate are complete.
 
-Internal 1.16 / code 17 build: Actions run `38540386231` passed mobile tests,
-signed AAB verification and upload. AAB SHA-256
-`633f38e6432a1382b87535d79d7304c84acccec6a7b54a3889ed5e17378f77c8`.
-The Play Console upload and on-device confirmation are still pending.
+For a missing production status RPC (PGRST202), the screen says that the
+connection is being prepared; other failures remain unknown. Neither path
+claims write access. An updated signed 1.16 internal bundle and on-device
+confirmation remain pending.
 
 Security advisor review: the new private deny-by-default table reports informational
 RLS-without-policy, intentionally with all client grants revoked. Unrelated staging

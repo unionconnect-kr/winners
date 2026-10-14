@@ -63,7 +63,8 @@ window.MANEE_NATIVE = {
         if(current!==seq||!same())return;
         const access=accessResult.status==='fulfilled'&&!accessResult.value.error?accessResult.value.data:null;
         const bill=billingResult.status==='fulfilled'?billingResult.value:null;
-        const view=subscriptionView(access,bill);
+        const unconfigured=accessResult.status==='fulfilled'&&accessResult.value.error?.code==='PGRST202';
+        const view=subscriptionView(access,bill,unconfigured);
         title.textContent=view.title;message.textContent=view.message;
         if(view.testActive){sandbox.hidden=false;sandbox.textContent='이 매장의 Google Play 테스트 구매가 확인되었습니다. 테스트 이용권은 정식 결제와 구분됩니다.';}
         test.hidden=bill?.testOnly!==true;
