@@ -46,7 +46,7 @@ function dialogFixture(overrides={}){
  };
  openAndroidBilling({billing,document,getContext:()=>({userId:'owner',storeId:'store',role:'storeOwner'})});
  const buttons=()=>document.body.children[0].children.filter(e=>e.tagName==='button');
- return {billing,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&e.textContent.endsWith(' · 테스트 구매'))};
+ return {billing,document,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&/ · (테스트 구매|구독 시작)$/.test(e.textContent))};
 }
 test('successful checkout immediately hides all offers but keeps close and restore usable',async()=>{
  const f=dialogFixture();await settle();assert.equal(f.visibleOffers().length,2);
@@ -70,4 +70,25 @@ test('restoration before product loading finishes cannot reintroduce purchase bu
  await f.buttons().find(b=>b.textContent==='구매 복원').onclick();
  release({products:[product]});await settle();
  assert.equal(f.visibleOffers().length,0);
+});
+test('paid dialog shows billing and cancellation terms only for a paid-ready store',async()=>{
+ const f=dialogFixture({status:async()=>({ready:true,testOnly:false,testActive:true,active:false,productId:product.productId}),
+  purchase:async()=>({status:'purchased',results:[{verified:true,active:true}]})});
+ await settle();
+ const copy=f.document.body.children[0].children.map(e=>e.textContent||'').join(' ');
+ assert.match(copy,/매장 이용권 구독/);
+ assert.match(copy,/1개월 무료 체험/);
+ assert.match(copy,/월 9,900원/);
+ assert.match(copy,/Play 스토어 구독 관리/);
+ assert.equal(f.visibleOffers().length,2);
+ assert.match(f.visibleOffers()[0].textContent,/구독 시작$/);
+ await f.visibleOffers()[0].onclick();
+ assert.equal(f.visibleOffers().length,0);
+});
+test('paid checkout is absent unless the server explicitly reports readiness and mode',async()=>{
+ for(const response of [{ready:false,testOnly:false,productId:product.productId},
+  {ready:true,productId:product.productId}]){
+  const f=dialogFixture({status:async()=>response});await settle();
+  assert.equal(f.visibleOffers().length,0);
+ }
 });
