@@ -236,3 +236,38 @@ Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
 - Still not verified: real Google credentials/API permissions, phone purchase or
   restore, multi-store purchase flow, renewal/refund event delivery. Automatic
   lifecycle refresh and application entitlement enforcement remain unfinished.
+
+## Lifecycle queue and authenticated RTDN receiver — 2026-10-14 KST
+
+- Deployed `manee-billing-refresh` v1 and `manee-play-notifications` v1.
+  The former authenticates a dedicated Vault scheduler bearer via a service-only
+  claim RPC. The latter verifies Google's RS256 signature, issuer, expiry,
+  audience, verified sender email and exact Pub/Sub subscription before enqueue.
+  Platform JWT verification is off only because these endpoints perform their
+  own service authentication; unauthenticated live requests both return 401.
+- Applied `android_billing_reconciliation` to staging and production. Duplicate
+  message IDs are deduplicated; state is always looked up with subscriptionsv2,
+  never copied from the notification. Lease generation prevents an event arriving
+  during refresh from being lost. Failed refresh retries with capped backoff;
+  terminal states stop periodic polling but new events/restores can resume it.
+- Production minute cron is enabled, currently processing Sandbox receipts only.
+  Each run claims up to 10 due receipts concurrently; successful nonterminal
+  receipts are due again in 5 minutes. Empty queues cause no Google API calls.
+  This is an internal-test capacity, not the large-scale production scheduler.
+- Live authorized empty worker invocation returned HTTP 200 with all counts zero.
+  This verifies service-key parsing and database access, NOT Google OAuth/API
+  permission or receipt validation. Staging and production rollback tests pass;
+  all synthetic data was rolled back. 45 focused automated tests pass.
+- Both private billing tables intentionally have no client RLS policies or direct
+  grants. Advisors report INFO for these RPC-only tables; unrelated existing
+  warnings remain. No credentials or receipt tokens were logged or committed.
+- REQUIRED GOOGLE CONFIGURATION (not done): Pub/Sub topic `manee-play-events`,
+  Google Play publisher permission, push identity `manee-play-notifications`,
+  push subscription `manee-play-events-push`, authenticated audience/endpoint
+  `https://bhwuuxcrzxespkjlmqxr.supabase.co/functions/v1/manee-play-notifications`,
+  and Play Console topic `projects/manee-production-3eafa/topics/manee-play-events`.
+  The sender email is `manee-play-notifications@manee-production-3eafa.iam.gserviceaccount.com`.
+  Use a dedicated no-key service account for push identity; no Play API financial
+  permission is needed for that identity. Actual RTDN delivery is unverified.
+- Paid checkout, production receipts, app entitlement enforcement and multi-store
+  billing remain disabled/incomplete. No public paid release has occurred.
