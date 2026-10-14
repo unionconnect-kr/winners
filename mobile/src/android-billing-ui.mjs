@@ -39,7 +39,7 @@ export function openAndroidBilling({billing,getContext,document}) {
  document.body.append(sheet);sheet.showModal();
  void(async()=>{try{
   const info=await billing.status();if(!same())return;
-  if(info.ready!==true||typeof info.testOnly!=='boolean'){status.textContent=info.reason==='additional_store_not_ready'?'추가 매장 구독 상품을 준비하고 있어요. 기존 매장의 구독은 유지됩니다.':'이 계정·매장은 구독 대상으로 등록되지 않았거나 상품 연결이 준비되지 않았어요.';return;}
+  if(info.ready!==true||typeof info.testOnly!=='boolean'){status.textContent=info.reason==='app_update_required'?'유료 결제를 사용하려면 앱을 업데이트해 주세요.':info.reason==='additional_store_not_ready'?'추가 매장 구독 상품을 준비하고 있어요. 기존 매장의 구독은 유지됩니다.':'이 계정·매장은 구독 대상으로 등록되지 않았거나 상품 연결이 준비되지 않았어요.';return;}
   testMode=info.testOnly;
   heading.textContent=testMode?'Google Play 결제 테스트':'매장 이용권 구독';
   explanation.textContent=testMode?'Play 스토어의 라이선스 테스트 계정으로 진행해 주세요. Google 결제창에 “테스트 카드”가 표시될 때만 구매를 완료하세요. 일반 카드가 보이면 취소해 주세요.':'구독은 매월 자동 갱신됩니다. 1개월 무료 체험이 표시되면 체험 종료 후 월 9,900원이 청구됩니다. Google Play 결제창에서 요금과 청구 시작일을 확인해 주세요. 취소는 Play 스토어 구독 관리에서 할 수 있습니다.';

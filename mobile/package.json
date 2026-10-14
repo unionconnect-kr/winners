@@ -16,7 +16,8 @@
     "sync:android": "cap sync android",
     "apk:staging": "npm run build:android:staging && npm run sync:android && cd android && ./gradlew assembleDebug",
     "build:android:internal": "node scripts/build-android-internal.mjs",
-    "aab:internal": "npm run build:android:internal && npm run sync:android && cd android && ./gradlew bundleRelease"
+    "aab:internal": "npm run build:android:internal && npm run sync:android && cd android && ./gradlew bundleRelease",
+    "aab:paid-pilot": "node scripts/build-android-paid-pilot.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",

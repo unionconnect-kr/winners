@@ -121,3 +121,27 @@ Draft PR #22 targets `main` and includes the accumulated Android changes. Before
 rollout, verify Play Console's free-trial offer and both products on a real
 device, deploy a gated purchase endpoint and paid-capable app, then exercise restore, cancellation,
 renewal and write-entitlement behavior with an explicitly selected pilot.
+
+## Paid pilot build boundary — review branch
+
+The existing `aab:internal` path still produces `play-internal-setup` assets with
+`billingEnabled:false`. Its compiled Android client now hides paid readiness and
+refuses a paid prepare/restore even if the server later reports paid eligibility;
+if a direct prepare obtains a checkout lease, the client releases it before Play.
+Sandbox tests remain available. The separate `aab:paid-pilot` command compiles
+`ANDROID_PAID_BILLING:true`, packages production Android assets, and verifies the
+signed AAB with the `paid-pilot` purpose and upload certificate. The production
+backend must still grant an exact owner/store pair before that app can start a
+paid checkout. No GitHub workflow produces or uploads a paid pilot bundle.
+
+Mobile tests: 61/61 pass, including internal client refusal, distinct package
+metadata and the unchanged internal bundle guard. A signed paid AAB has not yet
+been built or uploaded. Before producing one, select the pilot owner/store and
+Play account, verify the live offer and price on that account, advance the
+Android `versionCode` beyond the last Play upload, and provide the existing
+production Firebase/upload signing inputs. Upload to a restricted Play track,
+install that version on the pilot device, and only then deploy/enable the exact
+server permission. Keep write enforcement off until paid purchase, restore,
+renewal/cancellation and entitlement recovery have been checked. Current
+production purchase endpoint v7 is Sandbox-only; zero paid permissions,
+Production receipts, checkout leases and enrolled stores were observed.

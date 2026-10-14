@@ -15,6 +15,16 @@ test('internal build accepts only matching production assets and billing disable
   }
   assert.throws(()=>verifyAndroidAssets({...production(),appConfig:'production-ref staging-ref'}));
 });
+test('paid pilot assets have a distinct purpose and cannot pass the internal guard',()=>{
+ const input=production();
+ input.info.releasePurpose='paid-pilot';input.info.billingEnabled=true;
+ assert.throws(()=>verifyAndroidAssets(input));
+ verifyAndroidAssets({...input,releasePurpose:'paid-pilot'});
+ for(const change of [{releasePurpose:'public'},{billingEnabled:false}]){
+  const wrong=production();Object.assign(wrong.info,input.info,change);
+  assert.throws(()=>verifyAndroidAssets({...wrong,releasePurpose:'paid-pilot'}));
+ }
+});
 test('debug variant cannot package production assets',()=>{
   assert.throws(()=>verifyAndroidAssets({...production(),environment:'staging'}));
 });

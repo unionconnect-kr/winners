@@ -10,7 +10,7 @@ import {createAndroidBillingClient} from './android-billing.mjs';
 import {openAndroidBilling} from './android-billing-ui.mjs';
 import {subscriptionView} from './store-subscription.mjs';
 const playBilling=registerPlugin('ManeePlayBilling');
-const billing=createAndroidBillingClient({playBilling,getContext:()=>getContext(),request:async(c,_name,body)=>{
+const billing=createAndroidBillingClient({playBilling,allowPaid:ANDROID_PAID_BILLING,getContext:()=>getContext(),request:async(c,_name,body)=>{
  const {data:auth,error:authError}=await c.db.auth.getSession();
  if(authError||auth?.session?.user?.id!==c.userId)throw Error('다시 로그인해 주세요.');
  const {data,error}=await c.db.functions.invoke('manee-android-billing',{body:{...body,storeId:c.storeId},signal:AbortSignal.timeout(30000)});

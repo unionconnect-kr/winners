@@ -1,6 +1,6 @@
 // Receipts never grant access on the client: only the server verifies, persists
 // and acknowledges Google purchases. Prices and eligible offers come from Play.
-export function createAndroidBillingClient({playBilling, request, getContext}) {
+export function createAndroidBillingClient({playBilling, request, getContext, allowPaid=false}) {
   let busy = false;
   const context = () => {
     const c = getContext();
@@ -35,10 +35,14 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
     try { return await task(context()); } finally { busy = false; }
   };
   return {
-    status: () => call(context(), {action: 'status'}),
+    status: async () => {
+      const info=await call(context(), {action:'status'});
+      return !allowPaid && info.testOnly===false ? {...info,ready:false,reason:'app_update_required'} : info;
+    },
     products: async () => {
       const c = context(), info = await call(c, {action: 'status'});
       if (!info.ready || !info.productId) return {ready: false, products: []};
+      if(info.testOnly===false && !allowPaid)return {ready:false,products:[]};
       const result = await playBilling.products({productId: info.productId});
       unchanged(c);
       return result;
@@ -48,6 +52,7 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
       const info = await call(c, {action: 'prepare',checkoutId});
       const claimed=info.testOnly===false && info.checkoutId===checkoutId;
       const release=async()=>{if(claimed)try{await call(c,{action:'release',checkoutId});}catch{/* Lease expires if the network is unavailable. */}};
+      if(info.testOnly===false && !allowPaid){await release();throw Error('이 앱은 유료 결제를 지원하지 않아요. 앱을 업데이트해 주세요.');}
       if (!info.ready || !info.productId || !info.accountId || !info.profileId) throw Error('구독 연결을 준비하고 있어요.');
       if (info.active===true || (info.testOnly===true && info.testActive===true)){
         await release();
@@ -79,6 +84,7 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
     }),
     restore: () => run(async c => {
       const info=await call(c,{action:'status'});
+      if(info.testOnly===false && !allowPaid)throw Error('이 앱은 유료 결제를 지원하지 않아요. 앱을 업데이트해 주세요.');
       if(!info.ready || !info.productId)throw Error('이 매장의 구독 연결을 준비하고 있어요.');
       const current = await playBilling.purchases();
       unchanged(c);

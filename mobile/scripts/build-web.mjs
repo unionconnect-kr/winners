@@ -10,8 +10,9 @@ const environment = process.argv[2];
 const platform = process.argv[3] || 'ios';
 if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported native platform.');
 const androidProduction = platform === 'android' && environment === 'production';
-if (androidProduction && process.env.MANEE_ANDROID_RELEASE_PURPOSE !== 'play-internal-setup') {
-  throw new Error('Production Android is limited to explicit Play internal setup until billing is verified.');
+const androidReleasePurpose = process.env.MANEE_ANDROID_RELEASE_PURPOSE;
+if (androidProduction && !['play-internal-setup', 'paid-pilot'].includes(androidReleasePurpose)) {
+  throw new Error('Production Android requires an explicit internal setup or paid pilot build purpose.');
 }
 if (!['staging', 'production'].includes(environment)) {
   throw new Error('Specify staging or production explicitly.');
@@ -106,7 +107,7 @@ for (const asset of ['owner-ui.css', 'report-assets', 'icons', 'manifest.json'])
 cpSync(resolve(mobile, 'node_modules/xlsx-js-style/dist/xlsx.bundle.js'), resolve(output, 'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), resolve(output, 'vendor/supabase.js'));
 await build({ entryPoints: [resolve(mobile, platform === 'android' ? 'src/native-android.js' : 'src/native.js')], bundle: true,
-  define: {ANDROID_PRODUCTION:JSON.stringify(androidProduction),ANDROID_FIREBASE_PROJECT:JSON.stringify(androidPushProjectId),NATIVE_SERVICES_ORIGIN:JSON.stringify(functionsOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},
+  define: {ANDROID_PRODUCTION:JSON.stringify(androidProduction),ANDROID_PAID_BILLING:JSON.stringify(androidProduction && androidReleasePurpose === 'paid-pilot'),ANDROID_FIREBASE_PROJECT:JSON.stringify(androidPushProjectId),NATIVE_SERVICES_ORIGIN:JSON.stringify(functionsOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},
   outfile: resolve(output, 'native.js'), format: 'iife', target: platform === 'android' ? 'chrome100' : 'safari15', minify: true });
-writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef, ...(platform === 'android' ? { androidPushProjectId, ...(androidProduction ? { releasePurpose: 'play-internal-setup', billingEnabled: false } : {}) } : {}) }, null, 2) + '\n');
+writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef, ...(platform === 'android' ? { androidPushProjectId, ...(androidProduction ? { releasePurpose: androidReleasePurpose, billingEnabled: androidReleasePurpose === 'paid-pilot' } : {}) } : {}) }, null, 2) + '\n');
 console.log(`Prepared ${environment} native web assets (${config.projectRef}).`);

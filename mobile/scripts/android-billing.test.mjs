@@ -16,8 +16,20 @@ function setup(overrides={}) {
     calls.push(body.action);
     return body.action==='verify'?{verified:true,active:true}:{ready:true,...selection,accountId:'a'.repeat(64),profileId:'b'.repeat(64)};
   });
-  return {calls,playBilling,setContext:c=>context=c,client:createAndroidBillingClient({playBilling,request,getContext:()=>context})};
+  return {calls,playBilling,setContext:c=>context=c,client:createAndroidBillingClient({playBilling,request,getContext:()=>context,allowPaid:overrides.allowPaid??true})};
 }
+test('internal build hides paid readiness and refuses a paid checkout before Play',async()=>{
+ const seen=[];
+ const s=setup({allowPaid:false,request:async(_c,_n,b)=>{
+  seen.push(b.action);
+  return b.action==='release'?{released:true}:{ready:true,testOnly:false,...selection,accountId:'a',profileId:'b',checkoutId:b.checkoutId};
+ },playBilling:{products:async()=>{throw Error('must not query Play');},purchases:async()=>{throw Error('must not query Play');},purchase:async()=>{throw Error('must not charge');}}});
+ assert.deepEqual(await s.client.status(),{ready:false,testOnly:false,...selection,accountId:'a',profileId:'b',checkoutId:undefined,reason:'app_update_required'});
+ assert.deepEqual(await s.client.products(),{ready:false,products:[]});
+ await assert.rejects(s.client.restore(),/업데이트/);
+ await assert.rejects(s.client.purchase(selection),/업데이트/);
+ assert.deepEqual(seen,['status','status','status','prepare','release']);
+});
 test('purchase requires server readiness and verifies the receipt before success',async()=>{
   const s=setup();assert.equal((await s.client.purchase(selection)).status,'purchased');
   assert.deepEqual(s.calls,['prepare','checkout','verify']);

@@ -72,7 +72,7 @@ test('Android production requires explicit internal setup; staging cannot invoke
 });
 
 
-test('explicit Play internal setup bundles production Firebase and backend without test UI', () => {
+test('explicit Android release purposes isolate internal setup from paid pilot', () => {
   const path = resolve(mobile, 'android/app/src/release/google-services.json');
   const existed = existsSync(path);
   if (!existed) {
@@ -88,6 +88,13 @@ test('explicit Play internal setup bundles production Firebase and backend witho
     assert.equal(info.androidPushProjectId,'manee-production-3eafa');
     assert.equal(info.releasePurpose,'play-internal-setup');
     assert.equal(info.billingEnabled,false);
+    assert.match(read('www/native.js'),/allowPaid:!1/);
+    execFileSync(process.execPath, ['scripts/build-web.mjs','production','android'],
+      {cwd:mobile,env:{...process.env,MANEE_ANDROID_RELEASE_PURPOSE:'paid-pilot'}});
+    const pilot=JSON.parse(read('www/build-info.json'));
+    assert.equal(pilot.releasePurpose,'paid-pilot');
+    assert.equal(pilot.billingEnabled,true);
+    assert.match(read('www/native.js'),/allowPaid:!0/);
     assert.doesNotMatch(read('www/index.html'),/매니 Android 테스트 · 테스트 데이터만 입력해 주세요|테스트 앱 안내/);
     assert.match(read('www/index.html'),/native-subscription-btn/);
     assert.match(read('www/index.html'),/error\?\.code==="P4402"/);

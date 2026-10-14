@@ -3,12 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { verifyAndroidAssets } from './verify-android-build.mjs';
-const aab = resolve(process.argv[2] || 'android/app/build/outputs/bundle/release/app-release.aab');
+const purpose = process.argv[2] === '--paid-pilot' ? 'paid-pilot' : 'play-internal-setup';
+const aab = resolve(process.argv[purpose === 'paid-pilot' ? 3 : 2] || 'android/app/build/outputs/bundle/release/app-release.aab');
 const unpack = path => execFileSync('unzip', ['-p', aab, path], {encoding:'utf8',maxBuffer:8*1024*1024});
 const entries = execFileSync('unzip',['-Z1',aab],{encoding:'utf8'}).trim().split('\n');
 assert.ok(entries.includes('base/manifest/AndroidManifest.xml'));
 assert.ok(entries.includes('BundleConfig.pb'));
-verifyAndroidAssets({environment:'production',firebaseProject:'manee-production-3eafa',
+verifyAndroidAssets({environment:'production',firebaseProject:'manee-production-3eafa',releasePurpose:purpose,
   info:JSON.parse(unpack('base/assets/public/build-info.json')),
   appConfig:unpack('base/assets/public/app-config.js'),
   environments:JSON.parse(readFileSync(new URL('../../config/environments.json',import.meta.url),'utf8'))});
@@ -23,4 +24,4 @@ const actual = certificate.match(/SHA256:\s*([A-F0-9:]+)/i)?.[1].replaceAll(':',
 const expected = (process.env.MANEE_ANDROID_UPLOAD_CERT_SHA256 || '').replaceAll(':','').toUpperCase();
 assert.match(expected,/^[A-F0-9]{64}$/,'Configure the public upload certificate SHA-256.');
 assert.equal(actual,expected,'Bundle signature does not match the expected upload certificate.');
-console.log('Verified signed production-backend AAB for Play internal setup; public rollout and billing remain disabled.');
+console.log(`Verified signed production-backend AAB for ${purpose}; Play upload and server permissions are separate.`);
