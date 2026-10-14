@@ -136,18 +136,21 @@ paid checkout. The separate candidate workflow builds and stores a signed AAB
 for review, but does not upload it to Play or change server permissions.
 
 Mobile tests: 61/61 pass, including internal client refusal, distinct package
-metadata and the unchanged internal bundle guard. A signed paid AAB has not yet
-been built or uploaded. Before producing one, select the pilot owner/store and
-Play account, verify the live offer and price on that account, advance the
-Android `versionCode` beyond the last Play upload, and provide the existing
-production Firebase/upload signing inputs. Upload to a restricted Play track,
+metadata and the unchanged internal bundle guard. Before Play upload, confirm
+the pilot owner and Play account, the latest Play version code, and the live
+offer and price on that account. Upload to a restricted Play track,
 install that version on the pilot device, and only then deploy/enable the exact
 server permission. Keep write enforcement off until paid purchase, restore,
 renewal/cancellation and entitlement recovery have been checked. Current
 production purchase endpoint v7 is Sandbox-only; zero paid permissions,
 Production receipts, checkout leases and enrolled stores were observed.
 
-Android source is now 1.17 / code 18, one greater than the last prepared 1.16 /
-code 17. Confirm the latest code uploaded to Play Console before building or
-uploading another AAB. No signed paid AAB, Play upload or Production permission
-is claimed here.
+Android 1.17 / code 18 is one greater than the last prepared 1.16 / code 17.
+Candidate run `38597430252` from commit
+`a9794c0b0e3f122adb8ce41723a760473b2ce621` passed mobile tests, signed
+bundle verification and artifact upload. The downloaded AAB contains
+`releasePurpose:paid-pilot`, `billingEnabled:true`, and version name 1.17;
+its SHA-256 is
+`9da0166bfd6913aa9c3b47468bf95ba8876cf3e8edabce95e5fa7b92e3e08d6f`.
+Play Console has not been checked for its latest uploaded code. No Play upload
+or Production permission is claimed here.
