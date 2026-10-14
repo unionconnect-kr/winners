@@ -59,8 +59,21 @@ test('only explicitly allowed owners can verify sandbox receipts through the end
  const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async()=>({data:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
  assert.equal((await createHandler(options)(req({action:'verify',storeId,purchaseToken:'test'}))).status,503);
  assert.equal(saves,0);assert.equal(acks,0);
- const handler=createHandler({...options,sandboxUsers:[userId]});
+ const handler=createHandler({...options,testAccess:async()=>true});
  const response=await handler(req({action:'verify',storeId,purchaseToken:'test'}));assert.equal(response.status,200);assert.equal((await response.json()).testActive,true);assert.equal(acks,1);
  delete resource.testPurchase;
  assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'paid'}))).status,503);assert.equal(saves,1);assert.equal(acks,1);
+});
+
+test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';let access=true,checks=0;
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async()=>({data:true})}),
+ api:{product:async()=>product},service:{},testAccess:async({storeId:s})=>{checks++;return access&&s===storeId;}};
+ const h=createHandler(options);
+ const ready=await(await h(req())).json();assert.equal(ready.ready,true);assert.equal(ready.testOnly,true);
+ const prep=await(await h(req({action:'prepare',storeId}))).json();assert.deepEqual({accountId:prep.accountId,profileId:prep.profileId},google.binding(userId,storeId));
+ assert.equal((await h(req({action:'prepare',storeId:'33333333-3333-4333-8333-333333333333'}))).status,503);
+ access=false;assert.equal((await(await h(req())).json()).ready,false);
+ access=true;options.api.product=async()=>{access=false;return product;};
+ assert.equal((await h(req({action:'prepare',storeId}))).status,503);assert.ok(checks>4);
 });

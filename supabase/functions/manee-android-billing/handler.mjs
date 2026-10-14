@@ -1,10 +1,11 @@
 import {createPurchaseVerifier} from './purchase.mjs';
+import {binding} from './google-play.mjs';
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export const PRODUCT = 'manee.store1.monthly';
 export const BASE_PLAN = 'monthly';
-// Status is a real app endpoint, but checkout stays closed until durable purchase
-// storage, renewal processing and multi-store allocation are implemented.
-export function createHandler({client, api, service=null, sandboxUsers=[]}) {
+// Only an approved owner/store pair can open sandbox checkout. Production
+// receipts remain blocked until entitlement and multi-store billing ship.
+export function createHandler({client, api, service=null, testAccess=async()=>false}) {
   return async req => {
     const origin = req.headers.get('origin');
     const allowed = !origin || origin === 'https://localhost';
@@ -34,14 +35,17 @@ export function createHandler({client, api, service=null, sandboxUsers=[]}) {
       const authorize = () => user.rpc('manee_android_push_context', {p_store_id:body.storeId});
       const context = await authorize();
       if(context.error || context.data !== true) return reply(403, {error:'owner_access_denied'});
-      if(body.action === 'verify' && api && service && sandboxUsers.includes(auth.data.user.id)) {
+      const permitted=async()=>await testAccess({user,storeId:body.storeId})===true;
+      const eligible=!!api && !!service && await permitted();
+      if(body.action === 'verify' && eligible) {
         const verify=createPurchaseVerifier({api,service,authorize:async()=>{
           const current=await authorize();
           if(current.error || current.data!==true) throw Error('owner_access_denied');
+          if(!await permitted()) throw Error('billing_not_ready');
         }});
         return reply(200, await verify({userId:auth.data.user.id,storeId:body.storeId,purchaseToken:body.purchaseToken}));
       }
-      if(body.action !== 'status') return reply(503, {error:'billing_not_ready'});
+      if(body.action !== 'status' && !(body.action==='prepare' && eligible)) return reply(503, {error:'billing_not_ready'});
       if(!api) return reply(200, {ready:false, catalogReady:false});
       const product = await api.product(PRODUCT);
       const plan = product?.basePlans?.find(p => p.basePlanId === BASE_PLAN);
@@ -50,7 +54,10 @@ export function createHandler({client, api, service=null, sandboxUsers=[]}) {
         plan.regionalConfigs?.some(r => r.regionCode === 'KR' && r.newSubscriberAvailability === true) === true;
       const recheck = await authorize();
       if(recheck.error || recheck.data !== true) return reply(403, {error:'owner_access_denied'});
-      return reply(200, {ready:false, catalogReady:!!catalogReady, productId:PRODUCT, basePlanId:BASE_PLAN});
+      const ready=eligible && !!catalogReady && await permitted();
+      if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
+      return reply(200, {ready, catalogReady:!!catalogReady, productId:PRODUCT, basePlanId:BASE_PLAN,
+        ...(ready?{testOnly:true,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };
 }

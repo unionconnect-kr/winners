@@ -1,3 +1,4 @@
+# Internal billing test build: sandbox access is granted per owner and store.
 name: Android Play internal setup bundle
 on:
   workflow_dispatch:

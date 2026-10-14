@@ -271,3 +271,28 @@ Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
   permission is needed for that identity. Actual RTDN delivery is unverified.
 - Paid checkout, production receipts, app entitlement enforcement and multi-store
   billing remain disabled/incomplete. No public paid release has occurred.
+
+## Store-scoped internal purchase UI — 2026-10-14 KST
+
+- Real Play test notification reached the authenticated receiver at 10:29:02 KST
+  with HTTP 200. This verifies the notification transport, not a purchase.
+- Added an expiring, administrator-managed private tester table, one store per
+  owner. Authenticated access requires the existing live owner/session check.
+  Clients cannot enrol themselves, read the list, or extend their permission.
+  No tester identities are included in repository code or migrations.
+- Billing endpoint v3 checks that permission on status, prepare, and verification,
+  including after network calls. Only approved combinations receive ready status
+  and opaque purchase binding. Production receipts are still rejected.
+- The Android app-info screen now exposes an internal purchase/restore dialog.
+  Actual eligible Play monthly KRW 9,900 offers provide all displayed prices;
+  unexpected products/plans/prices are hidden. Users must see a Google test card
+  before completing purchase: the app cannot inspect the Play account email or
+  prove license-test status before the Google purchase sheet opens.
+- Test permission expires after 14 days and is provisioned only in production.
+  Staging has the schema but no testers. This is not a paid public launch or
+  multi-store billing implementation. Existing app access is unchanged.
+- 48 focused billing tests and 42 mobile tests pass (overlapping suites).
+  Production web assets compile; unauthenticated billing requests return 401.
+  Android version 1.13 / versionCode 14 is prepared for an internal-track AAB.
+  Actual purchase, restoration, Play API authorization, and device execution
+  remain unverified until the newly built app is installed through Play.

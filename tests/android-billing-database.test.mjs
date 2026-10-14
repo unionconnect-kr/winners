@@ -74,3 +74,20 @@ test('unrefreshed subscriptions and revoked owners cannot grant access',async()=
  await assert.rejects(()=>save(record('revoked-owner')),/Owner access denied/);
  await assert.rejects(()=>status(),/Owner access denied/);
 });
+
+test('test access is private, expires, and cannot be reused for another owner or store',async()=>{
+ await db.exec('reset role');
+ await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014014212_android_billing_test_access.sql',import.meta.url),'utf8'));
+ await db.query("insert into private.android_billing_testers values($1,$2,now()+interval '1 day')",[owner,store]);
+ // Restore fixtures modified by preceding tests.
+ await db.exec(`update public.profiles set status='active';update public.store_memberships set status='active';update public.stores set archived_at=null;update auth.users set banned_until=null;`);
+ await db.query('insert into auth.sessions(id,user_id) values($1,$1) on conflict(id) do update set not_after=null',[owner]);
+ await role(owner);
+ assert.equal((await db.query('select public.manee_android_billing_test_access($1) as ok',[store])).rows[0].ok,true);
+ assert.equal((await db.query('select public.manee_android_billing_test_access($1) as ok',[store2])).rows[0].ok,false);
+ await assert.rejects(()=>db.query('select * from private.android_billing_testers'));
+ await assert.rejects(()=>db.query("update private.android_billing_testers set expires_at=now()+interval '1 year'"));
+ await role(other);await assert.rejects(()=>db.query('select public.manee_android_billing_test_access($1)',[store]));
+ await db.exec("reset role;update private.android_billing_testers set expires_at=now()-interval '1 second'");await role(owner);
+ assert.equal((await db.query('select public.manee_android_billing_test_access($1) as ok',[store])).rows[0].ok,false);
+});
