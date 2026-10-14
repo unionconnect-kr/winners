@@ -104,10 +104,11 @@ receives a conflict during a live 15-minute claim; explicit cancellation or a
 verified purchase releases the matching checkout ID. An interrupted or pending
 purchase remains restorable, and verification does not depend on the lease.
 The additive migration was applied to Staging, with zero claims and no direct
-table writes by an authenticated client. Production migration application
-returned an `invalid or expired requestState` connector error; a read afterward
-confirmed that the checkout table and RPC were absent. No Production store is
-enrolled, and no Production receipts exist.
+table writes by an authenticated client. An initial Production attempt returned
+an `invalid or expired requestState` connector error and did not apply. The
+subsequent retry succeeded. Production postflight confirmed both RPCs, zero
+claims, no authenticated direct table inserts, no anonymous claim execution,
+zero enrolled stores and zero Production receipts.
 
 Paid preparation also requires Play's Korean regional base-plan price to be
 exactly KRW 9,900/month. Sandbox readiness is separate. Focused billing tests
@@ -116,7 +117,7 @@ purchases only, so this source branch does not display a paid checkout.
 
 Draft PR #22 targets `main` and includes 58 accumulated commits. Before paid
 rollout, verify Play Console's free-trial offer and both products on a real
-device, apply and inspect the Production lease migration, deploy a gated
+device, deploy a gated
 purchase endpoint and paid-capable app, then exercise restore, cancellation,
 renewal and write-entitlement behavior with an explicitly selected pilot.
 The duplicate-checkout HTTP 409 display improvement is not in this branch.
