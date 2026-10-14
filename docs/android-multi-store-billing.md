@@ -145,3 +145,8 @@ server permission. Keep write enforcement off until paid purchase, restore,
 renewal/cancellation and entitlement recovery have been checked. Current
 production purchase endpoint v7 is Sandbox-only; zero paid permissions,
 Production receipts, checkout leases and enrolled stores were observed.
+
+Android source is now 1.17 / code 18, one greater than the last prepared 1.16 /
+code 17. Confirm the latest code uploaded to Play Console before building or
+uploading another AAB. No signed paid AAB, Play upload or Production permission
+is claimed here.
