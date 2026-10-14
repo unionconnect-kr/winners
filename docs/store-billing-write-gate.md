@@ -2,7 +2,7 @@
 
 
 Added explicit per-store billing enrollment, initially empty. Android ledger
-entitlement now guards 17 store-keyed business tables at the database, including
+entitlement now guards 18 store-keyed business tables at the database, including
 writes through SECURITY DEFINER RPCs. Reads and existing membership checks remain
 unchanged. Both OLD and NEW store IDs are checked, so moving a row cannot bypass
 an expired source/destination store. The caller cannot alter enrollment or call
@@ -10,7 +10,7 @@ the internal entitlement predicate. A member-facing invoker RPC returns only
 `enforced` and `canWrite`; it checks live session, membership and account ban.
 
 Confirmed on isolated PostgreSQL (PGlite), 4 scenario tests: empty enrollment;
-unauthorized policy access; all 17 write triggers; read preservation; cross-store
+unauthorized policy access; all 18 write triggers; read preservation; cross-store
 updates; active/grace/canceled-before-expiry; expiry/hold/pause/pending; stale
 observations; Sandbox/Production separation; staff access restoration; superseded
 receipts and revoked owner membership. Staging deployment confirms 17 triggers,
@@ -29,7 +29,7 @@ implemented. Two separate Play products were verified simultaneously active in
 Sandbox on 2026-10-14; see `android-multi-store-billing.md`. This does not enable
 production billing or production write enforcement.
 
-Live recheck on 2026-10-14: staging and production each have 17 write-gate triggers
+Initial live recheck on 2026-10-14: staging and production each had 17 write-gate triggers
 and 0 enrolled stores. The authenticated access RPC exists in Production; anonymous
 callers cannot execute it. Three known owner stores still evaluate as write-entitled
 because none is enrolled.
@@ -59,3 +59,9 @@ RLS-without-policy, intentionally with all client grants revoked. Unrelated stag
 warnings remain for public SECURITY DEFINER ratio/snapshot RPCs and disabled leaked
 password protection. See https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
 and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection .
+
+Follow-up migration `20261014093800_monthly_net_payroll_billing_gate.sql` adds
+`monthly_net_payroll` as the 18th direct-key write surface. It uses the same
+OLD/NEW store checks; unenrolled stores remain unrestricted, and reads remain
+available. Staging confirms 18 gates, zero enrolled stores and an unrestricted sample store.
+This does not enroll a store or initiate a charge.

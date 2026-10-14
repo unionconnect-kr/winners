@@ -25,9 +25,10 @@ insert into public.crew(id,store_id) values('${staff}','${a}');
 insert into public.store_memberships(user_id,store_id,role,crew_id) values('${owner}','${a}','owner',null),('${owner}','${b}','owner',null),('${staff}','${a}','staff','${staff}');`);
 const helpers=fs.readFileSync(new URL('../supabase/migrations/20260916070000_staff_auth_foundation_part1.sql',import.meta.url),'utf8');
 await db.exec(helpers.slice(helpers.indexOf('create or replace function private.is_live_manee_session()'),helpers.indexOf('create or replace function private.current_crew_id')));
-const tables=['sales_reports','expense_entries','fixed_expenses','fixed_schedules','shifts','vendors','reservations','announcements','checklist_templates','checklist_checks','checklist_log','crew_pay_adjustments','monthly_cost_checks','monthly_cost_reviews','monthly_report_closings','recurring_cost_templates','store_business_calendar'];
+const tables=['sales_reports','expense_entries','fixed_expenses','fixed_schedules','shifts','vendors','reservations','announcements','checklist_templates','checklist_checks','checklist_log','crew_pay_adjustments','monthly_net_payroll','monthly_cost_checks','monthly_cost_reviews','monthly_report_closings','recurring_cost_templates','store_business_calendar'];
 for(const t of tables)await db.exec(`create table public.${t}(id integer primary key,store_id uuid,value integer);grant select,insert,update,delete on public.${t} to authenticated;`);
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014035157_store_billing_write_gate.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014093800_monthly_net_payroll_billing_gate.sql',import.meta.url),'utf8'));
 async function admin(){await db.exec("reset role;select set_config('request.jwt.claim.sub','',false)");}
 async function as(user){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[user,JSON.stringify({sub:user,session_id:user})]);await db.exec('set role authenticated');}
 async function access(s=a){return(await db.query('select public.manee_store_billing_access($1) as x',[s])).rows[0].x;}
@@ -42,7 +43,7 @@ test('deployment enrolls nobody; clients cannot enroll themselves or query polic
  await assert.rejects(()=>db.query('select private.manee_store_write_entitled($1)',[a]));
  await as(outsider);await assert.rejects(()=>access(),/Store access denied/);
 });
-test('expired enrolled store blocks every installed business trigger, keeps reads and other stores',async()=>{
+test('expired enrolled store blocks every installed business trigger, including net payroll, keeps reads and other stores',async()=>{
  await admin();await db.query('insert into private.store_billing_enforcement(store_id,environment) values($1,$2)',[a,'Production']);await as(owner);
  assert.deepEqual(await access(),{enforced:true,canWrite:false});
  for(const t of tables)await assert.rejects(()=>db.query(`insert into public.${t} values(99,$1,1)`,[a]),e=>e.code==='P4402');
