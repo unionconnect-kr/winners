@@ -1,4 +1,5 @@
 // Generated from netlify/functions/lib/google-play-billing.cjs; keep parity test passing.
+import {Buffer} from 'node:buffer';
 import {createHash,createPrivateKey,sign} from 'node:crypto';
 const PACKAGE='kr.co.manee.app';
 const GOOGLE='https://androidpublisher.googleapis.com/androidpublisher/v3/applications/'+PACKAGE;

@@ -24,7 +24,7 @@ export function openAndroidBilling({billing,getContext,document}) {
  el.onclick=async()=>{if(busy)return;busy=true;buttons.forEach(b=>b.disabled=true);try{
   if(!same())throw Error('계정 또는 매장을 다시 선택해 주세요.');await fn();
  }catch(e){if(sheet.isConnected)status.textContent=e.message||'연결을 확인해 주세요.';}finally{busy=false;buttons.forEach(b=>b.disabled=false);}};return el;};
- const show=r=>{if(!same())return;status.textContent=r.status==='cancelled'?'구매를 취소했어요.':r.status==='pending'?'승인을 기다리고 있어요. 잠시 후 구매 복원을 눌러 주세요.':r.status==='empty'?'복원할 구매가 없어요.':r.results?.some(x=>x.testActive)?'테스트 구매·서버 검증이 완료됐어요.': '구매 내역을 확인했어요. 현재 활성 테스트 구독은 없어요.';};
+ const show=r=>{if(!same())return;status.textContent=r.status==='alreadyActive'?'이 매장에 이미 이용 중인 구독이 있어요.':r.status==='cancelled'?'구매를 취소했어요.':r.status==='pending'?'승인을 기다리고 있어요. 잠시 후 구매 복원을 눌러 주세요.':r.status==='empty'?'복원할 구매가 없어요.':r.results?.some(x=>x.testActive)?'테스트 구매·서버 검증이 완료됐어요.': '구매 내역을 확인했어요. 현재 활성 테스트 구독은 없어요.';};
  button('닫기',()=>sheet.close());
  sheet.addEventListener('cancel',e=>{if(busy)e.preventDefault();});sheet.addEventListener('close',()=>sheet.remove(),{once:true});
  document.body.append(sheet);sheet.showModal();

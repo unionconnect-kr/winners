@@ -65,3 +65,12 @@ test('restoring pending purchases does not verify them',async()=>{
   const s=setup({playBilling:{purchases:async()=>({purchases:[{...paid,state:'pending'}]})}});
   assert.equal((await s.client.restore()).status,'pending');assert.deepEqual(s.calls,[]);
 });
+
+test('server-confirmed active subscription prevents another checkout even with empty device cache',async()=>{
+ for(const state of [{active:true},{testOnly:true,testActive:true}]){
+ const s=setup({request:async()=>({ready:true,...selection,accountId:'a',profileId:'b',...state}),playBilling:{purchases:async()=>{throw Error('must not query');}}});
+ assert.equal((await s.client.purchase(selection)).status,'alreadyActive');assert.deepEqual(s.calls,[]);
+ }
+ const s=setup({request:async(_c,_n,b)=>b.action==='verify'?{verified:true}:{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,testActive:true}});
+ assert.equal((await s.client.purchase(selection)).status,'purchased');
+});

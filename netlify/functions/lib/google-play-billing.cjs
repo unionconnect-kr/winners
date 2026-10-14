@@ -1,4 +1,5 @@
 'use strict';
+const {Buffer}=require('node:buffer');
 const {createHash,createPrivateKey,sign}=require('node:crypto');
 const PACKAGE='kr.co.manee.app';
 const GOOGLE='https://androidpublisher.googleapis.com/androidpublisher/v3/applications/'+PACKAGE;

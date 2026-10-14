@@ -9,7 +9,17 @@ try {
   if(url === 'https://bhwuuxcrzxespkjlmqxr.supabase.co' &&
     credentials.project_id === 'manee-production-3eafa' &&
     credentials.client_email === 'manee-play-billing@manee-production-3eafa.iam.gserviceaccount.com') {
-    api = googlePlay.createGooglePlayApi({credentials});
+    api = googlePlay.createGooglePlayApi({credentials,fetcher:async(input:any,init:any)=>{
+      const stage=String(input)==='https://oauth2.googleapis.com/token'?'oauth':'publisher';
+      try {
+        const response=await fetch(input,init);
+        if(!response.ok) console.error('billing_upstream',JSON.stringify({stage,status:response.status}));
+        return response;
+      } catch {
+        console.error('billing_upstream',JSON.stringify({stage,status:'network_error'}));
+        throw Error('billing_unavailable');
+      }
+    }});
   }
 } catch { /* Missing or malformed credentials keep billing unavailable. */ }
 const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');

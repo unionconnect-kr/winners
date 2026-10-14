@@ -46,7 +46,14 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
         return reply(200, await verify({userId:auth.data.user.id,storeId:body.storeId,purchaseToken:body.purchaseToken}));
       }
       if(body.action !== 'status' && !(body.action==='prepare' && eligible)) return reply(503, {error:'billing_not_ready'});
-      if(!api) return reply(200, {ready:false, catalogReady:false});
+      // Use the caller's JWT, never service-role access, for the store snapshot.
+      // The RPC checks live ownership and strips receipt tokens at the database.
+      const snapshot=await user.rpc('manee_android_billing_status',{p_store_id:body.storeId});
+      if(snapshot.error || !Array.isArray(snapshot.data?.subscriptions)) throw Error('billing_status_unavailable');
+      const subscriptions=snapshot.data.subscriptions;
+      const entitlement={active:subscriptions.some(s=>s.environment==='Production'&&s.active===true),
+        testActive:subscriptions.some(s=>s.environment==='Sandbox'&&s.testActive===true)};
+      if(!api) return reply(200, {ready:false, catalogReady:false,...entitlement});
       const product = await api.product(PRODUCT);
       const plan = product?.basePlans?.find(p => p.basePlanId === BASE_PLAN);
       const catalogReady = product?.packageName === 'kr.co.manee.app' && product.productId === PRODUCT &&
@@ -56,7 +63,7 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       if(recheck.error || recheck.data !== true) return reply(403, {error:'owner_access_denied'});
       const ready=eligible && !!catalogReady && await permitted();
       if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
-      return reply(200, {ready, catalogReady:!!catalogReady, productId:PRODUCT, basePlanId:BASE_PLAN,
+      return reply(200, {ready, catalogReady:!!catalogReady, productId:PRODUCT, basePlanId:BASE_PLAN,...entitlement,
         ...(ready?{testOnly:true,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };

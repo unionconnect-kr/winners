@@ -296,3 +296,32 @@ Workflow: https://github.com/unionconnect-kr/winners/actions/runs/38443746525
   Android version 1.13 / versionCode 14 is prepared for an internal-track AAB.
   Actual purchase, restoration, Play API authorization, and device execution
   remain unverified until the newly built app is installed through Play.
+
+## 2026-10-14 device lifecycle verification and status connection
+
+Internal Play 1.13 (versionCode 14) was installed from Play. A license tester
+completed a sandbox trial checkout with the always-approve test card. Device
+restore reported successful server verification. The private ledger confirmed
+renewal, cancellation, then expiry at 12:30 KST; the worker recorded EXPIRED at
+12:31 KST and cleared next_check_at. At 12:41 KST the device restore showed no
+purchases. No production payment was made. These observations do not independently
+prove every RTDN event type, refund, grace-period or revoked-purchase delivery.
+
+The Edge OAuth core now explicitly imports node:buffer (Deno does not provide the
+Node Buffer global). Safe upstream diagnostics include only stage and HTTP status.
+The refresh worker received the same fix. No private credentials or receipts are
+included in this report.
+
+Status/prepare now call the existing owner-scoped status RPC with the caller JWT.
+Only environment-separated active/testActive booleans are returned; tokens remain
+private. Database errors fail closed. The native coordinator avoids a second
+checkout when the server confirms an active subscription, even if device purchase
+cache is empty, and the dialog explains that a subscription already exists.
+The mobile source change needs a subsequent signed build before device verification.
+35 focused endpoint, verification, coordinator and offer tests pass.
+
+This is the status connection step, not application-wide paid access enforcement.
+Production receipt acceptance remains disabled. Multi-store product allocation,
+iOS parity, staff access during owner nonpayment and final paid rollout still need
+implementation and validation. The current single fixed product/one-store binding
+must not be advertised as supporting arbitrary additional store subscriptions.

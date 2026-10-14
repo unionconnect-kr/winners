@@ -8,7 +8,7 @@ const product={packageName:'kr.co.manee.app',productId:PRODUCT,basePlans:[{baseP
 const req=(body={action:'status',storeId},headers={authorization:'Bearer test-token'})=>new Request('https://example.com',{method:'POST',headers,body:JSON.stringify(body)});
 function setup({auth=true,owner=true,resource=product}={}){
  let calls=0,checks=0;
- const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:auth?{id:'user'}:null}})},rpc:async()=>({data:typeof owner==='function'?owner(++checks):owner})}),api:{product:async()=>{calls++;return resource;}}});
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:auth?{id:'user'}:null}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:typeof owner==='function'?owner(++checks):owner})}),api:{product:async()=>{calls++;return resource;}}});
  return {handler,calls:()=>calls};
 }
 test('anonymous, invalid sessions and nonowners cannot query Google',async()=>{
@@ -16,7 +16,7 @@ test('anonymous, invalid sessions and nonowners cannot query Google',async()=>{
  const s=setup();assert.equal((await s.handler(req(undefined,{}))).status,401);assert.equal(s.calls(),0);
 });
 test('valid catalog never enables checkout; prepare and verify remain gated',async()=>{
- const s=setup();assert.deepEqual(await (await s.handler(req())).json(),{ready:false,catalogReady:true,productId:PRODUCT,basePlanId:'monthly'});
+ const s=setup();assert.deepEqual(await (await s.handler(req())).json(),{ready:false,catalogReady:true,productId:PRODUCT,basePlanId:'monthly',active:false,testActive:false});
  for(const action of ['prepare','verify'])assert.equal((await s.handler(req({action,storeId}))).status,503);
  assert.equal(s.calls(),1);
 });
@@ -51,12 +51,12 @@ test('Edge deployment contains the same verification code as the tested server c
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../netlify/functions/lib/google-play-billing.cjs',import.meta.url),'utf8');
  const edge=await readFile(new URL('../supabase/functions/manee-android-billing/google-play.mjs',import.meta.url),'utf8');
- assert.equal(edge,source.replace("'use strict';\nconst {createHash,createPrivateKey,sign}=require('node:crypto');","// Generated from netlify/functions/lib/google-play-billing.cjs; keep parity test passing.\nimport {createHash,createPrivateKey,sign} from 'node:crypto';").replace('module.exports={PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};','export {PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};'));
+ assert.equal(edge,source.replace("'use strict';\nconst {Buffer}=require('node:buffer');\nconst {createHash,createPrivateKey,sign}=require('node:crypto');","// Generated from netlify/functions/lib/google-play-billing.cjs; keep parity test passing.\nimport {Buffer} from 'node:buffer';\nimport {createHash,createPrivateKey,sign} from 'node:crypto';").replace('module.exports={PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};','export {PACKAGE,binding,createGooglePlayApi,verifiedRecord,verifyAndPersist};'));
 });
 test('only explicitly allowed owners can verify sandbox receipts through the endpoint',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';const ids=google.binding(userId,storeId);let saves=0,acks=0;
  const resource={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async()=>({data:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
  assert.equal((await createHandler(options)(req({action:'verify',storeId,purchaseToken:'test'}))).status,503);
  assert.equal(saves,0);assert.equal(acks,0);
  const handler=createHandler({...options,testAccess:async()=>true});
@@ -67,7 +67,7 @@ test('only explicitly allowed owners can verify sandbox receipts through the end
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';let access=true,checks=0;
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async()=>({data:true})}),
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
  api:{product:async()=>product},service:{},testAccess:async({storeId:s})=>{checks++;return access&&s===storeId;}};
  const h=createHandler(options);
  const ready=await(await h(req())).json();assert.equal(ready.ready,true);assert.equal(ready.testOnly,true);
@@ -76,4 +76,35 @@ test('test readiness and prepare are scoped to the approved store and rechecked 
  access=false;assert.equal((await(await h(req())).json()).ready,false);
  access=true;options.api.product=async()=>{access=false;return product;};
  assert.equal((await h(req({action:'prepare',storeId}))).status,503);assert.ok(checks>4);
+});
+
+test('Edge OAuth works without the Node global Buffer', async()=>{
+ const {spawnSync}=await import('node:child_process');
+ const script=`
+ import {createGooglePlayApi} from './supabase/functions/manee-android-billing/google-play.mjs';
+ import {generateKeyPairSync} from 'node:crypto';
+ const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+ let calls=0;
+ const api=createGooglePlayApi({credentials:{client_email:'test@example.iam.gserviceaccount.com',private_key:privateKey.export({type:'pkcs8',format:'pem'})},fetcher:async()=>({ok:true,json:async()=>++calls===1?{access_token:'test',expires_in:3600}:{productId:'manee.store1.monthly'}})});
+ globalThis.Buffer=undefined;
+ const result=await api.product('manee.store1.monthly');
+ if(result.productId!=='manee.store1.monthly'||calls!==2)throw Error('lookup failed');
+ `;
+ const result=spawnSync(process.execPath,['--input-type=module','-e',script],{cwd:new URL('..',import.meta.url),encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+});
+
+test('store status is read with caller authorization and sandbox never becomes paid access',async()=>{
+ let subscriptions=[{environment:'Sandbox',testActive:true,active:true,purchaseToken:'must-not-leak'}];
+ let failed=false;const calls=[];
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async(name,args)=>{
+ calls.push({name,args});return name==='manee_android_billing_status'?{data:{subscriptions},error:failed?{}:null}:{data:true};
+ }}),api:{product:async()=>product},service:{},testAccess:async()=>true});
+ let r=await(await handler(req())).json();assert.equal(r.active,false);assert.equal(r.testActive,true);assert.ok(!JSON.stringify(r).includes('must-not-leak'));
+ assert.ok(calls.some(c=>c.name==='manee_android_billing_status'&&c.args.p_store_id===storeId));
+ subscriptions=[{environment:'Production',active:true,testActive:true}];
+ r=await(await handler(req({action:'prepare',storeId}))).json();assert.equal(r.active,true);assert.equal(r.testActive,false);
+ subscriptions=[{environment:'Sandbox',testActive:false}];
+ r=await(await handler(req())).json();assert.equal(r.active,false);assert.equal(r.testActive,false);
+ failed=true;assert.equal((await handler(req({action:'prepare',storeId}))).status,503);
 });

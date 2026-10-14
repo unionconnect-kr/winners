@@ -46,7 +46,8 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
     purchase: selection => run(async c => {
       const info = await call(c, {action: 'prepare'});
       if (!info.ready || !info.productId || !info.accountId || !info.profileId) throw Error('구독 연결을 준비하고 있어요.');
-      if (info.active) return {status: 'alreadyActive'};
+      if (info.active===true || (info.testOnly===true && info.testActive===true))
+        return {status: 'alreadyActive',testActive:info.testOnly===true&&info.testActive===true};
       const current = await playBilling.purchases();
       unchanged(c);
       const relevant = (current.purchases || []).filter(p => p.productIds?.includes(info.productId));
