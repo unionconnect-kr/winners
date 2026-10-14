@@ -44,25 +44,38 @@ export function createAndroidBillingClient({playBilling, request, getContext}) {
       return result;
     },
     purchase: selection => run(async c => {
-      const info = await call(c, {action: 'prepare'});
+      const checkoutId=globalThis.crypto.randomUUID();
+      const info = await call(c, {action: 'prepare',checkoutId});
+      const claimed=info.testOnly===false && info.checkoutId===checkoutId;
+      const release=async()=>{if(claimed)try{await call(c,{action:'release',checkoutId});}catch{/* Lease expires if the network is unavailable. */}};
       if (!info.ready || !info.productId || !info.accountId || !info.profileId) throw Error('구독 연결을 준비하고 있어요.');
-      if (info.active===true || (info.testOnly===true && info.testActive===true))
+      if (info.active===true || (info.testOnly===true && info.testActive===true)){
+        await release();
         return {status: 'alreadyActive',testActive:info.testOnly===true&&info.testActive===true};
-      const current = await playBilling.purchases();
-      unchanged(c);
-      const relevant = (current.purchases || []).filter(p => p.productIds?.includes(info.productId));
-      if (relevant.length) {
-        const results = await verify(c, relevant);
-        return {status: results.length ? 'restored' : 'pending', results};
       }
-      if (selection?.productId !== info.productId || !selection.offerToken) throw Error('구독 요금을 다시 확인해 주세요.');
-      const purchased = await playBilling.purchase({productId: info.productId,
-        offerToken: selection.offerToken, accountId: info.accountId, profileId: info.profileId});
-      unchanged(c);
-      if (purchased.status !== 'purchased') return purchased;
-      const results = await verify(c, purchased.purchases);
-      if (!results.length) throw Error('구매 확인이 지연되고 있어요. 구매 복원을 눌러 주세요.');
-      return {status: 'purchased', results};
+      if(info.testOnly===false && !claimed)throw Error('결제 연결을 다시 시도해 주세요.');
+      let playStarted=false;
+      try{
+        const current = await playBilling.purchases();
+        unchanged(c);
+        const relevant = (current.purchases || []).filter(p => p.productIds?.includes(info.productId));
+        if (relevant.length) {
+          const results = await verify(c, relevant);
+          if(results.length)await release();
+          return {status: results.length ? 'restored' : 'pending', results};
+        }
+        if (selection?.productId !== info.productId || !selection.offerToken) throw Error('구독 요금을 다시 확인해 주세요.');
+        playStarted=true;
+        const purchased = await playBilling.purchase({productId: info.productId,
+          offerToken: selection.offerToken, accountId: info.accountId, profileId: info.profileId});
+        unchanged(c);
+        if (purchased.status==='cancelled')await release();
+        if (purchased.status !== 'purchased') return purchased;
+        const results = await verify(c, purchased.purchases);
+        if (!results.length) throw Error('구매 확인이 지연되고 있어요. 구매 복원을 눌러 주세요.');
+        await release();
+        return {status: 'purchased', results};
+      }catch(error){if(!playStarted)await release();throw error;}
     }),
     restore: () => run(async c => {
       const info=await call(c,{action:'status'});

@@ -36,6 +36,7 @@ await service();
 await db.query('select public.manee_android_billing_save($1,$2,$3)',[owner,store,{purchaseToken:'historical',...google.binding(owner,store),productId:'manee.store1.monthly',basePlanId:'monthly',environment:'Sandbox',state:'SUBSCRIPTION_STATE_EXPIRED',checkedAt:new Date().toISOString(),expiresAt:new Date(Date.now()-1000).toISOString()}]);
 await db.exec('reset role');
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014040120_android_billing_product_allocation.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261014145616_android_billing_checkout_claim.sql',import.meta.url),'utf8'));
 const allocate=async(s=store,u=owner)=>{await role(u);return (await db.query('select public.manee_android_billing_product($1) as sku',[s])).rows[0].sku;};
 let tick=Date.now();
 const record=(token,s=store,productId='manee.store1.monthly',changes={})=>({purchaseToken:token,...google.binding(owner,s),productId,basePlanId:'monthly',environment:'Sandbox',state:'SUBSCRIPTION_STATE_ACTIVE',checkedAt:new Date(++tick).toISOString(),expiresAt:new Date(Date.now()+86400000).toISOString(),...changes});
@@ -63,4 +64,28 @@ test('second SKU persists and cannot be restored against another store or linked
  assert.equal(await save(record('new-two',store2,'manee.store2.monthly',{linkedPurchaseToken:'unknown-two'}),store2),true);
  await db.exec('reset role');const rows=(await db.query("select product_id from private.android_billing_purchases where purchase_token='unknown-two'")).rows;
  assert.equal(rows[0].product_id,'manee.store2.monthly');
+});
+test('checkout claim is scoped to the owner, store, product and request ID',async()=>{
+ const first=id(301),second=id(302),third=id(303);
+ const claim=(s=store,sku='manee.store1.monthly',request=first)=>db.query(
+  'select public.manee_android_billing_checkout_claim($1,$2,$3) as result',[s,sku,request]).then(x=>x.rows[0].result);
+ const release=(s=store,request=first)=>db.query(
+  'select public.manee_android_billing_checkout_release($1,$2) as released',[s,request]).then(x=>x.rows[0].released);
+ await role(owner);
+ assert.deepEqual(await claim(),{status:'claimed'});
+ assert.deepEqual(await claim(),{status:'claimed'});
+ assert.deepEqual(await claim(store,'manee.store1.monthly',second),{status:'in_progress'});
+ assert.equal(await release(store,second),false);
+ assert.equal(await release(),true);
+ assert.deepEqual(await claim(store,'manee.store1.monthly',second),{status:'claimed'});
+ await assert.rejects(()=>claim(store,'manee.store2.monthly',third),/Invalid checkout allocation/);
+ await assert.rejects(()=>claim(store2,'manee.store1.monthly',third),/Invalid checkout allocation/);
+ await service();await assert.rejects(()=>db.exec('delete from private.android_billing_checkout_claims'));
+ await db.exec('reset role');
+ await db.exec('update private.android_billing_checkout_claims set expires_at=now()-interval \'1 second\'');
+ await role(owner);assert.deepEqual(await claim(store,'manee.store1.monthly',third),{status:'claimed'});
+ await role(other);await assert.rejects(()=>claim(store,'manee.store1.monthly',first),/Owner access denied/);
+ await role(owner);assert.equal(await release(store,second),false);
+ await save(record('paid-checkout',store,'manee.store1.monthly',{environment:'Production'}));
+ await role(owner);assert.deepEqual(await claim(store,'manee.store1.monthly',first),{status:'active'});
 });

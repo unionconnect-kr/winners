@@ -4,6 +4,7 @@ import {generateKeyPairSync} from 'node:crypto';
 import google from '../netlify/functions/lib/google-play-billing.cjs';
 import {createHandler,PRODUCT} from '../supabase/functions/manee-android-billing/handler.mjs';
 const storeId='22222222-2222-4222-8222-222222222222';
+const checkoutId='33333333-3333-4333-8333-333333333333';
 const product={packageName:'kr.co.manee.app',productId:PRODUCT,basePlans:[{basePlanId:'monthly',state:'ACTIVE',autoRenewingBasePlanType:{billingPeriodDuration:'P1M'},regionalConfigs:[{regionCode:'KR',newSubscriberAvailability:true}]}]};
 const req=(body={action:'status',storeId},headers={authorization:'Bearer test-token'})=>new Request('https://example.com',{method:'POST',headers,body:JSON.stringify(body)});
 function setup({auth=true,owner=true,resource=product}={}){
@@ -72,13 +73,14 @@ test('production receipts require an exact owner/store permission and a live rec
   externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},
   lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
  const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
-  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true})}),
   api:{product:async()=>product,get:async()=>resource,acknowledge:async()=>acks++},
   service:{rpc:async()=>{saves++;return{data:true};}},testAccess:async()=>false,
   productionAccess:async({userId:u,storeId:s})=>permitted&&u===userId&&s===storeId};
  const handler=createHandler(options);
  const status=await(await handler(req())).json();assert.equal(status.ready,true);assert.equal(status.testOnly,false);
- const prep=await(await handler(req({action:'prepare',storeId}))).json();assert.equal(prep.testOnly,false);
+ const prep=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
+ assert.equal(prep.testOnly,false);assert.equal(prep.checkoutId,checkoutId);
  const response=await handler(req({action:'verify',storeId,purchaseToken:'paid'}));
  assert.equal(response.status,200);assert.equal((await response.json()).active,true);assert.equal(saves,1);assert.equal(acks,1);
  permitted=false;
@@ -92,6 +94,31 @@ test('production receipts require an exact owner/store permission and a live rec
  options.api.get=async()=>{permitted=false;return resource;};
  assert.equal((await handler(req({action:'verify',storeId,purchaseToken:'revoked'}))).status,503);
  assert.equal(saves,1);assert.equal(acks,1);
+});
+test('paid prepare permits one checkout, returns conflict for another, and release checks its ID',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';
+ let status='claimed',released=false;
+ const rpc=async(name,args)=>{
+  if(name==='manee_android_billing_product')return{data:PRODUCT};
+  if(name==='manee_android_billing_status')return{data:{subscriptions:[]}};
+  if(name==='manee_android_billing_checkout_claim')return{data:{status}};
+  if(name==='manee_android_billing_checkout_release'){
+   released=args.p_checkout_id===checkoutId;return{data:released};
+  }
+  return{data:true};
+ };
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc}),
+  api:{product:async()=>product},service:{},productionAccess:async()=>true});
+ assert.equal((await handler(req({action:'prepare',storeId}))).status,400);
+ const first=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
+ assert.equal(first.checkoutId,checkoutId);
+ status='in_progress';
+ assert.equal((await handler(req({action:'prepare',storeId,checkoutId:'44444444-4444-4444-8444-444444444444'}))).status,409);
+ assert.equal((await handler(req({action:'release',storeId,checkoutId}))).status,200);
+ assert.equal(released,true);
+ status='active';
+ const active=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
+ assert.equal(active.active,true);assert.equal(active.checkoutId,undefined);
 });
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{

@@ -71,8 +71,39 @@ test('server-confirmed active subscription prevents another checkout even with e
  const s=setup({request:async()=>({ready:true,...selection,accountId:'a',profileId:'b',...state}),playBilling:{purchases:async()=>{throw Error('must not query');}}});
  assert.equal((await s.client.purchase(selection)).status,'alreadyActive');assert.deepEqual(s.calls,[]);
  }
- const s=setup({request:async(_c,_n,b)=>b.action==='verify'?{verified:true}:{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,testActive:true}});
+ const s=setup({request:async(_c,_n,b)=>b.action==='verify'?{verified:true}:b.action==='release'?{released:true}:{ready:true,...selection,accountId:'a',profileId:'b',checkoutId:b.checkoutId,testOnly:false,testActive:true}});
  assert.equal((await s.client.purchase(selection)).status,'purchased');
+});
+
+test('a paid checkout releases its exact lease after verified purchase or explicit cancellation',async()=>{
+ for(const checkoutStatus of ['purchased','cancelled']){
+  const seen=[];
+  const s=setup({request:async(_c,_n,b)=>{
+   seen.push({action:b.action,checkoutId:b.checkoutId});
+   if(b.action==='prepare')return{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,checkoutId:b.checkoutId};
+   if(b.action==='verify')return{verified:true,active:true};
+   return{released:true};
+  },playBilling:{purchase:async()=>({status:checkoutStatus,purchases:[paid]})}});
+  assert.equal((await s.client.purchase(selection)).status,checkoutStatus);
+  assert.deepEqual(seen.map(x=>x.action),checkoutStatus==='purchased'?['prepare','verify','release']:['prepare','release']);
+  assert.equal(seen[0].checkoutId,seen.at(-1).checkoutId);
+ }
+});
+test('a pending or uncertain paid purchase keeps its lease for restoration',async()=>{
+ for(const purchase of [async()=>({status:'pending'}),async()=>{throw Error('Play disconnected');}]){
+  const seen=[];
+  const s=setup({request:async(_c,_n,b)=>{
+   seen.push(b.action);
+   return{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,checkoutId:b.checkoutId};
+  },playBilling:{purchase}});
+  try{await s.client.purchase(selection);}catch{}
+  assert.deepEqual(seen,['prepare']);
+ }
+});
+test('paid purchase cannot start when the server has not issued a lease',async()=>{
+ const s=setup({request:async()=>({ready:true,...selection,accountId:'a',profileId:'b',testOnly:false})});
+ await assert.rejects(s.client.purchase(selection),/다시 시도/);
+ assert.deepEqual(s.calls,[]);
 });
 
 test('restore verifies only the selected store product while leaving other store receipts alone',async()=>{

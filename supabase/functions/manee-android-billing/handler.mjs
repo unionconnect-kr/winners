@@ -26,7 +26,8 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       let body;
       try { if(raw.length > 8192) throw Error(); body = JSON.parse(raw); }
       catch { return reply(400, {error:'invalid_request'}); }
-      if (!body || !['status','prepare','verify'].includes(body.action) || !UUID.test(body.storeId || ''))
+      if (!body || !['status','prepare','verify','release'].includes(body.action) || !UUID.test(body.storeId || '') ||
+        (body.action==='release' && !UUID.test(body.checkoutId || '')))
         return reply(400, {error:'invalid_request'});
       const user = client(bearer);
       const auth = await user.auth.getUser(bearer.slice(7));
@@ -36,6 +37,12 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const authorize = () => user.rpc('manee_android_push_context', {p_store_id:body.storeId});
       const context = await authorize();
       if(context.error || context.data !== true) return reply(403, {error:'owner_access_denied'});
+      if(body.action==='release'){
+        const released=await user.rpc('manee_android_billing_checkout_release',{
+          p_store_id:body.storeId,p_checkout_id:body.checkoutId});
+        if(released.error || typeof released.data!=='boolean')return reply(503,{error:'billing_unavailable'});
+        return reply(200,{released:released.data});
+      }
       const permitted=async environment=>await (environment==='Production'?productionAccess:testAccess)(
         {user,userId:auth.data.user.id,storeId:body.storeId})===true;
       const sandboxEligible=!!api && !!service && await permitted('Sandbox');
@@ -82,8 +89,18 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const readyPaid=eligible && !!catalogReady && await permitted('Production');
       const ready=readySandbox||readyPaid;
       if(body.action==='prepare' && !ready)return reply(503,{error:'billing_not_ready'});
+      let checkout={};
+      if(body.action==='prepare' && readyPaid && !readySandbox && !entitlement.active){
+        if(!UUID.test(body.checkoutId || ''))return reply(400,{error:'invalid_request'});
+        const claim=await user.rpc('manee_android_billing_checkout_claim',{
+          p_store_id:body.storeId,p_product_id:productId,p_checkout_id:body.checkoutId});
+        if(claim.error || !['claimed','in_progress','active'].includes(claim.data?.status))
+          return reply(503,{error:'billing_unavailable'});
+        if(claim.data.status==='in_progress')return reply(409,{error:'checkout_in_progress'});
+        checkout=claim.data.status==='active'?{active:true}:{checkoutId:body.checkoutId};
+      }
       return reply(200, {ready, catalogReady:!!catalogReady, productId, basePlanId:BASE_PLAN,...entitlement,
-        ...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
+        ...checkout,...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };
 }
