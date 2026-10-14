@@ -1,0 +1,70 @@
+# Restricted paid pilot build: produces a signed AAB only; no Play upload or server permission.
+name: Android paid pilot candidate bundle
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/billing-paid-acceptance-20261014']
+    paths: ['.github/workflows/android-paid-pilot-bundle.yml', 'mobile/scripts/build-android-paid-pilot.mjs', 'mobile/scripts/build-web.mjs', 'mobile/scripts/verify-android-build.mjs', 'mobile/scripts/verify-android-aab.mjs', 'mobile/src/android-billing.mjs', 'mobile/src/native-android.js', 'mobile/android/app/build.gradle', 'mobile/package.json']
+permissions:
+  contents: read
+concurrency:
+  group: android-paid-pilot-candidate
+  cancel-in-progress: false
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    environment: android-play-internal
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - run: npm test
+      - name: Build and verify signed paid pilot candidate
+        env:
+          MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          MANEE_ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.MANEE_ANDROID_UPLOAD_STORE_PASSWORD }}
+          MANEE_ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.MANEE_ANDROID_UPLOAD_KEY_ALIAS }}
+          MANEE_ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.MANEE_ANDROID_UPLOAD_KEY_PASSWORD }}
+          MANEE_ANDROID_UPLOAD_CERT_SHA256: ${{ vars.MANEE_ANDROID_UPLOAD_CERT_SHA256 }}
+          MANEE_ANDROID_FIREBASE_PRODUCTION_JSON: ${{ secrets.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export MANEE_ANDROID_UPLOAD_KEYSTORE="$RUNNER_TEMP/manee-upload.jks"
+          trap 'rm -f "$MANEE_ANDROID_UPLOAD_KEYSTORE" android/app/src/release/google-services.json' EXIT
+          node --input-type=module - <<'JS'
+          import {writeFileSync, mkdirSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          for (const name of ['MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64','MANEE_ANDROID_UPLOAD_STORE_PASSWORD',
+            'MANEE_ANDROID_UPLOAD_KEY_ALIAS','MANEE_ANDROID_UPLOAD_KEY_PASSWORD',
+            'MANEE_ANDROID_UPLOAD_CERT_SHA256','MANEE_ANDROID_FIREBASE_PRODUCTION_JSON']) {
+            assert.ok(process.env[name], 'Missing release configuration: '+name);
+          }
+          mkdirSync('android/app/src/release',{recursive:true});
+          writeFileSync(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE,Buffer.from(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64,'base64'),{mode:0o600});
+          writeFileSync('android/app/src/release/google-services.json',process.env.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON,{mode:0o600});
+          JS
+          npm run aab:paid-pilot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manee-paid-pilot-candidate-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
+          if-no-files-found: error

@@ -132,7 +132,8 @@ Sandbox tests remain available. The separate `aab:paid-pilot` command compiles
 `ANDROID_PAID_BILLING:true`, packages production Android assets, and verifies the
 signed AAB with the `paid-pilot` purpose and upload certificate. The production
 backend must still grant an exact owner/store pair before that app can start a
-paid checkout. No GitHub workflow produces or uploads a paid pilot bundle.
+paid checkout. The separate candidate workflow builds and stores a signed AAB
+for review, but does not upload it to Play or change server permissions.
 
 Mobile tests: 61/61 pass, including internal client refusal, distinct package
 metadata and the unchanged internal bundle guard. A signed paid AAB has not yet
