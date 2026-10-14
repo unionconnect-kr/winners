@@ -20,11 +20,16 @@ This is an Android pilot, not complete paid rollout. Production database is not
 modified. No actual store is enrolled. Attendance remains available to avoid
 stranding an employee mid-shift; identity/account recovery, notifications, crew
 profile changes, indirect child records and storage are outside this first gate.
-Full account-erasure/cascade behavior, iOS entitlements, production refresh worker,
-UI access-state integration and signed device build must be verified before
-production enrollment. Multi-store product allocation remains unimplemented: the
-Android purchase verifier, SQL save and refresh worker still expect one fixed
-product. Do not enable a second store checkout under the existing SKU.
+Full account-erasure/cascade behavior, iOS entitlements, production-receipt
+refresh behavior, UI access-state integration and a signed device build containing
+that integration must be verified before production enrollment. Per-store Android
+product allocation, product-aware receipt verification and refresh are now
+implemented. Two separate Play products were verified simultaneously active in
+Sandbox on 2026-10-14; see `android-multi-store-billing.md`. This does not enable
+production billing or production write enforcement.
+
+Live recheck on 2026-10-14: staging still has 17 write-gate triggers and 0 enrolled
+stores. Production has no enrollment table and no billing write-gate triggers.
 
 Security advisor review: the new private deny-by-default table reports informational
 RLS-without-policy, intentionally with all client grants revoked. Unrelated staging
