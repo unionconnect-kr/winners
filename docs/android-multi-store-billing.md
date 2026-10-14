@@ -68,21 +68,25 @@ installation and on-device confirmation of 1.15 are not yet claimed.
 
 ## Production receipt reconciliation groundwork (2026-10-14)
 
-The refresh worker source is prepared to accept a claimed Production receipt only when Google's
+The refresh worker accepts a claimed Production receipt only when Google's
 fresh `subscriptionsv2.get` result has no `testPurchase` marker; Sandbox jobs
-likewise require that marker. A mismatched environment is retried without saving
-or acknowledging. The staged database claim and minute dispatcher select both ledger
-environments and include the immutable environment and product ID in each job.
+require that marker. A mismatched environment is retried without saving or
+acknowledging. The database claim and minute dispatcher select both ledger
+environments and include the bound environment and product ID in each job.
 The purchase endpoint still rejects Production receipts, the Android UI is
-`testOnly`, no store is enrolled in write enforcement, and this change alone
-cannot start a paid checkout. Google recommends verifying current state from the
-Developer API and processing RTDN updates; the existing event queue wakes the
-poller, while the five-minute refresh bounds stale entitlement.
+`testOnly`, and no store is enrolled in write enforcement. This change cannot
+start a paid checkout. The existing event queue wakes the five-minute poller.
 
-Deployment boundary on 2026-10-14: the new SQL is installed only in staging,
-where there are zero purchase rows, zero enrolled stores and no active billing
-refresh cron. The production refresh Edge Function remains version 3, and its
-claim/dispatch functions remain Sandbox-only. The production deployment was
-blocked by automatic approval review because it changes a live service-role
-and Google Play credential-bearing payment worker. Do not apply the production
-SQL ahead of its paired worker. Production checkout remains unavailable.
+Staging SQL was verified with zero purchase rows, zero enrolled stores and no
+active billing refresh cron. Automatic approval review initially blocked a
+production service-role and Google Play credential-bearing worker deployment.
+After explicit user approval, Production Edge Function `manee-billing-refresh`
+was upgraded from version 3 to 4, then migration
+`20261014100100_production_billing_refresh.sql` was applied. The deployed
+entrypoint and Google verifier match the previous version; the worker handler
+matches commit `ba5dacf1bd99c341d0eec387ca872a43d7784c7d`. Production
+preflight and postflight confirmed 0 Production receipts, 0 enrolled stores,
+the refresh cron active, claim/dispatch capable of Production records, and
+Songcheon/Hoga stores still write-entitled. The separate purchase Edge Function
+remains version 7 with its explicit Sandbox-only record guard; enabling paid
+checkout is a separate future step.
