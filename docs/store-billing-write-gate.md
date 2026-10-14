@@ -73,3 +73,9 @@ announcement read acknowledgements and attendance remain accessible. There
 are no configured Storage buckets in the connected staging or production
 projects as of this audit, so this migration adds no Storage policy.
 No store is enrolled or charged by this change.
+
+Production follow-up on 2026-10-14: the photo-child migration is installed.
+Production has 18 direct-key triggers and one photo-child trigger, zero enrolled
+stores, and the two sampled owner stores remain write-entitled. The Android
+staging regression workflow for commit `a6b078edbd2cc68abfc0b731a3bda5ecb8ec71e1`
+passed the app/security regression job before production deployment.
