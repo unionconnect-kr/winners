@@ -112,12 +112,12 @@ zero enrolled stores and zero Production receipts.
 
 Paid preparation also requires Play's Korean regional base-plan price to be
 exactly KRW 9,900/month. Sandbox readiness is separate. Focused billing tests
-pass (70/70). The existing Android dialog still explicitly permits test
-purchases only, so this source branch does not display a paid checkout.
+pass (72/72). The review branch contains a paid dialog behind explicit server
+readiness, shows Play's actual offer and renewal/cancellation terms, and gives
+a conflict message for another device's live checkout. The deployed Android
+app still presents only the internal test flow.
 
-Draft PR #22 targets `main` and includes 58 accumulated commits. Before paid
+Draft PR #22 targets `main` and includes the accumulated Android changes. Before paid
 rollout, verify Play Console's free-trial offer and both products on a real
-device, deploy a gated
-purchase endpoint and paid-capable app, then exercise restore, cancellation,
+device, deploy a gated purchase endpoint and paid-capable app, then exercise restore, cancellation,
 renewal and write-entitlement behavior with an explicitly selected pilot.
-The duplicate-checkout HTTP 409 display improvement is not in this branch.
