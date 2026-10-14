@@ -3,7 +3,10 @@ export function testOffers(products,productId='manee.store1.monthly') {
  if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
  const product=products?.find(p=>p.productId===productId);
  return (product?.offers||[]).filter(o=>o.basePlanId==='monthly' && o.offerToken &&
-  (o.offerId==='trial-1month'||!o.offerId) && o.phases?.length &&
+  (o.offerId==='trial-1month' ? o.phases?.length===2 &&
+    Number(o.phases[0].amountMicros)===0 && o.phases[0].period==='P1M' &&
+    o.phases[0].cycles===1 && o.phases[0].recurrenceMode===2 :
+    !o.offerId && o.phases?.length===1) &&
   o.phases.every(p=>p.currency==='KRW') &&
   o.phases.at(-1).period==='P1M' && o.phases.at(-1).recurrenceMode===1 &&
   Number(o.phases.at(-1).amountMicros)===9900000000
