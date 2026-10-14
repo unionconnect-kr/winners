@@ -43,8 +43,11 @@ and the broader gate are complete.
 
 For a missing production status RPC (PGRST202), the screen says that the
 connection is being prepared; other failures remain unknown. Neither path
-claims write access. An updated signed 1.16 internal bundle and on-device
-confirmation remain pending.
+claims write access. Android 1.16 / code 17 was rebuilt from commit
+`ce4e14cd7b9f9326b9379bef0e288763ddbe0520`: Actions run `38541291146`
+passed mobile tests, signed bundle verification and artifact upload. Final AAB
+SHA-256: `82355b47d77637d46802ff05b657960f42d6e1d44aea4cdb8e27c2373ade569e`.
+Play Console upload and on-device confirmation remain pending.
 
 Security advisor review: the new private deny-by-default table reports informational
 RLS-without-policy, intentionally with all client grants revoked. Unrelated staging
