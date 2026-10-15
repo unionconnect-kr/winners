@@ -44,8 +44,13 @@ support ownership and real erasure procedure need operational verification befor
 claiming this requirement is met in the Play Console. The same URL must be
 entered in Play Console's Data safety account-deletion answer only once live.
 
-Current branch status (2026-10-15): the request migration is applied to
-Staging and Production. Production postflight confirms zero requests;
+Current status (2026-10-15): the request migration is applied to Staging and
+Production. Initial Production postflight confirmed zero requests;
 anon/authenticated cannot read the queue or execute the submission RPC, while
-`service_role` can execute the RPC. Local tests pass. The public page and
-Netlify function have not been deployed to the Production site by this branch.
+`service_role` can execute the RPC. Local tests pass. PR #23 deployed the
+public page and Netlify function to Production; the signed-out page returned
+HTTP 200 and a synthetic request returned HTTP 200 and produced one private
+pending row. Its username is `releasecheck20261015` and contact is
+`release-check-20261015@example.invalid`. An approval-state error blocked the
+exact-row cleanup; this is a synthetic case, not a customer deletion request.
+Support ownership and actual identity-verified erasure remain untested.
