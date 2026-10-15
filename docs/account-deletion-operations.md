@@ -44,13 +44,20 @@ support ownership and real erasure procedure need operational verification befor
 claiming this requirement is met in the Play Console. The same URL must be
 entered in Play Console's Data safety account-deletion answer only once live.
 
-Current status (2026-10-15): the request migration is applied to Staging and
-Production. Initial Production postflight confirmed zero requests;
-anon/authenticated cannot read the queue or execute the submission RPC, while
-`service_role` can execute the RPC. Local tests pass. PR #23 deployed the
-public page and Netlify function to Production; the signed-out page returned
-HTTP 200 and a synthetic request returned HTTP 200 and produced one private
-pending row. Its username is `releasecheck20261015` and contact is
-`release-check-20261015@example.invalid`. An approval-state error blocked the
-exact-row cleanup; this is a synthetic case, not a customer deletion request.
-Support ownership and actual identity-verified erasure remain untested.
+Current status (2026-10-15, follow-up): the request migration is applied to
+Staging and Production. PR #23 deployed the public page and Netlify function.
+A fresh unauthenticated HTTP check returned 200 for the page and 200 for a
+synthetic submission. An independent Production SQL read confirmed exactly one
+pending row; submitting the same synthetic payload again returned the same
+generic success and left exactly one row. An invalid identifier/contact returned
+HTTP 400. Direct SELECT and submission-RPC grants remain absent for both anon
+and authenticated roles.
+
+The follow-up synthetic row and the earlier `releasecheck20261015` row were
+removed using exact username/contact/status predicates after checking each was
+a synthetic pending case. The final Production queue count is zero. No customer
+account or subscription was deleted or canceled. Focused request, billing and
+access tests passed 29/29; mobile tests passed 64/64 on review-branch source
+`16e994c`. These are automated/source checks, not a new signed-build or handset
+acceptance. Support ownership and actual identity-verified erasure remain
+untested.
