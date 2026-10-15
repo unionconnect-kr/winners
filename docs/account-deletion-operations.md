@@ -153,11 +153,27 @@ deleted remotely. Actual operator identity-verification, case-specific erasure,
 support ownership and processor/retention consistency remain release gates.
 
 The existing official Sites project reports public access and live domain
-`https://manee.co.kr` (saved version 22). Automated reads of its privacy and
-deletion pages, including the older linked Sites hostname, returned HTTP 403 or
-fetch errors. This does not establish that a normal visitor is blocked, but the
-current policy text was not retrieved for processor/retention reconciliation.
-No audience, site source, publication or legal-page link was changed.
+`https://manee.co.kr`. Automated HTTP reads of its privacy and deletion pages,
+including the older linked Sites hostname, returned 403/fetch errors. The source
+workflow then retrieved the exact version-22 source `8b0d9462`; its recorded
+deployment was independently confirmed successful. The source still described
+email-only deletion and lacked the implemented Android Play/FCM processing.
+
+Factual corrections were published as official-site version 23, source
+`854d5316271edbcbe587eebb31d49c5975c68396`, deployment
+`appgdep_6ad0d44137288191894995591a8aad59` (succeeded at 22:25 KST).
+The deletion guide now links the existing online intake, keeps email fallback
+and explains separate Play cancellation. The privacy page now describes the
+Android purchase/token verification, FCM registration and deletion-request
+fields, and the implemented Android request-menu links. HTML parsing, unique
+IDs and local links/anchors passed. The public audience is unchanged; the native
+app and Netlify service were not redeployed. Browser rendering was not verified.
+Actual processor contracts, transfer details, retention settings, case-specific
+erasure and the other explicitly pending policy items remain unresolved; no
+unknown terms were invented or marked verified. All five CI workflows for the
+inventory implementation commit `1ae641a` succeeded, including the full app
+regression/concurrent-database job. The seven focused checks are part of that
+source, not seven additional live customer-deletion tests.
 
 Current Supabase references: [User Management](https://supabase.com/docs/guides/auth/managing-user-data)
 and [Delete Objects](https://supabase.com/docs/guides/storage/management/delete-objects).
