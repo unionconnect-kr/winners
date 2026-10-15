@@ -76,7 +76,7 @@ test('Staging legacy identity storage neither reads nor overwrites production en
 
 function sandbox(){
   const temp=mkdtempSync(resolve(tmpdir(),'manee-build-'));
-  for(const path of ['scripts','config','index.html','owner-ui.css','report-assets','manifest.json','sw.js']) cpSync(resolve(root,path),resolve(temp,path),{recursive:true});
+  for(const path of ['scripts','config','index.html','account-deletion.html','owner-ui.css','report-assets','manifest.json','sw.js']) cpSync(resolve(root,path),resolve(temp,path),{recursive:true});
   mkdirSync(resolve(temp,'netlify/functions/lib'),{recursive:true});
   return temp;
 }
@@ -85,12 +85,13 @@ test('Preview publish output excludes production URL/key and disables old push s
   const temp=sandbox();
   try{
     const r=build(temp,'deploy-preview'); assert.equal(r.status,0,r.stderr);
-    for(const f of ['index.html','app-config.js','sw.js','manifest.json']){
+    for(const f of ['index.html','account-deletion.html','app-config.js','sw.js','manifest.json']){
       const s=readFileSync(resolve(temp,'dist',f),'utf8');
       assert.ok(!s.includes(configs.production.supabaseUrl),f);
       assert.ok(!s.includes(configs.production.publishableKey),f);
     }
     assert.ok(readFileSync(resolve(temp,'dist/app-config.js'),'utf8').includes(configs.staging.supabaseUrl));
+    assert.ok(readFileSync(resolve(temp,'dist/account-deletion.html'),'utf8').includes('계정 삭제 요청'));
     assert.equal(JSON.parse(readFileSync(resolve(temp,'netlify/functions/lib/manee-environment.json'),'utf8')).externalServicesEnabled,false);
     const handlers={};let shown=0;
     vm.runInNewContext(readFileSync(resolve(temp,'dist/sw.js'),'utf8'),{self:{addEventListener:(name,fn)=>{handlers[name]=fn;},registration:{showNotification:()=>{shown++;}}}});
@@ -102,6 +103,7 @@ test('Production build selects production configuration explicitly',()=>{
   const temp=sandbox();
   try{const r=build(temp,'production');assert.equal(r.status,0,r.stderr);
     assert.ok(readFileSync(resolve(temp,'dist/app-config.js'),'utf8').includes(configs.production.supabaseUrl));
+    assert.ok(readFileSync(resolve(temp,'dist/account-deletion.html'),'utf8').includes('계정 삭제 요청'));
     assert.equal(JSON.parse(readFileSync(resolve(temp,'netlify/functions/lib/manee-environment.json'),'utf8')).externalServicesEnabled,true);
   }finally{rmSync(temp,{recursive:true,force:true});}
 });
