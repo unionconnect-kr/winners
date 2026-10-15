@@ -18,8 +18,15 @@ service_role can submit. The fixed-cost function contains the entitlement skip.
 The public deletion page and intake function are live after narrow PR #23;
 signed Android 1.20/code 21 AAB was uploaded and published to the existing
 internal track on 2026-10-15 at 18:08 KST. Play displays latest release
-21 (1.20), active, available to internal testers. Handset installation and
-account-deletion link acceptance remain pending.
+21 (1.20), active, available to internal testers. The operator supplied a handset
+screenshot of the working deletion page. It does not show the installed native
+version, so full 1.20 handset acceptance remains pending.
+
+PR #24 was approved and merged as `de947c38` on 2026-10-15. The public page now
+shows deletion scope, retention standards, the responsible support department,
+and fallback contact links. A live `null` JSON POST returns HTTP 400
+`invalid_request`; it creates no deletion case. This corrects the former
+unhandled null payload. The public page was also checked in the browser.
 
 Google Play requires an in-app deletion request route and a usable web resource
 for an app that supports account creation. The support team's verified erasure
@@ -30,8 +37,10 @@ The Production write gate still has zero enrolled stores. The remaining business
 write surfaces and subscription lifecycle on a handset have not passed the
 release gate. A Production checkout switch grants only exact owner/store pairs;
 the Play catalog currently has two verified product slots per owner. A public
-paid offer to arbitrary new owners or a third store needs an explicit catalog
-and access design. iOS StoreKit paid access remains disabled.
+paid offer now has a separately gated public eligibility policy prepared on
+the review branch; it has not been deployed or enabled. Third-store allocation
+is tested locally, but further Play products still need registration and live
+offer validation. iOS StoreKit paid access remains disabled.
 
 A fresh live deletion-intake check passed: page HTTP 200, valid and duplicate
 submission HTTP 200 with one pending row, invalid input HTTP 400, and no direct
@@ -45,10 +54,15 @@ The earlier navigation approval block was resolved after explicit user approval
 of Google's official google.play/business redirect. The user completed Google
 sign-in. Play then accepted the exact verified AAB, with only optional mapping
 and native-symbol warnings; both internal rollout confirmation steps completed.
-The app dashboard remains 10/11: Data safety is unfinished. Its deletion URL
-was corrected to the live intake URL, and no partial-data-only deletion feature
-was claimed; this was saved as a draft, not finally submitted. Retention/erasure
-instructions and all data-category answers still need reconciliation. The
+Data safety was finally saved on 2026-10-15 after correcting the deletion URL
+to the live intake page and adding optional reply-email collection for app
+functionality/account management. No partial-data-only deletion feature was
+claimed. Publishing overview lists the completed questionnaire among changes
+not yet sent for review. The dashboard now shows release tasks rather than the
+former incomplete app-setup checklist. Production remains inactive, and its
+five release tasks are 0/5: countries, release creation, confirmation, review,
+and publication. Retention/erasure operations and processor-policy consistency
+still need verification before review submission. The
 signed-in company account is not a tester; use the already invited tester account
 for handset acceptance. No tester permissions were changed. The signed candidate is from
 GitHub Actions run 38674564107,
@@ -56,10 +70,11 @@ commit c81d059f; the AAB SHA-256 is
 `266fcb8ecaafb0a763cf284c79be0e6cc814625c361a692e0b0a1293f37d12cc`.
 
 Next operational sequence: review the larger billing branch, install the
-published internal 1.20 on the invited tester handset and verify the deletion
-link. The Production paid ledger is now independently reconciled; exercise restore and an expired/canceled enrolled store without harming live
+published internal 1.20 on the invited tester handset and verify its native
+version and navigation. The Production paid ledger is independently reconciled;
+exercise restore and an expired/canceled enrolled store without harming live
 work, and verify support
-can fulfill a deletion request. Then complete Play's declarations and submit
+can fulfill a deletion request. Then reconcile Play's declarations and submit
 the Android release for review. Do not describe internal testing as public
 release; the Play Console review/publish outcome is a separate external step.
 

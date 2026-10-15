@@ -61,3 +61,12 @@ access tests passed 29/29; mobile tests passed 64/64 on review-branch source
 `16e994c`. These are automated/source checks, not a new signed-build or handset
 acceptance. Support ownership and actual identity-verified erasure remain
 untested.
+
+On 2026-10-15, approved PR #24 merged as `de947c38` and reached the public
+Netlify site. Browser and HTTP checks confirm the scope/retention/support
+section is live. A JSON `null` request now returns HTTP 400 `invalid_request`
+without reaching the submission RPC; the handler regression suite covers
+null, arrays, numbers, booleans and strings. The Play Data safety questionnaire
+was saved with this live URL and optional reply-email collection, and appears
+in the not-yet-submitted publishing changes. No review submission, real account
+erasure, subscription cancellation or new pending case occurred in this check.
