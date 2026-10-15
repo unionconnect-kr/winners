@@ -1,0 +1,21 @@
+name: Native iOS service checks
+on:
+  push:
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016]
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'netlify/functions/lib/ios-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+  pull_request:
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'netlify/functions/lib/ios-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/native-*.test.mjs
