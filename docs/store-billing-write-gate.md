@@ -79,3 +79,29 @@ Production has 18 direct-key triggers and one photo-child trigger, zero enrolled
 stores, and the two sampled owner stores remain write-entitled. The Android
 staging regression workflow for commit `a6b078edbd2cc68abfc0b731a3bda5ecb8ec71e1`
 passed the app/security regression job before production deployment.
+
+## Read preservation before enrollment
+
+Audit on 2026-10-15 found that the owner fixed-cost loader calls
+`manee_prepare_fixed_costs` before its SELECT. This RPC copies previous-month
+costs and materializes recurring templates. When enrollment denies writes,
+its insert trigger can reject that RPC and the existing app then clears the
+fixed-cost list as a load failure. Migration
+`20261015112000_fixed_cost_read_billing_gate.sql` keeps membership and month
+checks, then returns without materializing costs if the store is not currently
+write-entitled. It leaves existing rows readable and the ordinary database
+write trigger unchanged. Local PostgreSQL tests cover expired enrollment with
+an existing row and both automatic write paths, recovery with a fresh receipt,
+another unenrolled store, and direct-write rejection. This migration is a
+review-branch change; it has not been deployed to the live database here.
+
+The direct client mutation audit found these deliberate exclusions: `stores`
+settings (including the location used for employee clock-in), `crew` and
+membership/identity maintenance, `attendance` and edit requests, read
+acknowledgements, notification subscriptions, and tax reminder acknowledgements.
+No expiry behavior for those paths has been approved or enabled. Store creation,
+renaming, deletion and franchise management have separate account/recovery
+effects and must not be swept into an all-row `stores` billing trigger. The
+current gate therefore covers its listed business tables, not every possible
+mutation in the application. Production enrollment remains at zero until the
+remaining boundary and on-device lifecycle checks are complete.
