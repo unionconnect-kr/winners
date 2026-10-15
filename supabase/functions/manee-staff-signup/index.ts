@@ -61,6 +61,10 @@ Deno.serve(async (req) => {
     const userClient = createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
     const body = await req.json().catch(() => ({}))
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_request', message: '가입 정보를 확인해주세요.' }, 400)
+    if (body.age_14_plus_confirmed !== true) {
+      return json({ error: 'age_confirmation_required', message: '만 14세 이상임을 확인해 주세요. 확인 항목이 없으면 앱 업데이트 또는 화면 새로고침 후 가입해 주세요.' }, 400)
+    }
     const username = normalizeUsername(body.username)
     const password = String(body.password ?? '')
     const displayName = String(body.display_name ?? body.name ?? '').normalize('NFKC').trim().slice(0, 50)
@@ -113,7 +117,10 @@ Deno.serve(async (req) => {
     if (usernameReserved) return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다. 기존 계정은 로그인해주세요.' }, 409)
 
     const internalEmail = `u-${crypto.randomUUID().replaceAll('-', '')}@auth.manee.local`
-    const { data: created, error: createError } = await admin.auth.admin.createUser({ email: internalEmail, password, email_confirm: true })
+    const { data: created, error: createError } = await admin.auth.admin.createUser({ email: internalEmail, password, email_confirm: true,
+      app_metadata: { manee_age_14_plus_confirmed: true, manee_age_confirmation_at: new Date().toISOString(),
+        manee_age_confirmation_version: '14plus-2026-10-16', manee_age_confirmation_source: 'self-attestation' },
+    })
     if (createError || !created.user) return json({ error: 'auth_create_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500)
 
     const bootstrapArgs = { p_user_id: created.user.id, p_username: username, p_display_name: displayName }

@@ -388,3 +388,8 @@ body:has(.expense-editor-overlay) .toast{z-index:110}
 .owner-ui .owner-report-home-notice button{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:11px 12px;border:0;border-radius:9px;background:#315f45;color:#fff;font:inherit;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;}
 .owner-ui .owner-report-home-notice .home-report-footnote{font-size:11px;color:#66766b;}
 .owner-ui .owner-report-home-notice button:focus-visible{outline:3px solid #a1bda8;outline-offset:3px;}
+
+/* Required age attestation: retain a visible checkbox in every signup surface. */
+.signup-age-check{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0 10px!important;line-height:1.5;font-size:14px;color:var(--ink);cursor:pointer}
+.signup-age-check input[type="checkbox"]{width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;flex:0 0 20px;margin:1px 0 0!important;padding:0!important;accent-color:var(--brick)}
+.signup-age-check span{flex:1;min-width:0}

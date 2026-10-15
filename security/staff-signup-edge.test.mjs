@@ -5,7 +5,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const source=readFileSync(new URL('../supabase/functions/manee-staff-signup/index.ts',import.meta.url),'utf8');
-const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password'};
+const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password',age_14_plus_confirmed:true};
 function harness(options={}){
   const calls=[];let handler;
   const ok=data=>({data,error:null});

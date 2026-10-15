@@ -70,15 +70,18 @@ Deno.serve(async (req) => {
     const token = req.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]
     if (!token) return json({ error: 'invalid_session', message: '다시 로그인해 주세요.' }, 401)
     const { data: verified, error: verifyError } = await admin.auth.getUser(token)
-    if (verifyError || !verified.user) { console.error('franchise_signup_verify_failed', verifyError); return json({ error: 'invalid_session', message: '다시 로그인해 주세요.' }, 401) }
+    if (verifyError || !verified.user) { console.error('franchise_signup_verify_failed'); return json({ error: 'invalid_session', message: '다시 로그인해 주세요.' }, 401) }
     const actorId = verified.user.id
-    console.log('franchise_signup_actor', actorId)
 
     const { data: isAdmin, error: adminCheckError } = await admin.from('platform_admins').select('user_id').eq('user_id', actorId).eq('status', 'active').maybeSingle()
-    if (adminCheckError) console.error('franchise_signup_admin_check_error', adminCheckError)
+    if (adminCheckError) console.error('franchise_signup_admin_check_error')
     if (!isAdmin) return json({ error: 'owner_required', message: '본사 관리자만 프랜차이즈 계정을 만들 수 있어요.' }, 403)
 
     const body = await req.json().catch(() => ({}))
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_request', message: '가입 정보를 확인해주세요.' }, 400)
+    if (body.age_14_plus_confirmed !== true) {
+      return json({ error: 'age_confirmation_required', message: '만 14세 이상임을 확인해 주세요. 확인 항목이 없으면 앱 업데이트 또는 화면 새로고침 후 가입해 주세요.' }, 400)
+    }
     const username = normalizeUsername(body.username)
     const password = String(body.password ?? '')
     const displayName = String(body.display_name ?? body.name ?? '').normalize('NFKC').trim().slice(0, 50)
@@ -101,22 +104,24 @@ Deno.serve(async (req) => {
     const { data: actorAllowed, error: actorLimitError } = await admin.rpc('consume_auth_rate_limit', {
       p_action: 'franchise_signup_actor', p_key_hash: actorHash, p_window_seconds: 3600, p_max_attempts: 20,
     })
-    if (actorLimitError) { console.error('franchise_signup_rate_limit_error', actorLimitError); return json({ error: 'rate_limit_check_failed', debug: actorLimitError.message }, 500) }
+    if (actorLimitError) { console.error('franchise_signup_rate_limit_error'); return json({ error: 'rate_limit_check_failed' }, 500) }
     if (!actorAllowed) return json({ error: 'rate_limited', message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }, 429)
 
     const { data: usernameReserved, error: reservationError } = await admin.rpc('is_manee_username_reserved', {
       p_username: username,
     })
     if (reservationError || typeof usernameReserved !== 'boolean') {
-      console.error('franchise_signup_username_lookup_error', reservationError)
-      return json({ error: 'username_lookup_failed', message: '아이디를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.', debug: reservationError?.message }, 503)
+      console.error('franchise_signup_username_lookup_error')
+      return json({ error: 'username_lookup_failed', message: '아이디를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.' }, 503)
     }
     if (usernameReserved) return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다.' }, 409)
 
     const internalEmail = `u-${crypto.randomUUID().replaceAll('-', '')}@auth.manee.local`
-    const { data: created, error: createError } = await admin.auth.admin.createUser({ email: internalEmail, password, email_confirm: true })
-    if (createError || !created.user) { console.error('franchise_signup_create_user_error', createError); return json({ error: 'auth_create_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.', debug: createError?.message }, 500) }
-    console.log('franchise_signup_user_created', created.user.id)
+    const { data: created, error: createError } = await admin.auth.admin.createUser({ email: internalEmail, password, email_confirm: true,
+      app_metadata: { manee_age_14_plus_confirmed: true, manee_age_confirmation_at: new Date().toISOString(),
+        manee_age_confirmation_version: '14plus-2026-10-16', manee_age_confirmation_source: 'admin-attestation' },
+    })
+    if (createError || !created.user) { console.error('franchise_signup_create_user_error'); return json({ error: 'auth_create_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500) }
 
     const { data: franchiseId, error: bootstrapError } = await admin.rpc('bootstrap_franchise_account', {
       p_actor: actorId,
@@ -125,7 +130,7 @@ Deno.serve(async (req) => {
       p_display_name: displayName,
       p_franchise_name: franchiseName,
     })
-    if (bootstrapError) console.error('franchise_signup_bootstrap_error', JSON.stringify(bootstrapError))
+    if (bootstrapError) console.error('franchise_signup_bootstrap_error')
 
     if (bootstrapError || !franchiseId) {
       const { data: recovered, error: recoveryError } = await admin.from('profiles')
@@ -135,17 +140,17 @@ Deno.serve(async (req) => {
       }
       const { error: cleanupError } = await admin.auth.admin.deleteUser(created.user.id)
       if (cleanupError) {
-        console.error('franchise_signup_cleanup_failed', created.user.id)
+        console.error('franchise_signup_cleanup_failed')
         return json({ error: 'signup_cleanup_failed', message: '계정 정리에 실패했습니다. 관리자에게 문의해주세요.' }, 503)
       }
       if (bootstrapError?.code === '23505') return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다.' }, 409)
       if (bootstrapError?.message?.includes('Owner permission required')) return json({ error: 'owner_required', message: '본사 관리자만 프랜차이즈 계정을 만들 수 있어요.' }, 403)
-      return json({ error: 'account_bootstrap_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.', debug: bootstrapError?.message }, 500)
+      return json({ error: 'account_bootstrap_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500)
     }
 
     return json({ ok: true, franchise: { id: franchiseId, name: franchiseName }, user: { id: created.user.id, username } }, 201)
   } catch (e) {
-    console.error('franchise_signup_unexpected_error', e instanceof Error ? (e.stack || e.message) : String(e))
-    return json({ error: 'unexpected_error', message: '잠시 후 다시 시도해주세요.', debug: e instanceof Error ? e.message : String(e) }, 500)
+    console.error('franchise_signup_unexpected_error')
+    return json({ error: 'unexpected_error', message: '잠시 후 다시 시도해주세요.' }, 500)
   }
 })

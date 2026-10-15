@@ -1759,6 +1759,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       '<div class="staff-personal-fields"><h3>매장에 전달할 내 정보</h3><p>연락처는 선택 입력이에요. 신규 직원으로 승인되면 매장에 전달돼요. 급여·근무조건은 사장님이 설정해요.</p>'+
       '<label for="staff-signup-phone">연락처 (선택)</label><input id="staff-signup-phone" type="tel" maxlength="24" autocomplete="tel" placeholder="010-0000-0000">'+
       '</div>'+
+      '<label class="signup-age-check" for="staff-signup-age-confirmed"><input id="staff-signup-age-confirmed" type="checkbox"><span>만 14세 이상입니다. (필수)</span></label>'+
+      '<p class="crew-code-hint">만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p>'+
       staffAuthButton('signup','가입하기')+'</div>'+staffAuthButton('login-screen','로그인 화면으로');
   }
   function renderStaffPersonalSummary(personal){
@@ -1949,7 +1951,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         if(!usernameCheck || usernameCheck.username!==normalizedUsername || !usernameCheck.available) throw new Error('아이디 중복확인을 먼저 해주세요.');
         const personal={phone:read('staff-signup-phone').trim()};
         if(personal.phone && (!/^[+0-9 ()-]{7,24}$/.test(personal.phone)||personal.phone.replace(/[^0-9]/g,'').length<7||personal.phone.replace(/[^0-9]/g,'').length>15)) throw new Error('연락처를 확인해 주세요.');
-        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal});
+        if(document.getElementById('staff-signup-age-confirmed')?.checked!==true) throw new Error('만 14세 이상임을 확인해 주세요.');
+        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal,age_14_plus_confirmed:true});
         const session=data.session || (await callManeeAuthApi('manee-login',{username,password})).session;
         await applyManeeAuthSession(session); await restoreManeeAuthIdentity(null,true); showToast('스텝 계정을 만들었어요. 매장 연결코드를 입력해 주세요.');
       }else if(action==='preview-link'){
@@ -2602,12 +2605,13 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const normalizedUsername = username.normalize("NFKC").trim().toLowerCase();
     const usernameCheck = state.ownerRequestUsernameCheck;
     if(!usernameCheck || usernameCheck.username !== normalizedUsername || !usernameCheck.available){ showToast("아이디 중복확인을 먼저 해주세요."); return; }
+    if(document.getElementById('owner-request-age-confirmed')?.checked!==true){showToast('만 14세 이상임을 확인해 주세요.');return;}
     state.ownerSignupBusy=true;
     const submitButton=document.getElementById("submit-owner-request-btn");
     if(submitButton){submitButton.disabled=true;submitButton.textContent="가입 처리 중…";}
     showToast("계정을 만드는 중이에요…");
     try{
-      const payload = { username, password:pw, display_name:name, store_name:storeName };
+      const payload = { username, password:pw, display_name:name, store_name:storeName, age_14_plus_confirmed:true };
       if(franchiseCode) payload.franchise_code = franchiseCode;
       const data = await callManeeAuthApi("manee-signup", payload);
       let session = data.session;
@@ -3007,6 +3011,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const password = pwInp.value||"";
     if(!franchiseName || !displayName || !username || !password){ showToast("모든 항목을 입력해 주세요."); return; }
     if(password.length < 8){ showToast("비밀번호는 8자 이상으로 만들어 주세요."); return; }
+    if(document.getElementById("new-franchise-age-confirmed")?.checked!==true){showToast("계정 사용자가 만 14세 이상임을 확인해 주세요.");return;}
     showToast("계정을 만드는 중이에요…");
     try{
       const { data:sessionData, error:sessionError } = await db.auth.getSession();
@@ -3014,7 +3019,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       const res = await fetch(SUPABASE_URL+"/functions/v1/manee-franchise-signup", {
         method: "POST",
         headers: { "Content-Type":"application/json", "apikey":SUPABASE_ANON_KEY, "Authorization":"Bearer "+sessionData.session.access_token },
-        body: JSON.stringify({ franchise_name:franchiseName, display_name:displayName, username, password })
+        body: JSON.stringify({ franchise_name:franchiseName, display_name:displayName, username, password, age_14_plus_confirmed:true })
       });
       const data = await res.json().catch(()=>null);
       if(!res.ok || !data || data.ok!==true) throw new Error((data&&data.message)||"계정을 만들지 못했어요.");
@@ -5771,7 +5776,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     return html;
   }
   function ownerSignupDraft(){
-    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:''};
+    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:'',ageConfirmed:false};
     return state.ownerSignupDraft;
   }
   function renderOwnerSignup(){
@@ -5782,7 +5787,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     html+='<section'+(d.step===1?'':' hidden')+'>'+input('name','owner-request-name-input','사장님 이름','text','autocomplete="name" maxlength="80"')+'</section>';
     html+='<section'+(d.step===2?'':' hidden')+'>'+input('username','owner-request-username-input','아이디','text','autocomplete="username" maxlength="30" autocapitalize="none"')+'<button type="button" class="crew-code-btn" id="check-owner-username-btn">아이디 중복확인</button><p id="owner-request-username-status" role="status">'+(state.ownerRequestUsernameCheck?.username===d.username.normalize('NFKC').trim().toLowerCase()?(state.ownerRequestUsernameCheck.available?'사용할 수 있는 아이디예요.':'이미 사용 중인 아이디예요.'):'')+'</p>'+input('password','owner-request-password-input','비밀번호 · 8자 이상','password','autocomplete="new-password"')+input('confirm','owner-request-password-confirm-input','비밀번호 확인','password','autocomplete="new-password"')+'</section>';
     html+='<section'+(d.step===3?'':' hidden')+'>'+input('store','owner-request-store-input','매장 이름','text','maxlength="100"')+input('franchise','owner-request-franchise-code-input','프랜차이즈 코드 · 선택','text','maxlength="40"')+'<p>코드가 있는 경우 프랜차이즈 요금제가 적용돼요.</p></section>';
-    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
+    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<label class="signup-age-check" for="owner-request-age-confirmed"><input id="owner-request-age-confirmed" data-signup-age type="checkbox"'+(d.ageConfirmed===true?' checked':'')+'><span>만 14세 이상입니다. (필수)</span></label><p>만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p><p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
     html+='<div class="setup-actions"><button type="button" data-signup-back>이전</button>'+(d.step===4?'<button type="button" id="submit-owner-request-btn" class="setup-primary">가입하고 매장 준비하기</button>':'<button type="button" data-signup-next class="setup-primary">'+(d.step===0?'차근차근 시작하기':'다음')+'</button>')+'</div><button type="button" id="landing-back-btn" class="switch-link">로그인 화면으로</button></div>';
     return html;
   }
@@ -5805,6 +5810,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       ownerSignupDraft()[el.dataset.signupField]=el.value;
       if(el.dataset.signupField==='username'){state.ownerRequestUsernameCheck=null;const status=document.getElementById('owner-request-username-status');if(status)status.textContent='';}
     }));
+    const age=app.querySelector('[data-signup-age]');if(age)age.addEventListener('change',()=>{ownerSignupDraft().ageConfirmed=age.checked===true;});
     const next=app.querySelector('[data-signup-next]');if(next)next.onclick=ownerSignupNext;
     const back=app.querySelector('[data-signup-back]');if(back)back.onclick=()=>{if(state.ownerSignupBusy)return;const d=ownerSignupDraft();if(d.step>0){d.step--;render();}else landingBack();};
     app.querySelectorAll('[data-signup-field]').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ownerSignupNext();}}));
@@ -7225,6 +7231,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       html += '<label class="field-label">담당자 이름</label><input class="field-input" id="new-franchise-display-name-input" type="text" placeholder="담당자 이름" style="margin-bottom:8px;">';
       html += '<label class="field-label">아이디</label><input class="field-input" id="new-franchise-username-input" type="text" placeholder="아이디 (4~30자)" style="margin-bottom:8px;">';
       html += '<label class="field-label">비밀번호</label><input class="field-input" id="new-franchise-password-input" type="password" placeholder="비밀번호 (8자 이상)" style="margin-bottom:10px;">';
+      html += '<label class="signup-age-check" for="new-franchise-age-confirmed"><input id="new-franchise-age-confirmed" type="checkbox"><span>계정 사용자가 만 14세 이상임을 확인했습니다. (필수)</span></label>';
       html += '<button class="landing-btn primary" id="create-franchise-auth-btn" style="margin:0;">계정 만들기</button>';
       html += '</div>';
     }
