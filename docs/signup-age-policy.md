@@ -56,25 +56,71 @@ Independent readback matches the exact source for all three. Four real HTTP
 requests to owner/staff (unchecked confirmation and null JSON) returned the
 expected HTTP 400 codes and no-store headers, before any signup side effects.
 No real or synthetic customer account was created or deleted for these probes.
-Production handlers have not been deployed with this requirement yet.
+Production was deployed after the compatible web and internal binary were available:
+owner v12, staff v9 and franchise v7, all ACTIVE on 2026-10-16 around 01:12 KST.
+Independent readback matched all three source files. The same four no-side-effect
+HTTP rejection probes passed against Production with HTTP 400 and no-store.
+This does not prove live positive signup or an individual’s actual age.
 
-## Candidate and rollout boundary
+## Rollout sequencing used
 
-Android 1.22/code 23 is prepared because the signup UI changes packaged assets.
+Android 1.22/code 23 was prepared because the signup UI changes packaged assets.
 The signed-AAB verifier checks that all three checkbox IDs and explicit payload
 confirmation are actually packaged, in addition to signature/backend isolation.
 The existing paid-pilot candidate workflow builds the artifact only; it does not
 upload to Play or expand public checkout eligibility.
 
-Do not enforce Production before the compatible web signup and new Play binary
-are available. Older 1.21 signup requests omit the flag and would be refused;
+The deployment rule was to enforce Production only after the compatible web
+signup and new Play binary were available. Older 1.21 signup requests omit the flag and would be refused;
 existing sign-in continues. Prepare a narrow web change against current main,
 validate it, publish the compatible internal binary, and then coordinate the
 Production endpoint switch. Replace the saved 1.21 Production candidate before
 submitting review. Do not merge the cumulative billing PR wholesale as a shortcut.
 
-After actual deployment, update the official privacy notice with confirmation
-flag/time and the accurate deployed scope; do not claim this implementation is
-already live in the current public/installed app. Public paid checkout, new-store
+After deployment, the official privacy notice was updated with confirmation
+flag/time and the accurate deployed scope. Internal availability is distinct from
+public release or every handset having updated. Public paid checkout, new-store
 billing launch, device expiry/employee refusal and the separate 30-day deletion
 case/contact operation remain distinct release gates.
+
+
+## Live rollout evidence — 2026-10-16
+
+Narrow PR #25 (10 files; signup only) passed its verification workflow and was
+squash-merged as `4abb78bee89511ef142bba2350c4729e45969736`. Both main checks
+(verify and read-only public app availability) succeeded. Public Netlify HTML
+contains all three checkbox IDs and the explicit payload flag; the live staff
+signup screen shows the unchecked required checkbox. The cumulative billing
+PR #22 was not merged.
+
+All seven workflows at `6d2a5dad6dc9943b8ce4dec344a1b111647ee285` succeeded,
+including signed AAB run `38765267948` and the mobile test suite (64/64). The AAB
+verifier passed inside CI with the existing upload certificate. A local repeat
+reached signature verification but the local runtime lacks jarsigner; the CI
+verification is the signature evidence. The downloaded ZIP digest matched
+GitHub’s artifact digest, and keytool confirmed its certificate matches code 22.
+
+- Artifact: `11990135164`, `manee-paid-pilot-candidate-aab`.
+- ZIP SHA-256: `7f74db58790076718a2b08f20d451c5146adf9f57bc75e3da465239340b15537`.
+- AAB SHA-256: `a92b2f2518455cd9ae1d2a1e4c9c5705277b615dd02f33929ef845940e9feb89`.
+- Play parsed code 23 / version 1.22, target SDK 36; no device-support reduction.
+- Internal release 10 is **available to internal testers**, displayed posted
+  2026-10-16 01:10 KST. No tester-list/access expansion or purchase was performed.
+- Play validation had zero blocking errors and two diagnostic warnings: missing
+  mapping/deobfuscation file and native debug symbols.
+
+Official privacy versions 26 and 27 were successfully published with confirmation record
+items, deployed web/Android/server scope, self/admin-attestation limitations and
+the separate under-14 identified-account process still pending. No iOS rollout,
+public Google review, public paid checkout, or new-store enforcement launch is
+claimed by this evidence.
+
+
+Play Production candidate code 23 / 1.22 was saved and verified in publishing
+overview; it replaced code 22 in the ten **unsubmitted** changes. Korea remains
+the sole selected country. The quick pre-review checks were still running at
+01:22 KST (up to 14 minutes shown). Managed publishing remains disabled; no
+review submission or public release was performed. Existing Production dashboard
+DEX/code optimization guidance carries a February 2027 deadline; this was not a
+blocking error in the candidate validation and optimization completion is not
+claimed.
