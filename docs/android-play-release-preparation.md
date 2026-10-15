@@ -85,11 +85,13 @@ evidence, not real identity verification or a successful Auth/Storage API erasur
 The Production write gate still has zero enrolled stores. The remaining business
 write surfaces and subscription lifecycle on a handset have not passed the
 release gate. A Production checkout switch grants only exact owner/store pairs;
-the Play catalog currently has two verified product slots per owner. A public
+the Play catalog now has three verified product slots per owner. A public
 paid offer now has a separately gated public eligibility policy prepared on
 the review branch; it has not been deployed or enabled. Third-store allocation
-is tested locally, but further Play products still need registration and live
-offer validation. iOS StoreKit paid access remains disabled.
+is tested locally; the third Play monthly plan is active and its server catalog
+entry was enabled at 23:19 KST. A live third-store purchase/restore is not claimed.
+The original one-month trial is for accounts that have never subscribed to this
+app; slots 2 and 3 have ordinary monthly plans. iOS paid access remains disabled.
 
 A fresh live deletion-intake check passed: page HTTP 200, valid and duplicate
 submission HTTP 200 with one pending row, invalid input HTTP 400, and no direct
@@ -97,7 +99,8 @@ anon/authenticated queue or submission-RPC access. Both exact synthetic cases
 (the prior run and this follow-up) were removed; the final queue count is zero.
 Production ledger recheck at 2026-10-15 08:37 UTC confirms one nonsuperseded
 ACTIVE Production receipt, future expiry, and a fresh verification timestamp.
-The write gate still has zero enrolled stores and two enabled product slots.
+At that earlier ledger check, the write gate had zero enrolled stores and two
+enabled product slots; the 23:19 catalog follow-up above supersedes that count.
 Mobile tests pass 64/64 and focused request/billing/access tests pass 29/29.
 The earlier navigation approval block was resolved after explicit user approval
 of Google's official google.play/business redirect. The user completed Google
@@ -108,12 +111,13 @@ to the live intake page and adding optional reply-email collection for app
 functionality/account management. No partial-data-only deletion feature was
 claimed. Publishing overview lists the completed questionnaire among changes
 not yet sent for review. The dashboard now shows release tasks rather than the
-former incomplete app-setup checklist. Production remains inactive, and its
-five release tasks are 0/5: countries, release creation, confirmation, review,
-and publication. Retention/erasure operations and processor-policy consistency
+former incomplete app-setup checklist. At that checkpoint Production was inactive
+and its five release tasks were 0/5: countries, release creation, confirmation,
+review and publication. The later 1.21 draft/country follow-up supersedes that
+setup count. Retention/erasure operations and processor-policy consistency
 still need verification before review submission. The
 signed-in company account is not a tester; use the already invited tester account
-for handset acceptance. No tester permissions were changed. The signed candidate is from
+for handset acceptance. No tester permissions were changed. The earlier signed candidate was from
 GitHub Actions run 38674564107,
 commit c81d059f; the AAB SHA-256 is
 `266fcb8ecaafb0a763cf284c79be0e6cc814625c361a692e0b0a1293f37d12cc`.
@@ -140,6 +144,20 @@ five CI workflows. Production postflight at 23:02:30 KST preserved all 31 store
 rows and Songcheon write access, with no client policy-update or service-role
 launch grant. Installation alone does not launch checkout/enforcement,
 and the installed 1.21 assets do not change. See `store-billing-write-gate.md`.
+
+### Production candidate preparation — 2026-10-15 late follow-up
+
+The exact internal-track code 22 / 1.21 was promoted into a Production draft,
+reusing the existing AAB and Korean release notes without uploading another file.
+Initial Console validation had one blocking error: no Production country.
+Korea alone was selected and saved to publishing changes, and revalidation
+removed that error. Only the same two diagnostic-file warnings remain: missing
+R8/ProGuard deobfuscation mapping and native debug symbols. No new app feature,
+new tester access or legal agreement was added. This does not complete the
+remaining handset/operations gates or imply Google review approval/publication.
+The revalidated candidate was saved successfully; Console confirmed the changes
+are saved and must be sent separately from publishing overview for Google review.
+Neither that review submission nor public publication was performed.
 
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.

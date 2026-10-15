@@ -5,7 +5,8 @@ Existing single-product receipts are backfilled without changing their store or
 purchase binding. An owner-scoped advisory lock serializes allocations across
 stores. Slots are never recycled automatically. New slots remain unavailable until
 an operator registers and enables a matching, verified Play Console subscription.
-The first two products are now enabled for internal testing (see the live evidence below).
+The first three products are enabled in the Production catalog. See the dated
+evidence below; public checkout remains off and additional slots are not implied.
 
 The endpoint selects catalog and receipt verification products from the database,
 not from request parameters. The SQL persistence function rejects wrong products,
@@ -180,7 +181,7 @@ This is deterministic database coverage; live lifecycle events remain pending.
 Keep the production write gate unenrolled until its remaining mutation surfaces
 and live entitlement recovery are verified. Do not start another paid checkout
 merely to test store isolation.
-# Public checkout preparation — 2026-10-15 follow-up
+## Public checkout preparation — 2026-10-15 follow-up
 
 The server rollout policy now has a separate, exact public switch:
 `MANEE_ANDROID_PAID_PUBLIC_ENABLED=yes-2026-public-launch`. The existing
@@ -197,8 +198,9 @@ no available product returns not-ready; enabling the product allocates slot 3,
 preserves slots 1 and 2, and refuses cross-store restore/token linking. Other
 owners reuse their own independent slot allocation. This proves the existing
 database allocation can grow beyond two slots; it does not create or validate a
-third product in Google Play. The production catalog still has two enabled
-slots. The caller cannot supply a product ID to escape that limit.
+third product in Google Play. The production catalog had two enabled slots at
+that checkpoint (the Console follow-up below supersedes this count). The caller
+cannot supply a product ID to escape the enabled catalog.
 
 Validation: 24 focused rollout, endpoint and real local PostgreSQL-engine tests
 pass, including public-switch defaults/malformed settings, nonowner rejection,
@@ -209,3 +211,37 @@ no live store was enrolled in billing enforcement. Before activation, reconcile
 the complete paid-access boundary and verify enough Play products/plans/offers
 for the offered multi-store service. Do not claim arbitrary extra stores are
 available merely because this policy code exists.
+
+## Third Play product registered — 2026-10-15 23:19 KST
+
+The initial third-product creation did not persist; the refreshed Console list
+still contained two products. A subsequent request succeeded and created
+`manee.store3.monthly`, named `매니 추가 매장 이용권 3`. Its `monthly` base plan
+was saved and activated: monthly auto-renewing, Korea only, KRW 9,900. The
+Console confirms active status and saved changes. The first save failed while
+the plan ID input was marked invalid; ordinary keyboard entry validated the
+same `monthly` value and the next save succeeded. No customer checkout occurred.
+
+The original active `trial-1month` offer on product 1 was inspected without
+editing it: one free month, new-customer acquisition, **never subscribed to this
+app** eligibility. Additional slots 2 and 3 have the ordinary monthly plan;
+this follow-up does not promise another trial to an existing subscriber or
+change the approved app-level acquisition offer.
+
+Only after the Console price/active-plan verification, Production catalog slot 3
+was registered and enabled with a conflict check. At 23:19:23 KST the independent
+postflight has three enabled products, zero enforcement enrollment, launched_at
+NULL and Songcheon still write-entitled. Existing allocations and receipts were
+not changed. Third-store purchase/restore has local coverage but no new live
+third-store purchase is claimed; owners needing a fourth never-used product
+remain not-ready rather than sharing/rebinding another store's subscription.
+
+Production Edge Function `manee-android-billing` was read back as active version
+10 with JWT verification enabled. Its handler, Google verifier and purchase
+normalizer exactly match the review branch; only index/config wiring and the
+public eligibility policy differ. The deployed policy still uses exact pilot
+pairs and contains no public eligibility switch. No redeployment or public
+configuration change was made in this follow-up. All five CI workflows for
+source `432aa32` passed. A source comparison to signed 1.21 source `c06a0a3`
+shows no mobile/application asset changes, so another AAB/install is not needed
+for these server/catalog changes.
