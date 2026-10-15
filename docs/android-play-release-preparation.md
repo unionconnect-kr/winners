@@ -1,5 +1,36 @@
 # Android Play release preparation — 2026-10-14
 
+## Current signup policy rollout — 2026-10-16
+
+Android **1.22/code 23** supersedes the earlier 1.21 handset instructions below
+because signup now includes a required, unchecked 14+ confirmation. Signed run
+38765267948 and all six other workflows at 6d2a5dad succeeded. Play internal
+release 10 displays available to internal testers, posted 01:10 KST. The same
+code 23 binary was selected from Play's bundle library for the new Production
+candidate; zero blocking validation errors and two diagnostic warnings remain.
+
+Narrow signup-only PR #25 was merged as 4abb78be; live web signup includes the
+checkbox and main verification/availability checks passed. Production owner v12,
+staff v9 and franchise v7 were deployed after compatible clients were available.
+All three exact-source readbacks and four real, side-effect-free rejection
+probes passed. No account was created/deleted, no existing confirmation was
+fabricated and existing login/attendance is unchanged. Privacy version 27 is live.
+See `signup-age-policy.md` for exact artifact digests, source scope and limits.
+
+The next handset check should use Play 1.22. Check its version and the unchecked
+14+ item on signup without creating an account, then cold restart into the
+existing account and verify its existing store/subscription. Payment/restore
+success has already been recorded; no repeat purchase is requested. The actual
+expiry/employee refusal test still needs its separately coordinated bounded
+window and automatic recovery, as the earlier window did not provide handset
+evidence. Do not mark expiry/employee refusal passed from a normal active screen.
+
+Public review/publication, public checkout activation, new-store enrollment and
+the 30-day completed deletion-case/contact disposal operation remain separate
+release gates. Identified under-14 account/employee-invite handling and external
+processor/backup conditions still require their actual operating procedures.
+
+
 ## Current release gate — 2026-10-15
 
 Latest internal release: the operator selected restricting attendance input
