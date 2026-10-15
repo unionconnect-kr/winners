@@ -49,6 +49,13 @@ test('web handler rate limits before writing and returns no account lookup resul
   assert.equal(h.calls[0].args.p_key_hash,createHash('sha256').update('192.0.2.1').digest('hex'));
   assert.ok(!result.body.includes('owner123'));
 });
+test('JSON null and other non-object bodies return 400 before any database call',async()=>{
+  for(const payload of [null,[],42,true,'request']){
+    const h=handler();const result=await h.call(payload);
+    assert.equal(result.statusCode,400);
+    assert.equal(h.calls.length,0);
+  }
+});
 test('staging, rate limit and backend failure never claim successful submission',async()=>{
   const staging=handler({blocked:true});assert.equal((await staging.call({username:'owner123',contact:'test@example.com'})).statusCode,503);
   assert.equal(staging.calls.length,0);

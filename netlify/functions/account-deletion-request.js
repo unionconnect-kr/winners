@@ -14,6 +14,7 @@ exports.handler=async(event)=>{
   if(event.isBase64Encoded||Buffer.byteLength(event.body||'')>2048)return response(400,{error:'invalid_request'});
   let payload;
   try{payload=JSON.parse(event.body||'');}catch{return response(400,{error:'invalid_request'});}
+  if(!payload||typeof payload!=='object'||Array.isArray(payload))return response(400,{error:'invalid_request'});
   const username=typeof payload.username==='string'?payload.username.normalize('NFKC').trim().toLowerCase():'';
   const contact=typeof payload.contact==='string'?payload.contact.trim():'';
   if(!/^[a-z0-9가-힣._-]{4,30}$/.test(username)||contact.length<5||contact.length>120||/[<>\x00-\x1f\x7f]/.test(contact))
