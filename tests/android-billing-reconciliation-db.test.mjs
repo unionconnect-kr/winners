@@ -82,3 +82,38 @@ test('new event can recheck terminal state; unknown tokens never create purchase
 test('verified restoration resumes polling after a terminal state',async()=>{
  await save(record('sandbox',{environment:'Sandbox',state:'SUBSCRIPTION_STATE_ACTIVE'}));assert.equal((await claim()).length,1);
 });
+test('production renewal, cancellation, hold, expiry and restoration stay bound to the same store',async()=>{
+ await db.exec('reset role;delete from private.android_billing_purchases');
+ const token='paid-lifecycle';
+ await save(record(token,{expiresAt:new Date(Date.now()+3600000).toISOString()}));
+ let jobs=await claim();assert.equal(jobs.length,1);assert.equal(jobs[0].environment,'Production');
+ await save(record(token,{expiresAt:new Date(Date.now()+31*86400000).toISOString()}));
+ assert.equal(await finish(jobs[0],true),true);
+ assert.equal((await status()).some(s=>s.environment==='Production'&&s.active),true);
+
+ await event('lifecycle-canceled',token);
+ jobs=await claim();assert.equal(jobs.length,1);
+ await save(record(token,{state:'SUBSCRIPTION_STATE_CANCELED',expiresAt:new Date(Date.now()+86400000).toISOString()}));
+ await finish(jobs[0],true);
+ assert.equal((await status()).some(s=>s.state==='SUBSCRIPTION_STATE_CANCELED'&&s.active),true);
+
+ await event('lifecycle-hold',token);
+ jobs=await claim();assert.equal(jobs.length,1);
+ await save(record(token,{state:'SUBSCRIPTION_STATE_ON_HOLD'}));
+ await finish(jobs[0],true);
+ assert.equal((await status()).some(s=>s.active),false);
+
+ await event('lifecycle-expired',token);
+ jobs=await claim();assert.equal(jobs.length,1);
+ await save(record(token,{state:'SUBSCRIPTION_STATE_EXPIRED',expiresAt:new Date(Date.now()-1000).toISOString()}));
+ await finish(jobs[0],true);
+ await db.exec('reset role');
+ assert.equal((await db.query('select next_check_at from private.android_billing_purchases where purchase_token=$1',[token])).rows[0].next_check_at,null);
+ assert.equal((await status()).some(s=>s.active),false);
+
+ await event('lifecycle-restored',token);
+ jobs=await claim();assert.equal(jobs.length,1);
+ await save(record(token,{state:'SUBSCRIPTION_STATE_ACTIVE',expiresAt:new Date(Date.now()+31*86400000).toISOString()}));
+ await finish(jobs[0],true);
+ assert.equal((await status()).some(s=>s.state==='SUBSCRIPTION_STATE_ACTIVE'&&s.active),true);
+});
