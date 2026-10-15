@@ -272,3 +272,10 @@ days** (168 hours), replacing the earlier completion/cancellation basis. The
 retention implementation and explicit inactive/activation boundary are recorded
 in `docs/reservation-retention.md`. The 30-day deletion-case and other processor
 retention questions are separate and are not closed by that reservation change.
+
+
+Reservation automatic disposal was subsequently approved and activated in
+Production at 2026-10-16 00:34 KST, with the first successful real cron run and
+independent 21 → 0 reservation count at 00:35 KST. See the exact evidence and
+scope in `docs/reservation-retention.md`. This does not complete the separate
+30-day deletion-case/contact disposal or external-copy/backup procedures.

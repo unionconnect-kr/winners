@@ -80,3 +80,33 @@ backups or other external copies. Backup rotation and restoration-time re-erasur
 remain separate unresolved operations. No full-backup deletion or unverified
 processor retention term is promised. The deletion-request case's 30-day clock,
 staff-record retention and signup age policy are separate launch questions.
+
+
+## Approved Production activation — 2026-10-16 00:34–00:35 KST
+
+The operator answered “자동 파기” to the explicit activation question describing
+permanent deletion of the existing 21 rows and the recurring appointment-plus-
+seven-day rule. A fresh 00:33:24 KST read confirmed 21 total/due rows, zero invalid
+times, no existing retention job, 2,024 attendance rows and zero payroll rows.
+A short reservation-table lock and exact 21-due-row guard protected the activation
+boundary. The first submitted wrapper had a SQL dollar-quoting syntax error and
+executed no changes; the corrected wrapper then scheduled the reviewed command.
+
+At 00:34:23.534 KST the Production job `manee-reservation-retention` (job 7) was
+active as postgres with schedule `* * * * *` and exact command
+`select private.manee_purge_expired_reservations(500);`. The first real cron run
+started at 00:35:00.422 and succeeded at 00:35:00.468 KST. Independent 00:35:13
+postflight found zero total/due reservations, establishing removal of the 21
+preflight rows. The cron return message is “1 row” for the SELECT result, not a
+reported deletion count. Attendance remained 2,024, payroll remained zero and
+billing enforcement enrollment remained zero. No manual second purge was used.
+A follow-up found the job active, one successful run, zero failed runs and no due
+backlog. Staging remains unscheduled with its original four reservations.
+
+This supersedes the inactive-state and pending-confirmation observations above.
+The underlying implementation source `bbf8ccd` passed all six CI workflows,
+including actual Auth/Storage APIs and Android packaging. Root regression was
+955 total / 944 passed / zero failed / 11 environment-dependent skips. This turn
+changes operational state and documentation only; no new Android install or
+checkout is required. Other account-deletion, backup/processor, age-policy and
+handset release gates are not completed by reservation disposal.

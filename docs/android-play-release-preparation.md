@@ -555,3 +555,13 @@ Installation erased none. Activating the prepared cron would permanently erase
 those 21 reservation rows; that real-data effect needs explicit confirmation.
 No new Android binary is needed for this server and notice change. See
 `docs/reservation-retention.md` for implementation and the separate backup limits.
+
+
+At 2026-10-16 00:32 KST the operator selected “자동 파기” after the explicit
+21-row permanent-deletion review. The exact count was rechecked and guarded under
+a table lock. Production minute job 7 was activated at 00:34:23 KST; its first real
+run succeeded at 00:35:00 and an independent read confirmed reservations 21 → 0,
+with attendance 2,024, payroll zero and billing enrollment zero preserved. This
+supersedes the pending reservation-activation gate above. Source `bbf8ccd` passed
+all six CI workflows (955 root cases: 944 pass, zero fail, 11 environmental skips).
+No Google review submission, publication or public billing activation occurred.
