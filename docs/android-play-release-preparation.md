@@ -191,6 +191,34 @@ still apply; public checkout and new-store enforcement remain unactivated.
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
 
+### Remaining acceptance batch — following company registration save
+
+All five existing workflows for `a8b5dba` succeeded. A browser now verifies the
+complete public privacy → deletion guide → signed-out intake connection. No
+additional case was submitted. A new local-only Auth/Storage API rehearsal is
+prepared in a dedicated workflow; its complete result is pending, not accepted
+on the strength of its local target-guard check alone.
+
+The next handset batch uses the already installed Play 1.21 and does not require
+another checkout. First fully close/reopen the app and confirm the selected
+store/subscription and restore status. Then coordinate a fresh, explicitly
+bounded expiry window before testing the expired banner and employee-session
+write refusal; the previous window has ended, so testing the currently writable
+store cannot supply expiry evidence. Use a disposable test employee/action and
+verify no attendance/business record was inserted. Confirm recovery after the
+window and reconcile server counts. Do not edit an actual worker's attendance
+or use the normal post-recovery screenshot as proof of rejection.
+
+Policy consistency also remains: the public notice says age 14+ but signup does
+not collect an age confirmation; Play's saved target group includes age 13+.
+Reservation disposal seven days after completion/cancellation is not evidenced
+by the actual schema/jobs. Case contacts have a 30-day post-completion standard
+but no dedicated completion timestamp/verified disposal mechanism. These are
+concrete remaining implementation/operations questions, not completed checklist
+items. Existing support ownership is the company 경영지원팀; no new department
+selection is needed. Actual review submission/publication and both public billing
+activation steps remain pending until the relevant gates and timing are resolved.
+
 ## Initial console state (2026-10-14, before the paid pilot)
 
 - Company Play Console sign-in succeeded; app `kr.co.manee.app` exists as a draft.

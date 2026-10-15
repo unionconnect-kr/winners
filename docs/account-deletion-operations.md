@@ -167,7 +167,8 @@ and explains separate Play cancellation. The privacy page now describes the
 Android purchase/token verification, FCM registration and deletion-request
 fields, and the implemented Android request-menu links. HTML parsing, unique
 IDs and local links/anchors passed. The public audience is unchanged; the native
-app and Netlify service were not redeployed. Browser rendering was not verified.
+app and Netlify service were not redeployed. At that checkpoint browser rendering
+had not been verified; the subsequent browser check below supersedes that limit.
 Actual processor contracts, transfer details, retention settings, case-specific
 erasure and the other explicitly pending policy items remain unresolved; no
 unknown terms were invented or marked verified. All five CI workflows for the
@@ -218,3 +219,40 @@ Auth Admin API request, Storage object erasure, Google cancellation, processor
 cleanup or customer-specific retention decision was tested. The retained crew
 record is not proof of irreversible anonymization merely because name/phone were
 replaced. Those operational limits remain before claiming a full real-case erasure.
+
+## Browser connection and disposable API check — late 2026-10-15 follow-up
+
+A signed-out browser successfully opened the Play-registered privacy URL. The
+Sites host redirected `privacy.html` to `/privacy` and rendered the current
+2026-10-15 notice. Its deletion-guide link rendered the current guide, and the
+guide's online-intake link reached
+`https://winners-staffapp.netlify.app/account-deletion.html` with both required
+inputs and support/retention/Play-cancellation explanations. Earlier automated
+HTTP 403 responses therefore did not establish that real browser access failed.
+No form was submitted and no new request/customer account was created in this
+browser connection check.
+
+`security/deletion-api-rehearsal.mjs` and its dedicated CI workflow prepare a
+separate, disposable local Supabase stack with real Auth and Storage services.
+The harness refuses hosted URLs (including Production and Staging), uses no
+repository secrets, blocks HTTP redirects, uploads synthetic user-owned files,
+checks owned-file deletion refusal, revokes refresh sessions, removes the target
+file through Storage API, deletes the Auth identity and checks the colleague's
+file bytes/session. Exact-fixture cleanup and unconditional stack/volume teardown
+follow. Only PASS labels are retained as a CI artifact; local credentials and
+stack logs are removed. The remote-target guard passes locally. The full API
+result is pending CI and must not yet be reported as passed.
+
+The API stack intentionally has no MANEE migrations or customer data. It tests
+the supported API sequence alongside the existing application SQL rehearsal;
+it does not prove production processor cleanup, identity verification, shared
+business-data retention decisions, signed JWT expiry or a complete customer case.
+
+Read-only Production checks also reconfirmed Seoul (`ap-northeast-2`) hosting.
+Reservations have no completion/cancellation timestamp or status column, and no
+cron job matched the inspected reservation/deletion/retention name filters.
+That is insufficient evidence for the published seven-day post-completion
+reservation disposal standard. Deletion cases have `reviewed_at`, not a distinct
+completion timestamp: apply the published 30-day standard through documented
+manual completion/disposal records until an accurate mechanism is verified.
+Do not infer case disposal from unrelated billing-event/push-delivery cleanup.

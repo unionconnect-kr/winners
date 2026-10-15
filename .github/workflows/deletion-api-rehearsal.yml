@@ -1,0 +1,60 @@
+name: Disposable deletion Auth and Storage APIs
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'security/deletion-api-rehearsal.mjs'
+      - 'tests/deletion-api-local-guard.test.mjs'
+      - '.github/workflows/deletion-api-rehearsal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deletion-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_TELEMETRY_DISABLED: '1'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: node --test tests/deletion-api-local-guard.test.mjs
+      - name: Prepare isolated CLI workspace
+        run: |
+          set -euo pipefail
+          command -v psql || (sudo apt-get update -qq && sudo apt-get install -y postgresql-client)
+          mkdir "$RUNNER_TEMP/manee-deletion-api"
+          npx --yes supabase@2.81.3 init --workdir "$RUNNER_TEMP/manee-deletion-api"
+      - name: Start throwaway Supabase without repository migrations or secrets
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.81.3 start --workdir "$RUNNER_TEMP/manee-deletion-api" --exclude studio,realtime,edge-runtime,logflare,vector,supavisor,imgproxy > "$RUNNER_TEMP/deletion-stack.log" 2>&1
+          umask 077
+          npx --yes supabase@2.81.3 status --workdir "$RUNNER_TEMP/manee-deletion-api" --output json > "$RUNNER_TEMP/deletion-status.json"
+      - name: Actual Auth and Storage API erasure with colleague preservation
+        env:
+          MANEE_DELETION_API_REHEARSAL: disposable-local-only
+        run: |
+          set -euo pipefail
+          node security/deletion-api-rehearsal.mjs "$RUNNER_TEMP/deletion-status.json" | tee "$RUNNER_TEMP/deletion-api-results.txt"
+      - name: Destroy disposable containers, volumes and credentials
+        if: always()
+        run: |
+          npx --yes supabase@2.81.3 stop --workdir "$RUNNER_TEMP/manee-deletion-api" --no-backup
+          rm -f "$RUNNER_TEMP/deletion-status.json" "$RUNNER_TEMP/deletion-stack.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-deletion-api-results
+          path: ${{ runner.temp }}/deletion-api-results.txt
+          retention-days: 14
