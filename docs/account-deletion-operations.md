@@ -44,5 +44,8 @@ support ownership and real erasure procedure need operational verification befor
 claiming this requirement is met in the Play Console. The same URL must be
 entered in Play Console's Data safety account-deletion answer only once live.
 
-Current branch status (2026-10-15): implementation and local tests only; the
-Production migration and public page have not been deployed by this branch.
+Current branch status (2026-10-15): the request migration is applied to
+Staging and Production. Production postflight confirms zero requests;
+anon/authenticated cannot read the queue or execute the submission RPC, while
+`service_role` can execute the RPC. Local tests pass. The public page and
+Netlify function have not been deployed to the Production site by this branch.

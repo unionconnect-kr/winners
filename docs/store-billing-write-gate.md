@@ -92,8 +92,9 @@ checks, then returns without materializing costs if the store is not currently
 write-entitled. It leaves existing rows readable and the ordinary database
 write trigger unchanged. Local PostgreSQL tests cover expired enrollment with
 an existing row and both automatic write paths, recovery with a fresh receipt,
-another unenrolled store, and direct-write rejection. This migration is a
-review-branch change; it has not been deployed to the live database here.
+another unenrolled store, and direct-write rejection. This migration was
+applied to Staging and Production on 2026-10-15. Production postflight confirms
+the function includes the entitlement skip and zero stores are enrolled.
 
 The direct client mutation audit found these deliberate exclusions: `stores`
 settings (including the location used for employee clock-in), `crew` and
