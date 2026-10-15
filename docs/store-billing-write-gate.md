@@ -182,3 +182,35 @@ still permits writes with its three open shifts preserved. No enrollment,
 receipt changes or business-record writes were performed. All five CI workflows
 for implementation commit `87d34c0` succeeded. No app rebuild is needed for this
 server-only change; 1.21 remains the installed handset version.
+
+## Bounded live expiry test — 2026-10-15
+
+At 21:39 KST the operator approved a maximum five-minute interruption for the
+selected Songcheon store, including its three open attendance records. Before
+activation, two five-second pg_cron canaries succeeded and unscheduled themselves.
+The second exercised the exact conditional deadline, scoped deletion and
+self-unscheduling structure used for recovery, without matching any enrollment.
+
+The live test began at 21:45:51.087 KST, with recovery scheduled for 21:49:51.087
+KST. A single transaction scheduled the five-second recovery job before inserting
+the exact store's temporary Sandbox enrollment. It checked the named active
+store, zero prior enrollments, a fresh ACTIVE Production receipt and expired
+Sandbox evidence. The resulting entitlement was false. No receipt, subscription,
+customer permission or business record was changed. Recovery only matches the
+selected store, Sandbox environment and this test's exact enabled_at marker.
+
+A rollback-only operator SQL probe with a synthetic customer subject confirmed
+that the live attendance trigger raises P4402 on an unchanged-field update.
+The target was one existing open record; all three remained open and no update
+persisted. This verifies the database trigger, not an employee handset session
+or client RLS. The user was asked to refresh the store-access screen during the
+window. A handset screenshot of the expired state is not yet established.
+
+The recovery job succeeded at 21:49:52.405 KST and removed itself. Postflight
+confirmed zero enrolled stores, restored write entitlement, no failed timer runs
+and the same three open attendance records. The Production receipt remained
+ACTIVE, with its original 2026-11-14T20:12:12.218Z expiry and a fresh worker check.
+The interruption lasted about four minutes and one second. No permanent
+enrollment or general paid rollout was enabled. Handset expiry display, employee
+session behavior and a cold restart still require independent device evidence;
+the server test does not mark those checks complete.
