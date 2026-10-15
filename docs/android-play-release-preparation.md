@@ -159,6 +159,18 @@ The revalidated candidate was saved successfully; Console confirmed the changes
 are saved and must be sent separately from publishing overview for Google review.
 Neither that review submission nor public publication was performed.
 
+Publishing overview now contains ten unsubmitted changes, including 22 (1.21),
+Korea and the saved app-content declarations. Its separate Google quick check
+found a review-submission blocker: Korean developer account details. The account
+page requires business registration number, e-commerce license number and the
+issuing agency. The already-published company business number was entered and
+validates, but the form is **not saved**: the last two required fields are empty.
+Prior context confirms the company reported that its e-commerce registration
+was completed; neither exact license number nor issuer was supplied in the
+retrieved records or found by the focused public lookup. Request those two
+values from the operator; do not invent them or use a different entity's license.
+See [Google's required Korean developer details](https://support.google.com/googleplay/android-developer/answer/3255733).
+
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
 
