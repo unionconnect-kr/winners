@@ -61,14 +61,15 @@ jobs:
           node --test --test-reporter=tap security/store-code-concurrency.test.mjs | tee /tmp/android-concurrency.txt
           node --test --test-reporter=tap security/new-staff-self-profile-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
           node --test --test-reporter=tap security/attendance-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/new-store-billing-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
           node --input-type=module - <<'JS'
           import { readFileSync } from 'node:fs';
           import assert from 'node:assert/strict';
           const log = readFileSync('/tmp/android-concurrency.txt', 'utf8');
           // A skipped suite must never allow an APK through this gate.
-          assert.equal([...log.matchAll(/^# tests 1$/gm)].length, 3);
-          assert.equal([...log.matchAll(/^# pass 1$/gm)].length, 3);
-          assert.equal([...log.matchAll(/^# skipped 0$/gm)].length, 3);
+          assert.equal([...log.matchAll(/^# tests 1$/gm)].length, 4);
+          assert.equal([...log.matchAll(/^# pass 1$/gm)].length, 4);
+          assert.equal([...log.matchAll(/^# skipped 0$/gm)].length, 4);
           JS
       - name: Check app and security regressions
         run: |

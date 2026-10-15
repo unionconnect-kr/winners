@@ -223,7 +223,7 @@ The still image does not independently establish a cold restart, the temporary
 expired screen or employee-session write rejection. No repeat purchase or
 permanent enrollment is needed to record this evidence.
 
-## Public rollout cohort — decision still required
+## Public rollout cohort — new stores selected on 2026-10-15
 
 A Production aggregate read at 2026-10-15 22:40:51 KST found 15 nonarchived stores
 with a currently active, nonbanned owner. One has a current valid Production
@@ -233,9 +233,50 @@ workers). The counts do not classify internal/QA stores as paying customers.
 
 Opening public checkout and enrolling store write enforcement are separate
 changes. Automatically enrolling all existing stores would restrict business
-and attendance input for the 14 currently unentitled stores. The operator must
-choose the rollout cohort/timing before that customer-facing behavior changes:
-new stores created after a recorded launch cutoff, keeping the existing 15
-unchanged initially, or a separately announced transition for existing stores
-as well. The latter also needs its effective date. No cohort enrollment,
-grandfathering rule, cutoff timestamp or public switch was activated by this read.
+and attendance input for the 14 currently unentitled stores. At 22:45 KST the
+operator selected option 1: new stores only, keeping existing stores unchanged
+initially. No transition date or paid conversion for existing stores is implied.
+
+Migration `20261015134721_new_store_billing_rollout.sql` adds one private launch
+record, an operator-only idempotent launch action and an AFTER INSERT store
+trigger. Deployment leaves launched_at NULL and enrolls no store. After launch,
+each actual new INSERT atomically receives Production enforcement, including
+owner signup through the existing service-role bootstrap RPC. The trigger never
+uses client-controlled created_at and never backfills or enrolls a store on
+UPDATE, rename, archive or restoration. Prelaunch stores are preserved even if
+their timestamps are edited. Stores created before the future launch action
+also remain prelaunch stores; the observed 15-store count is not a frozen ID list.
+
+Shared policy-row locks allow concurrent inserts and serialize them with launch.
+A prelaunch insert must commit/roll back before launch completes; an insert
+waiting behind launch sees the activated policy. A missing policy fails the
+new insert closed. The private launch function uses SECURITY INVOKER; only the
+trigger uses SECURITY DEFINER with an empty search_path. No anon/authenticated/
+service_role policy-table or function access is granted. Existing store RLS and
+the owner/signup permissions are unchanged. This is enrollment, not payment or
+membership authorization; normal verified Production receipts still decide
+whether an enrolled store can write. Sandbox does not unlock it.
+
+Eight focused PostgreSQL-engine scenarios pass, covering preserved stores,
+idempotent launch, edited timestamps, role isolation, business/real clock denial,
+Production recovery versus Sandbox/expiry, service-role signup and atomic failure.
+Root regression: 948 checks, 937 pass, zero failures, 11 environment-dependent
+skips. A new disposable PostgreSQL concurrency suite exercises both launch/insert
+lock orders, stale repeatable-read rejection and parallel postlaunch creation;
+the Android CI requires it to pass without skipping alongside the three existing
+concurrency suites. Its CI result remains pending at this source checkpoint.
+
+Staging has the migration installed. A rollback-only activation/signup rehearsal
+confirmed a prelaunch store stays writable, no existing store is enrolled, the
+actual service-role owner bootstrap succeeds, and its unpaid new store receives
+Production enforcement and denies writes. Launch and all synthetic data were
+rolled back. The final policy is unlaunched, enrollment zero and no client launch
+grant. Advisors add only the intentionally private RLS-without-policy INFO entry
+(25 to 26); the existing three exposed-definer and one password warnings remain.
+See [RLS-without-policy explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+Before the real launch action, finish the handset/public-readiness gates, deploy
+and enable the approved public checkout path, and verify sufficient Play catalog
+slots/offers. Activating enforcement while new owners cannot purchase/restore is
+not a valid launch sequence. No public switch or real launch action has been
+activated; the current Android 1.21 assets have not changed.

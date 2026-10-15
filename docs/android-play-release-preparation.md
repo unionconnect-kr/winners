@@ -128,6 +128,16 @@ the final candidate review, and consistency with Play's declarations. Submit
 the Android release for review only after those gates are resolved. Internal
 testing is not public release; Play's review/publish outcome is a separate step.
 
+At 22:45 KST the operator chose public paid enforcement for new stores only;
+existing stores keep their current access initially. The private inactive rollout
+migration and new-store trigger are implemented and installed on Staging.
+Rollback-only testing covers the real service-role owner bootstrap and preserves
+all prelaunch stores. Root regression is 948 total / 937 passed / 0 failed /
+11 environment-dependent skips; the new real-PostgreSQL concurrency gate is
+required in Android CI. Production installation and the latest CI remain pending
+at this checkpoint. Installation alone does not launch checkout/enforcement,
+and the installed 1.21 assets do not change. See `store-billing-write-gate.md`.
+
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
 
