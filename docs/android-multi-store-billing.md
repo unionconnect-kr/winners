@@ -154,3 +154,29 @@ its SHA-256 is
 `9da0166bfd6913aa9c3b47468bf95ba8876cf3e8edabce95e5fa7b92e3e08d6f`.
 Play Console has not been checked for its latest uploaded code. No Play upload
 or Production permission is claimed here.
+
+## Paid pilot handset acceptance — 2026-10-15 KST
+
+The operator published Android 1.19 / code 20 to Play internal testing and
+installed it on the pilot handset. Play's checkout showed a one-month free
+trial followed by KRW 9,900/month, and the operator completed the subscription
+for Saengsaeng Songcheon. The app reported purchase and server verification
+complete. On 1.19, both the subscription dialog and the separate store access
+screen display the selected store as subscribed. A handset screenshot for
+Gamjok Seosin, selected under the same owner account, instead displays
+"preparing" and no subscription. No second purchase was made.
+
+The access screen explicitly says the billing write restriction is not applied
+to these stores. A successful Play purchase and the two handset screens verify
+the paid pilot display and store separation; they do not establish that paid
+write enforcement, a future renewal, expiry or cancellation works in Production.
+The Production ledger could not be independently read during this follow-up,
+so no current database count or refresh timestamp is claimed here.
+
+Local reconciliation integration now drives one Production receipt through
+renewal, cancellation before expiry, account hold, expiration and event-driven
+restoration, checking the member-visible status and worker claim/finish behavior.
+This is deterministic database coverage; live lifecycle events remain pending.
+Keep the production write gate unenrolled until its remaining mutation surfaces
+and live entitlement recovery are verified. Do not start another paid checkout
+merely to test store isolation.
