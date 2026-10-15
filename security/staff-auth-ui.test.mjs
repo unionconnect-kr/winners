@@ -146,3 +146,10 @@ test('Recovery failure does not display success or discard the form',async()=>{
   await assert.rejects(()=>h.context.handleAccountRecoveryAction('recovery-reset'));
   assert.equal(h.state.landingMode,'account-recovery');assert.equal(h.calls.some(c=>c.toast),false);
 });
+test('expired-store attendance refusal explains the restriction and preserves staff login',async()=>{
+ const h=harness({memberships:[staff],rpcError:{code:'P4402',message:'expired'},state:{role:'staff',store:'Staff Store',storeIdMap:{'Staff Store':'store-staff'},authProfile:{user_id:'verified-user'},myCrewId:'crew-self',attendance:[]}});
+ await h.context.clockAuthStaff('in');
+ assert.equal(h.state.role,'staff');assert.equal(h.state.staffClockBusy,false);
+ assert.ok(h.calls.some(c=>c.toast?.includes('출퇴근') && c.toast?.includes('제한')));
+ assert.equal(h.calls.some(c=>c.toast?.includes('처리됐어요')),false);
+});

@@ -2,6 +2,12 @@
 
 ## Current release gate — 2026-10-15
 
+Latest candidate preparation: the operator selected restricting attendance
+input on subscription expiry. Source now prepares 1.21/code 22 with matching
+staff/access-screen copy and a new attendance/edit-request billing migration;
+see `store-billing-write-gate.md`. The published internal build remains 1.20.
+The new candidate has not yet been signed, uploaded or accepted on a handset.
+
 Play internal testing has accepted Android 1.19/code 20. The pilot owner
 completed a real Play subscription for one store, and the handset reports it
 active while the owner's second store remains unsubscribed. This is useful paid

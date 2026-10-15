@@ -4,7 +4,7 @@ export function subscriptionView(access, billing, unconfigured=false) {
   const testActive = billing?.testOnly === true && billing?.testActive === true;
   if (access?.enforced === true) {
     if (access.canWrite === true) return {title:'매장 이용권 이용 중',message:'이 매장의 입력·수정이 가능합니다.',testActive};
-    return {title:'매장 이용권 확인 필요',message:'이 매장의 기록은 볼 수 있지만 입력·수정은 제한됩니다. 사장님이 구독 상태를 확인해 주세요. 출퇴근 기록은 계속 사용할 수 있습니다.',testActive};
+    return {title:'매장 이용권 확인 필요',message:'이 매장의 기록은 볼 수 있지만 출퇴근을 포함한 업무 입력·수정은 제한됩니다. 사장님이 구독 상태를 확인해 주세요.',testActive};
   }
   if (access?.enforced === false) {
     if (billing?.active === true) return {title:'매장 이용권 이용 중',message:'Google Play 구독이 확인되었습니다. 현재 이 매장에는 이용권에 따른 입력 제한이 적용되지 않았습니다.',testActive};

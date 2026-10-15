@@ -6,6 +6,7 @@ test('sandbox purchase cannot be displayed as paid access when server denies wri
  const view=subscriptionView({enforced:true,canWrite:false},{testOnly:true,testActive:true});
  assert.match(view.title,/확인 필요/);
  assert.match(view.message,/입력·수정은 제한/);
+ assert.match(view.message,/출퇴근을 포함/);
  assert.equal(view.testActive,true);
 });
 test('unenrolled store is shown as unenforced despite a sandbox purchase',()=>{

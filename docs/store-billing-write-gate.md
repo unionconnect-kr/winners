@@ -18,8 +18,8 @@ receipts and revoked owner membership. Staging deployment confirms 17 triggers,
 
 This is an Android pilot, not complete paid rollout. On 2026-10-14, the existing
 explicit-enrollment migration was applied to Production with zero enrolled stores.
-No live store is restricted. Attendance remains available to avoid
-stranding an employee mid-shift; identity/account recovery, notifications, crew
+No live store is restricted. Attendance was originally excluded; the selected
+launch policy below supersedes that exclusion. Identity/account recovery, notifications, crew
 profile changes, indirect child records and storage are outside this first gate.
 Full account-erasure/cascade behavior, iOS entitlements, production-receipt
 refresh behavior, the remaining write surfaces, and on-device expiry behavior
@@ -96,13 +96,44 @@ another unenrolled store, and direct-write rejection. This migration was
 applied to Staging and Production on 2026-10-15. Production postflight confirms
 the function includes the entitlement skip and zero stores are enrolled.
 
-The direct client mutation audit found these deliberate exclusions: `stores`
+The original direct client mutation audit found these deliberate exclusions: `stores`
 settings (including the location used for employee clock-in), `crew` and
 membership/identity maintenance, `attendance` and edit requests, read
 acknowledgements, notification subscriptions, and tax reminder acknowledgements.
 No expiry behavior for those paths has been approved or enabled. Store creation,
 renaming, deletion and franchise management have separate account/recovery
 effects and must not be swept into an all-row `stores` billing trigger. The
-current gate therefore covers its listed business tables, not every possible
+original gate therefore covered its listed business tables, not every possible
 mutation in the application. Production enrollment remains at zero until the
 remaining boundary and on-device lifecycle checks are complete.
+
+## Selected launch expiry policy — 2026-10-15
+
+The operator explicitly selected blocking attendance as well as business input
+when a store's subscription is no longer entitled. Migration
+`20261015130000_attendance_billing_gate.sql` adds the existing OLD/NEW store gate
+to `attendance` and `attendance_edit_requests`. It covers real employee clock
+RPCs, owner/manual edits/deletion, employee confirmations/correction requests,
+and approvals running through SECURITY DEFINER functions. Clock-out is also
+blocked if entitlement expires during an open shift; the existing open record
+remains unchanged and readable. Active/grace receipts and cancellation before
+expiry remain entitled; a fresh valid renewal/restore reopens attendance.
+
+The migration adds no enrollment and changes no read, identity/recovery,
+purchase or restore permissions. Other identity/store/notification exclusions
+above remain separate from business input. Native 1.21/code 22 is prepared with
+the corrected expiry explanation; 1.20 must not be used as acceptance evidence
+for this new policy because its access screen still says attendance is allowed.
+
+Six integration scenarios use the real staff clock/correction/confirmation and
+approval SQL against the existing RLS fixture. They cover unenrolled operation,
+expired clock-in/out, preserved open records/reads, owner and cross-store
+mutations, pending correction atomicity, renewal/restoration, cancellation,
+Sandbox isolation, account hold and stale receipt checks. The staff UI test
+also confirms a P4402 refusal keeps login and does not claim a successful clock.
+The migration is installed on Staging and Production. Both postflights
+confirm both triggers, zero enrolled stores, and no client enrollment or
+internal-predicate grants. Handset acceptance remains required before enrolling
+a live store. The updated source passes 923 root checks: 913 passed, zero failed,
+10 environment-dependent skips, plus 64/64 mobile checks. These do not prove a
+new signed binary or live handset acceptance.

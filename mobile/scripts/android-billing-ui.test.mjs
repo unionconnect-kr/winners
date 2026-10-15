@@ -80,6 +80,8 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
  assert.match(copy,/1개월 무료 체험/);
  assert.match(copy,/월 9,900원/);
  assert.match(copy,/Play 스토어 구독 관리/);
+ assert.match(copy,/출퇴근을 포함한 업무 입력·수정이 제한/);
+ assert.match(copy,/기존 기록 조회와 구독 복원은 가능/);
  assert.equal(f.visibleOffers().length,1);
  assert.match(f.visibleOffers()[0].textContent,/구독 시작$/);
  await f.visibleOffers()[0].onclick();
