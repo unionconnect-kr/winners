@@ -1,0 +1,201 @@
+name: iOS signed archive
+
+on:
+  push:
+    branches: [main, codex/ios-build-preparation]
+    paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
+  workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: 'Upload to App Store Connect for TestFlight (main only; no review submission)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-signed-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation')
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          xcrun altool --help > "$RUNNER_TEMP/manee-altool-help.txt" 2>&1
+          grep -q -- '--validate-app' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--upload-app' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--apiKey' "$RUNNER_TEMP/manee-altool-help.txt"
+          grep -q -- '--apiIssuer' "$RUNNER_TEMP/manee-altool-help.txt"
+      - name: Check signing secrets and decode files
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import os, base64, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-signing'
+          root.mkdir(mode=0o700, exist_ok=True)
+          for name in ('IOS_DISTRIBUTION_P12_BASE64', 'IOS_DISTRIBUTION_P12_PASSWORD', 'IOS_PROVISION_PROFILE_BASE64'):
+              if not os.environ.get(name):
+                  raise SystemExit('Missing secret: ' + name)
+          for name, filename in [('IOS_DISTRIBUTION_P12_BASE64', 'certificate.p12'), ('IOS_PROVISION_PROFILE_BASE64', 'profile.mobileprovision')]:
+              try:
+                  data = base64.b64decode(''.join(os.environ[name].split()), validate=True)
+                  if not data:
+                      raise ValueError()
+              except Exception:
+                  raise SystemExit('Invalid base64 file in secret: ' + name)
+              (root / filename).write_bytes(data)
+          print('Signing files decoded; secret contents are not logged.')
+          PY
+      - name: Import certificate and validate profile
+        env:
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing_dir="$RUNNER_TEMP/manee-signing"
+          keychain_path="$signing_dir/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 3600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          # Windows OpenSSL 3 exports PBES2. Re-wrap locally for macOS import
+          # only if the native importer cannot read the original container.
+          if ! security import "$signing_dir/certificate.p12" -P "$P12_PASSWORD" -t cert -f pkcs12 -k "$keychain_path" -T /usr/bin/codesign > /dev/null 2>&1; then
+            openssl_bin="$(brew --prefix openssl@3)/bin/openssl"
+            "$openssl_bin" pkcs12 -in "$signing_dir/certificate.p12" -passin env:P12_PASSWORD -noenc -out "$signing_dir/identity.pem"
+            "$openssl_bin" pkcs12 -export -in "$signing_dir/identity.pem" -passout env:P12_PASSWORD -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 -out "$signing_dir/compatible.p12"
+            security import "$signing_dir/compatible.p12" -P "$P12_PASSWORD" -t cert -f pkcs12 -k "$keychain_path" -T /usr/bin/codesign > /dev/null
+            rm -f "$signing_dir/identity.pem" "$signing_dir/compatible.p12"
+          fi
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path" > /dev/null
+          security list-keychains -d user -s "$keychain_path" "$HOME/Library/Keychains/login.keychain-db"
+          security cms -D -i "$signing_dir/profile.mobileprovision" > "$signing_dir/profile.plist"
+          python3 - <<'PY'
+          import os, pathlib, plistlib, datetime, hashlib, subprocess, re, shutil
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-signing'
+          profile = plistlib.loads((root / 'profile.plist').read_bytes())
+          team, bundle = 'J7AWFKW86N', 'kr.co.manee.app'
+          ent = profile.get('Entitlements', {})
+          def require(ok, message):
+              if not ok:
+                  raise SystemExit(message)
+          require(profile.get('TeamIdentifier') == [team], 'Profile is for a different Apple team.')
+          require(ent.get('application-identifier') == team + '.' + bundle, 'Profile is for a different app.')
+          require(ent.get('com.apple.developer.team-identifier') == team, 'Profile team entitlement mismatch.')
+          require(ent.get('aps-environment') == 'production', 'Regenerate the App Store profile with Push Notifications enabled.')
+          require(not ent.get('get-task-allow', True), 'A distribution profile is required.')
+          require('ProvisionedDevices' not in profile and not profile.get('ProvisionsAllDevices'), 'An App Store profile is required.')
+          require(profile['ExpirationDate'] > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), 'Profile has expired.')
+          uuid = profile['UUID']
+          require(bool(re.fullmatch(r'[0-9A-Fa-f-]{36}', uuid)), 'Invalid profile UUID.')
+          identities = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning', str(root / 'signing.keychain-db')], text=True)
+          valid = re.findall(r'\b([0-9A-Fa-f]{40})\s+"Apple Distribution:', identities)
+          allowed = {hashlib.sha1(cert).hexdigest().upper() for cert in profile.get('DeveloperCertificates', [])}
+          matches = [fingerprint.upper() for fingerprint in valid if fingerprint.upper() in allowed]
+          require(len(matches) == 1, 'No unique valid distribution identity matches this profile.')
+          fingerprint = matches[0]
+          # Xcode 16+ and earlier profile search locations.
+          for relative in ('Library/Developer/Xcode/UserData/Provisioning Profiles', 'Library/MobileDevice/Provisioning Profiles'):
+              dest = pathlib.Path.home() / relative
+              dest.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(root / 'profile.mobileprovision', dest / (uuid + '.mobileprovision'))
+          (root / 'uuid.txt').write_text(uuid)
+          options = {'method': 'app-store-connect', 'destination': 'export', 'teamID': team,
+                     'signingStyle': 'manual', 'signingCertificate': fingerprint,
+                     'provisioningProfiles': {bundle: uuid}, 'manageAppVersionAndBuildNumber': False}
+          (root / 'ExportOptions.plist').write_bytes(plistlib.dumps(options))
+          # Apply manual signing only to the app Release configuration, not SPM targets.
+          project = pathlib.Path('ios/App/App.xcodeproj/project.pbxproj')
+          content = project.read_text()
+          pattern = r'(\t\t504EC3181FED79650016851F /\* Release \*/ = \{.*?\n\t\t\};)'
+          def configure(match):
+              block = match[0]
+              require('CODE_SIGN_STYLE = Automatic;' in block, 'Unexpected app signing configuration.')
+              return block.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = "' + fingerprint + '";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "' + uuid + '";')
+          content, count = re.subn(pattern, configure, content, flags=re.S)
+          require(count == 1, 'Could not locate the app Release configuration.')
+          project.write_text(content)
+          print('Certificate password, signing identity, profile, team and bundle ID verified.')
+          PY
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:production
+      - run: npm run sync:ios
+      - name: Archive signed iPhone app
+        run: |
+          set -euo pipefail
+          build_number="1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/manee.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/manee-derived" \
+            CURRENT_PROJECT_VERSION="$build_number" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/manee-signing/signing.keychain-db" \
+            archive > "$RUNNER_TEMP/manee-archive.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/manee-archive.log"; exit 1; }
+      - name: Export signed IPA
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/manee.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/manee-signing/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/manee-ipa" > "$RUNNER_TEMP/manee-export.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/manee-export.log"; exit 1; }
+          test -n "$(find "$RUNNER_TEMP/manee-ipa" -maxdepth 1 -name '*.ipa' -print -quit)"
+          codesign --verify --deep --strict "$RUNNER_TEMP/manee.xcarchive/Products/Applications/App.app"
+          echo 'Signed IPA exported. No App Store upload or review submission was performed.'
+          echo '### Signed archive verified' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Signing succeeded; the IPA is an artifact only. Native subscriptions, push notifications, branding and real-device QA remain release gates.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manee-ios-signed-${{ github.run_number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/manee-ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload to App Store Connect for TestFlight
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_testflight && github.ref == 'refs/heads/main'
+        env:
+          MANEE_UPLOAD_TESTFLIGHT: 'true'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=("$RUNNER_TEMP/manee-ipa/"*.ipa)
+          test "${#ipas[@]}" -eq 1
+          node scripts/upload-testflight.mjs "${ipas[0]}"
+          echo 'Upload accepted; Apple processing is pending. No review submission or tester invitation was performed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary signing materials
+        if: always()
+        run: |
+          signing_dir="$RUNNER_TEMP/manee-signing"
+          security delete-keychain "$signing_dir/signing.keychain-db" 2>/dev/null || true
+          if [ -f "$signing_dir/uuid.txt" ]; then
+            profile_uuid="$(cat "$signing_dir/uuid.txt")"
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$profile_uuid.mobileprovision"
+          fi
+          rm -rf "$signing_dir"
+          rm -rf "$RUNNER_TEMP"/manee-upload-*
