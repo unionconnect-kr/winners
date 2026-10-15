@@ -1,5 +1,39 @@
 # Android Play release preparation — 2026-10-14
 
+## Current release gate — 2026-10-15
+
+Play internal testing has accepted Android 1.19/code 20. The pilot owner
+completed a real Play subscription for one store, and the handset reports it
+active while the owner's second store remains unsubscribed. This is useful paid
+checkout and store-isolation evidence, not evidence of public availability or
+expiry enforcement. The installed 1.19 build predates the changes below.
+
+The review branch now prepares Android 1.20/code 21 with an in-app account
+deletion request link; a public web form, private request queue, and support
+operation note are included. Local request/RLS and billing gate tests pass.
+The queue migration, public page and 1.20 AAB are not deployed or installed.
+Google Play requires an in-app deletion request route and a usable web resource
+for an app that supports account creation. The support team's verified erasure
+process, live web submission and Play Data safety answer must be checked before
+public review; see `account-deletion-operations.md`.
+
+The Production write gate still has zero enrolled stores. The fixed-cost read
+preservation migration is on the review branch only. The remaining business
+write surfaces and subscription lifecycle on a handset have not passed the
+release gate. A Production checkout switch grants only exact owner/store pairs;
+the Play catalog currently has two verified product slots per owner. A public
+paid offer to arbitrary new owners or a third store needs an explicit catalog
+and access design. iOS StoreKit paid access remains disabled.
+
+Next operational sequence: review and merge the branch, apply the additive
+request and fixed-cost migrations, deploy and check the public request endpoint,
+produce the signed 1.20 AAB, and verify the installed build in an internal or
+closed track. Reconcile the Production paid ledger, exercise restore and an
+expired/canceled enrolled store without harming live work, and verify support
+can fulfill a deletion request. Then complete Play's declarations and submit
+the Android release for review. Do not describe internal testing as public
+release; the Play Console review/publish outcome is a separate external step.
+
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
 

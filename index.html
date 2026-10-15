@@ -6681,7 +6681,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(state.section==='settings') return ownerSubHeader('매장 설정')+renderCrewManage('settings');
     if(state.section==='alerts') return ownerSubHeader('알림 모아보기')+renderHqNotices()+renderNotifDetails();
     let html='<h2>더보기</h2>';
-    return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
+    return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer" style="display:block;padding:14px 18px;color:inherit;text-decoration:none;">계정 삭제 요청 ↗</a><button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
   }
   function renderOwnerStorePicker(){
     const stores=state.myStores||[],group=ownerRouteGroup();
@@ -6942,6 +6942,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     else if(state.section === "sales") html += renderSalesSection();
     else html += renderSchedule();
     }
+    if(isHq || isFranchise) html += '<p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청하기 ↗</a></p>';
     html += '<button class="switch-link" id="switch-user-btn">다른 사용자로 전환</button>';
     html += '</main>';
     html += '<nav class="bottom-nav">';
@@ -7813,7 +7814,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(page==='help'){
       return '<section class="category team-card"><p class="team-card-title team-title-lg">출퇴근은 어떻게 기록되나요?</p><p class="team-sub">홈의 출근·퇴근 버튼은 매장에서 약 100m 이내에서만 기록돼요. 매장의 영업일 기준 시간 전에 출근하면 전날 영업일 기록으로 저장돼요.</p></section>'+
         '<section class="category team-card"><p class="team-card-title team-title-lg">예정 근무와 실제 근무</p><p class="team-sub">스케줄은 근무 예정이에요. 실제 출퇴근 기록과 매니저의 근무 확인 여부를 함께 확인하세요. 근무 확인이 끝난 시간만 예상 급여에 반영돼요.</p></section>'+
-        '<section class="category team-card"><p class="team-card-title team-title-lg">근무기록이 다르게 보이나요?</p><p class="team-sub">매장명, 날짜, 실제 출근·퇴근 시간을 확인한 뒤 '+(mgr?'사장님':'매니저나 사장님')+'께 알려 주세요.</p></section>';
+        '<section class="category team-card"><p class="team-card-title team-title-lg">근무기록이 다르게 보이나요?</p><p class="team-sub">매장명, 날짜, 실제 출근·퇴근 시간을 확인한 뒤 '+(mgr?'사장님':'매니저나 사장님')+'께 알려 주세요.</p></section>'+
+        '<section class="category team-card"><p class="team-card-title team-title-lg">계정 삭제</p><p class="team-sub">매니 계정과 연결된 개인정보의 삭제를 요청할 수 있어요.</p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청하기 ↗</a></section>';
     }
     return '';
   }

@@ -28,6 +28,7 @@ const staffAuthAnchor = 'const MANEE_STAFF_AUTH_ENABLED = MANEE_IS_STAGING;';
 if (html.split(staffAuthAnchor).length !== 2) throw new Error('Review staff Auth activation anchor before building.');
 if (environment === 'production') html = html.replace(staffAuthAnchor,'const MANEE_STAFF_AUTH_ENABLED = true; // security-v2 production cutover');
 writeFileSync(resolve(output,'index.html'),html);
+cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
 cpSync(resolve(root,'owner-ui.css'),resolve(output,'owner-ui.css'));
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(config)+');\n');
