@@ -214,3 +214,11 @@ The interruption lasted about four minutes and one second. No permanent
 enrollment or general paid rollout was enabled. Handset expiry display, employee
 session behavior and a cold restart still require independent device evidence;
 the server test does not mark those checks complete.
+
+At 22:03 KST the operator supplied `1000005335.jpg`, showing the Songcheon
+owner's store-access screen after recovery. It displays “매장 이용권 이용 중”,
+confirms Google Play subscription status and says input restrictions do not
+currently apply. The normal post-recovery handset display is now verified.
+The still image does not independently establish a cold restart, the temporary
+expired screen or employee-session write rejection. No repeat purchase or
+permanent enrollment is needed to record this evidence.

@@ -22,6 +22,16 @@ stores. Songcheon remains write-enabled with three open shifts. All five CI
 workflows for the payroll follow-up `87d34c0` succeeded. The Android 1.21 binary
 is unchanged.
 
+The approved bounded expiry test ran on Songcheon at 21:45:51–21:49:52 KST.
+The operator SQL probe confirmed attendance-trigger P4402 rejection and rolled
+back without changing records. The prevalidated recovery timer succeeded and
+removed itself; postflight confirmed zero enrollment, write access restored,
+three open shifts preserved and the Production receipt still ACTIVE. At 22:03
+KST the operator supplied handset screenshot `1000005335.jpg`: Songcheon shows
+“매장 이용권 이용 중”, a confirmed Google Play subscription and no input restriction.
+This establishes the post-recovery handset display. It does not show the
+temporary expired screen, an employee write attempt or the app restart itself.
+
 Play internal testing has accepted Android 1.19/code 20. The pilot owner
 completed a real Play subscription for one store, and the handset reports it
 active while the owner's second store remains unsubscribed. This is useful paid
@@ -89,14 +99,15 @@ GitHub Actions run 38674564107,
 commit c81d059f; the AAB SHA-256 is
 `266fcb8ecaafb0a763cf284c79be0e6cc814625c361a692e0b0a1293f37d12cc`.
 
-Next operational sequence: review the larger billing branch, install the
-published internal 1.20 on the invited tester handset and verify its native
-version and navigation. The Production paid ledger is independently reconciled;
-exercise restore and an expired/canceled enrolled store without harming live
-work, and verify support
-can fulfill a deletion request. Then reconcile Play's declarations and submit
-the Android release for review. Do not describe internal testing as public
-release; the Play Console review/publish outcome is a separate external step.
+Next operational sequence: review the larger billing branch and complete the
+remaining device evidence for the already installed 1.21; do not request another
+1.20 install or paid checkout. Restore/server verification and the post-recovery
+owner screen are established. Temporary expiry display, employee-session refusal
+and cold restart remain separate evidence gaps. The next operational gates are
+support's verified deletion procedure, public checkout and catalog readiness,
+the final candidate review, and consistency with Play's declarations. Submit
+the Android release for review only after those gates are resolved. Internal
+testing is not public release; Play's review/publish outcome is a separate step.
 
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
