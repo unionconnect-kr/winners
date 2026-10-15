@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {generateKeyPairSync} from 'node:crypto';
 import google from '../netlify/functions/lib/google-play-billing.cjs';
 import {createHandler,PRODUCT} from '../supabase/functions/manee-android-billing/handler.mjs';
+import {createProductionAccess} from '../supabase/functions/manee-android-billing/production-access.mjs';
 const storeId='22222222-2222-4222-8222-222222222222';
 const checkoutId='33333333-3333-4333-8333-333333333333';
 const product={packageName:'kr.co.manee.app',productId:PRODUCT,basePlans:[{basePlanId:'monthly',state:'ACTIVE',autoRenewingBasePlanType:{billingPeriodDuration:'P1M'},regionalConfigs:[{regionCode:'KR',newSubscriberAvailability:true}]}]};
@@ -194,4 +195,15 @@ test('catalog and preparation use server allocation, never a client-supplied pro
  const r=await(await h(req({action:'prepare',storeId,productId:'attacker'}))).json();assert.equal(r.productId,sku);assert.equal(queried,sku);
  sku=null;assert.equal((await(await h(req())).json()).reason,'additional_store_not_ready');
  assert.equal((await h(req({action:'prepare',storeId}))).status,503);
+});
+test('public rollout still denies nonowners and rechecks ownership after catalog lookup',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111';
+ const productionAccess=createProductionAccess({url:'https://bhwuuxcrzxespkjlmqxr.supabase.co',enabled:'yes-2026-launch',publicEnabled:'yes-2026-public-launch'});
+ let owner=false,googleCalls=0;
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_push_context'?owner:name==='manee_android_billing_product'?'manee.store3.monthly':name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+  service:{},productionAccess,
+  api:{product:async productId=>{googleCalls++;owner=false;return {...product,productId};}}};
+ const handler=createHandler(options);
+ assert.equal((await handler(req())).status,403);assert.equal(googleCalls,0);
+ owner=true;assert.equal((await handler(req())).status,403);assert.equal(googleCalls,1);
 });

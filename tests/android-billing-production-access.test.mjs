@@ -20,3 +20,16 @@ test('an exact server-only owner/store pair cannot expand to another owner or st
  assert.equal(await allowed({...pair,storeId:'44444444-4444-4444-8444-444444444444'}),false);
  assert.equal(await allowed({userId:undefined,storeId:store}),false);
 });
+test('public checkout requires its own exact switch as well as the production launch switch',async()=>{
+ for(const config of [
+  {url,publicEnabled:'yes-2026-public-launch'},
+  {url,enabled:'yes-2026-launch',publicEnabled:'true'},
+  {url,enabled:'yes-2026-launch',publicEnabled:'yes'},
+  {url:'https://obpkzecgswnfuyhwvncd.supabase.co',enabled:'yes-2026-launch',publicEnabled:'yes-2026-public-launch'}
+ ])assert.equal(await createProductionAccess(config)(pair),false);
+ const access=createProductionAccess({url,enabled:'yes-2026-launch',publicEnabled:'yes-2026-public-launch'});
+ assert.equal(await access(pair),true);
+ assert.equal(await access({userId:'33333333-3333-4333-8333-333333333333',storeId:'44444444-4444-4444-8444-444444444444'}),true);
+ for(const invalid of [{},{userId:owner},{userId:'*',storeId:store},{userId:owner,storeId:'not-a-store'}])
+  assert.equal(await access(invalid),false);
+});

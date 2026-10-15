@@ -27,9 +27,12 @@ const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const service=serviceKey ? createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}}) : null;
 // A deployment alone cannot accept paid receipts. An operator must explicitly
 // enable the switch and name exact owner/store pairs in a server-only secret.
+// A separate exact public-launch value is required to offer checkout to other
+// authenticated owners; deploying this code does not enable that mode.
 const productionAccess=createProductionAccess({url,
  enabled:Deno.env.get('MANEE_ANDROID_PAID_CHECKOUT_ENABLED'),
- pairs:Deno.env.get('MANEE_ANDROID_PAID_PAIRS')});
+ pairs:Deno.env.get('MANEE_ANDROID_PAID_PAIRS'),
+ publicEnabled:Deno.env.get('MANEE_ANDROID_PAID_PUBLIC_ENABLED')});
 Deno.serve(createHandler({api,service,productionAccess,
  testAccess:async({user,storeId}:any)=>{
  const result=await user.rpc('manee_android_billing_test_access',{p_store_id:storeId});

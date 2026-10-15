@@ -180,3 +180,32 @@ This is deterministic database coverage; live lifecycle events remain pending.
 Keep the production write gate unenrolled until its remaining mutation surfaces
 and live entitlement recovery are verified. Do not start another paid checkout
 merely to test store isolation.
+# Public checkout preparation — 2026-10-15 follow-up
+
+The server rollout policy now has a separate, exact public switch:
+`MANEE_ANDROID_PAID_PUBLIC_ENABLED=yes-2026-public-launch`. The existing
+production project pin and `MANEE_ANDROID_PAID_CHECKOUT_ENABLED=yes-2026-launch`
+are still required. Without the new value the original exact owner/store pilot
+allowlist applies. Client input cannot enable this mode. This is eligibility for
+offering and verifying a purchase; it grants neither store membership nor paid
+write access. The endpoint still checks the caller's live owner membership
+before allocation and after Google lookups, validates the selected store's
+server-allocated product, and requires the Korean monthly KRW 9,900 catalog price.
+
+Local tests now exercise a third store with an initially disabled third product:
+no available product returns not-ready; enabling the product allocates slot 3,
+preserves slots 1 and 2, and refuses cross-store restore/token linking. Other
+owners reuse their own independent slot allocation. This proves the existing
+database allocation can grow beyond two slots; it does not create or validate a
+third product in Google Play. The production catalog still has two enabled
+slots. The caller cannot supply a product ID to escape that limit.
+
+Validation: 24 focused rollout, endpoint and real local PostgreSQL-engine tests
+pass, including public-switch defaults/malformed settings, nonowner rejection,
+ownership loss during catalog access, and third-store receipt separation.
+The source is prepared for review. The new switch has not been set, the Edge
+Function has not been redeployed, no additional Play product was created, and
+no live store was enrolled in billing enforcement. Before activation, reconcile
+the complete paid-access boundary and verify enough Play products/plans/offers
+for the offered multi-store service. Do not claim arbitrary extra stores are
+available merely because this policy code exists.

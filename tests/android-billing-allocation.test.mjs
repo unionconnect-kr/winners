@@ -89,3 +89,17 @@ test('checkout claim is scoped to the owner, store, product and request ID',asyn
  await save(record('paid-checkout',store,'manee.store1.monthly',{environment:'Production'}));
  await role(owner);assert.deepEqual(await claim(store,'manee.store1.monthly',first),{status:'active'});
 });
+test('third-store allocation uses the next enabled product and preserves all existing bindings',async()=>{
+ const thirdStore=id(103);
+ await db.exec(`reset role;insert into public.stores(id) values('${thirdStore}');
+ insert into public.store_memberships(user_id,store_id,role) values('${owner}','${thirdStore}','owner');
+ insert into private.android_billing_products values('manee.store3.monthly',3,false);`);
+ assert.equal(await allocate(thirdStore),null);
+ await db.exec("reset role;update private.android_billing_products set enabled=true where slot=3");
+ assert.equal(await allocate(thirdStore),'manee.store3.monthly');
+ assert.equal(await allocate(store),'manee.store1.monthly');
+ assert.equal(await allocate(store2),'manee.store2.monthly');
+ assert.equal(await save(record('third-store',thirdStore,'manee.store3.monthly'),thirdStore),true);
+ await assert.rejects(()=>save(record('third-store',store,'manee.store1.monthly')),/binding conflict/);
+ await assert.rejects(()=>save(record('cross-third',thirdStore,'manee.store3.monthly',{linkedPurchaseToken:'one'}),thirdStore),/Linked purchase binding conflict/);
+});
