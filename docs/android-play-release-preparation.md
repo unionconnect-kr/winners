@@ -31,16 +31,25 @@ the Play catalog currently has two verified product slots per owner. A public
 paid offer to arbitrary new owners or a third store needs an explicit catalog
 and access design. iOS StoreKit paid access remains disabled.
 
-The live page returned HTTP 200 and its function accepted a synthetic request;
-Production contains that one clearly named synthetic pending request because
-its cleanup was blocked by an approval-state error. Do not treat it as a real
-customer case. The signed candidate is from GitHub Actions run 38674564107,
+A fresh live deletion-intake check passed: page HTTP 200, valid and duplicate
+submission HTTP 200 with one pending row, invalid input HTTP 400, and no direct
+anon/authenticated queue or submission-RPC access. Both exact synthetic cases
+(the prior run and this follow-up) were removed; the final queue count is zero.
+Production ledger recheck at 2026-10-15 08:37 UTC confirms one nonsuperseded
+ACTIVE Production receipt, future expiry, and a fresh verification timestamp.
+The write gate still has zero enrolled stores and two enabled product slots.
+Mobile tests pass 64/64 and focused request/billing/access tests pass 29/29.
+Play Console navigation in this follow-up was rejected by automatic approval
+review because it classified a different destination than the requested
+play.google.com origin. No Play state was read or changed; renewed user approval
+is needed before retrying that blocked action. The signed candidate is from
+GitHub Actions run 38674564107,
 commit c81d059f; the AAB SHA-256 is
 `266fcb8ecaafb0a763cf284c79be0e6cc814625c361a692e0b0a1293f37d12cc`.
 
 Next operational sequence: review the larger billing branch, upload and verify
-1.20 in an internal or closed Play track. Reconcile the Production paid ledger,
-exercise restore and an expired/canceled enrolled store without harming live
+1.20 in an internal or closed Play track. The Production paid ledger is now
+independently reconciled; exercise restore and an expired/canceled enrolled store without harming live
 work, and verify support
 can fulfill a deletion request. Then complete Play's declarations and submit
 the Android release for review. Do not describe internal testing as public
