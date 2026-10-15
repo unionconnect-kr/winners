@@ -170,9 +170,15 @@ already published 1.21 binary remains the handset candidate.
 Staging deployment/postflight confirms the new trigger, zero enrolled stores,
 and no anonymous/authenticated direct execution of the trigger function. Security
 advisories are unchanged: the same 25 intentionally private RLS-without-policy
-INFO findings and four pre-existing warnings. Production deployment was rejected
-by automatic approval review because this payroll/employee-record restriction
-extends beyond its recognized attendance authorization. It is NOT installed in
-Production; no retry or indirect execution was used. Obtain explicit approval
-for that precise production change before applying it. No enrollment is part of
-this migration.
+INFO findings and four pre-existing warnings. Automatic approval review initially
+required explicit authorization for the broader payroll restriction. The user
+then approved that precise Production change on 2026-10-15 at 21:29 KST.
+The prepared migration was applied successfully after that approval. Production
+postflight confirms the trigger, zero enrolled stores and no anon/authenticated
+direct execution grant. Production advisors show 21 private RLS-without-policy
+INFO findings, three public-definer warnings and one password-protection warning
+in the categories already tracked. The selected Songcheon store
+still permits writes with its three open shifts preserved. No enrollment,
+receipt changes or business-record writes were performed. All five CI workflows
+for implementation commit `87d34c0` succeeded. No app rebuild is needed for this
+server-only change; 1.21 remains the installed handset version.

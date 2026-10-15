@@ -16,8 +16,11 @@ source CI workflows also succeeded. User screenshots now confirm Play-installed
 successful purchase restore/server verification at 21:17 KST. App restart and
 actual expired attendance on the handset remain unverified. The payroll-setup
 follow-up passes 927 root checks (917 pass, 10 skips, zero failures) and is
-installed on Staging; its Production deployment is blocked by automatic approval
-review pending explicit authorization for the broader payroll restriction.
+installed on Staging and, after the user's explicit 21:29 KST approval, Production.
+Postflight confirms the new trigger, no direct client execution and zero enrolled
+stores. Songcheon remains write-enabled with three open shifts. All five CI
+workflows for the payroll follow-up `87d34c0` succeeded. The Android 1.21 binary
+is unchanged.
 
 Play internal testing has accepted Android 1.19/code 20. The pilot owner
 completed a real Play subscription for one store, and the handset reports it
