@@ -16,8 +16,10 @@ postflight initially found zero deletion requests and zero enrolled stores; anon
 authenticated roles cannot read the queue or call the submission RPC, while
 service_role can submit. The fixed-cost function contains the entitlement skip.
 The public deletion page and intake function are live after narrow PR #23;
-signed Android 1.20/code 21 AAB was built but has not been uploaded to Play or
-installed on a handset.
+signed Android 1.20/code 21 AAB was uploaded and published to the existing
+internal track on 2026-10-15 at 18:08 KST. Play displays latest release
+21 (1.20), active, available to internal testers. Handset installation and
+account-deletion link acceptance remain pending.
 
 Google Play requires an in-app deletion request route and a usable web resource
 for an app that supports account creation. The support team's verified erasure
@@ -39,17 +41,23 @@ Production ledger recheck at 2026-10-15 08:37 UTC confirms one nonsuperseded
 ACTIVE Production receipt, future expiry, and a fresh verification timestamp.
 The write gate still has zero enrolled stores and two enabled product slots.
 Mobile tests pass 64/64 and focused request/billing/access tests pass 29/29.
-Play Console navigation in this follow-up was rejected by automatic approval
-review because it classified a different destination than the requested
-play.google.com origin. No Play state was read or changed; renewed user approval
-is needed before retrying that blocked action. The signed candidate is from
+The earlier navigation approval block was resolved after explicit user approval
+of Google's official google.play/business redirect. The user completed Google
+sign-in. Play then accepted the exact verified AAB, with only optional mapping
+and native-symbol warnings; both internal rollout confirmation steps completed.
+The app dashboard remains 10/11: Data safety is unfinished. Its deletion URL
+was corrected to the live intake URL, and no partial-data-only deletion feature
+was claimed; this was saved as a draft, not finally submitted. Retention/erasure
+instructions and all data-category answers still need reconciliation. The
+signed-in company account is not a tester; use the already invited tester account
+for handset acceptance. No tester permissions were changed. The signed candidate is from
 GitHub Actions run 38674564107,
 commit c81d059f; the AAB SHA-256 is
 `266fcb8ecaafb0a763cf284c79be0e6cc814625c361a692e0b0a1293f37d12cc`.
 
-Next operational sequence: review the larger billing branch, upload and verify
-1.20 in an internal or closed Play track. The Production paid ledger is now
-independently reconciled; exercise restore and an expired/canceled enrolled store without harming live
+Next operational sequence: review the larger billing branch, install the
+published internal 1.20 on the invited tester handset and verify the deletion
+link. The Production paid ledger is now independently reconciled; exercise restore and an expired/canceled enrolled store without harming live
 work, and verify support
 can fulfill a deletion request. Then complete Play's declarations and submit
 the Android release for review. Do not describe internal testing as public
