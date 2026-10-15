@@ -63,6 +63,13 @@ for an app that supports account creation. The support team's verified erasure
 process and Play Data safety answer must be checked before
 public review; see `account-deletion-operations.md`.
 
+Deletion operations now include an operator-only, read-only pre/post inventory
+and an execution runbook. Seven local PostgreSQL-engine checks pass; schema-only
+runs passed on Staging and Production without selecting a customer or changing
+data. Four NO ACTION Auth references and retained crew/history copies require
+case-specific handling. This prepares the operation; it does not establish a
+completed identity-verified erasure or processor/retention consistency.
+
 The Production write gate still has zero enrolled stores. The remaining business
 write surfaces and subscription lifecycle on a handset have not passed the
 release gate. A Production checkout switch grants only exact owner/store pairs;

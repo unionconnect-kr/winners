@@ -70,3 +70,94 @@ null, arrays, numbers, booleans and strings. The Play Data safety questionnaire
 was saved with this live URL and optional reply-email collection, and appears
 in the not-yet-submitted publishing changes. No review submission, real account
 erasure, subscription cancellation or new pending case occurred in this check.
+
+## Operator inventory and case execution — 2026-10-15
+
+`security/account-deletion-preflight.sql` is an operator SQL Editor inventory.
+It installs no function, grants no permission and runs in a read-only,
+repeatable-read transaction that ends with ROLLBACK. Its default empty subject
+reports schema constraints only. After identity verification, set the LOCAL
+subject UUID privately. The selected-subject report counts current Auth sessions,
+direct UUID references (including named references without foreign keys), linked
+crew rows, username references, Storage ownership and other store owners/members.
+It never returns names, phone numbers, contact values, receipt tokens or object
+paths. Internal crew/store IDs and all case reports still belong in restricted
+case records, not Git, PRs or ordinary chat.
+
+Keep the verified username and linked crew IDs in that restricted case record
+before removing identity or memberships. Supply them through the script's LOCAL
+settings for the post-erasure report: after cascades, the original links may no
+longer exist. A username override that conflicts with a current profile is
+rejected. Empty-subject mode rejects any supplied username or crew targets.
+The report is not a complete personal-data search: unstructured text, JSON,
+uploaded content and versions, logs, exported reports, backups and external
+processors need separate review. Reference counts can overlap.
+
+Read-only schema runs on Staging and Production confirmed four current
+NO ACTION Auth references. They block user deletion only when matching records
+exist: `public.push_subscriptions.user_id`,
+`public.franchise_join_requests.requested_by` and `.reviewed_by`, and
+`public.monthly_cost_reviews.completed_by`. Clear the user's notification
+registration, and decide removal or de-identification of the request/reviewer
+records in the specific approved case. `requested_by` is non-nullable, so blindly
+setting every actor column to NULL is not an executable solution. Do not change
+these foreign keys to CASCADE across customer records merely to bypass a failure.
+
+Auth deletion cascades profiles and memberships, but does not itself erase
+`public.crew` identity fields. `private.profile_prior_values`,
+`private.profile_adoption`, `private.staff_access_events` and
+`private.password_reset_events` also contain user UUID references without an
+Auth/profile deletion cascade. Audit old field values and actor/target copies
+alongside current profiles. Deleting a crew row is not a substitute: it cascades
+attendance and some shared history, and `monthly_net_payroll.crew_id` can block
+it. The store DELETE rule archives, so it is not proof of store-data erasure.
+
+For a verified case, use this execution order:
+
+1. Record the verified identity, request ID, affected store/crew IDs, reviewed
+   retention/removal decisions and responsible operator in restricted storage.
+   Run and retain the preflight report there. No public erasure endpoint is added.
+2. Resolve active shared-store ownership before removing an owner. The report
+   identifies sole-owner and shared-owner cases, but does not transfer ownership.
+   Resolve the store's future billing separately: deleting an Auth identity
+   cascades its purchase binding; it does not cancel the Google Play subscription.
+   Do not require a new payment merely to perform account-deletion verification.
+3. Prevent further account access through the established supported Auth
+   administration path and revoke sessions. Verify the actual live-session check,
+   rather than assuming a signed JWT stops working just because identity is gone.
+4. Execute the approved, exact-target removal/de-identification plan for personal
+   copies and deletion blockers. Keep retained employment/shared-store records
+   under the documented case-specific basis. Do not delete whole stores, unrelated
+   employees or their attendance as a side effect of a personal deletion request.
+5. Review uploaded personal content, ownership, versions and multipart uploads.
+   Perform approved object deletion through the Storage API, not DELETE against
+   `storage.objects`: metadata removal alone leaves stored files behind. Review
+   service-owned content too; user ownership counts do not identify all personal
+   files. Then remove the Auth user through the supported administration path.
+6. Run the postflight with the original private identifiers. Verify sessions,
+   account/profile/membership links, personal copies, Storage and the specific
+   approved plan, plus preservation of other employees' records. A zero count
+   for one identifier or a successful Auth delete is not full erasure proof.
+7. Tell the verified requester what was removed and what remains with its basis,
+   duration and backup reflection timing. Only then mark the case completed.
+   Apply the published 30-day post-completion case/contact handling standard;
+   review logs, exports and backups against their actual retention configuration.
+
+Current verification: seven real local PostgreSQL-engine checks pass. They cover
+default schema-only privacy, no-FK historical copies and preserved business data,
+reviewer/subject separation, legacy/current Storage ownership, invalid or
+conflicting inputs, database-enforced read-only behavior and remaining copies
+after synthetic Auth deletion. Staging and Production schema-only runs passed;
+no customer subject was selected, no records were changed and no account was
+deleted remotely. Actual operator identity-verification, case-specific erasure,
+support ownership and processor/retention consistency remain release gates.
+
+The existing official Sites project reports public access and live domain
+`https://manee.co.kr` (saved version 22). Automated reads of its privacy and
+deletion pages, including the older linked Sites hostname, returned HTTP 403 or
+fetch errors. This does not establish that a normal visitor is blocked, but the
+current policy text was not retrieved for processor/retention reconciliation.
+No audience, site source, publication or legal-page link was changed.
+
+Current Supabase references: [User Management](https://supabase.com/docs/guides/auth/managing-user-data)
+and [Delete Objects](https://supabase.com/docs/guides/storage/management/delete-objects).
