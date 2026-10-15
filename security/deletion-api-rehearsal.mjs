@@ -40,7 +40,7 @@ async function rehearse() {
         using (bucket_id = '${bucket}' and (storage.foldername(name))[1] = auth.uid()::text);`,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    for (const label of ['target', 'colleague']) {
+    for (const label of ['target', 'colleague', 'premature-delete']) {
       const email = `${label}-${randomUUID()}@example.test`;
       const password = `${randomUUID()}Aa9!`;
       const { user } = ok(await admin.auth.admin.createUser({ email, password, email_confirm: true }), 'create fixture user');
@@ -54,7 +54,7 @@ async function rehearse() {
       files.push({ path, content, client, session, id: user.id });
       ok(await client.storage.from(bucket).upload(path, content, { contentType: 'text/plain' }), 'authenticated fixture upload');
     }
-    const [target, colleague] = files;
+    const [target, colleague, premature] = files;
     assert.match(target.id, /^[0-9a-f-]{36}$/);
     const ownedCount = execFileSync('psql', ['-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c',
       `select count(*) from storage.objects where bucket_id = '${bucket}' and owner_id = '${target.id}' and name = '${target.path}'`], {
@@ -64,10 +64,17 @@ async function rehearse() {
     check(ownedCount === '1', 'target owns uploaded object');
     const before = ok(await admin.storage.from(bucket).download(target.path), 'download fixture');
     check(await before.text() === target.content, 'target file bytes readable before deletion');
-    const blocked = await admin.auth.admin.deleteUser(target.id);
-    check(!!blocked.error, 'Auth deletion refuses an owned Storage object');
-    const stillPresent = ok(await admin.auth.admin.getUserById(target.id), 'read blocked user');
-    check(stillPresent.user.id === target.id, 'blocked deletion preserves Auth identity');
+    // Some versions refuse owned-object deletion; others allow Auth deletion
+    // while leaving bytes behind. Neither behavior replaces Storage erasure.
+    const prematureDelete = await admin.auth.admin.deleteUser(premature.id);
+    const prematureIdentity = await admin.auth.admin.getUserById(premature.id);
+    if (prematureDelete.error) {
+      check(prematureIdentity.data?.user?.id === premature.id, 'premature Auth deletion blocked with identity preserved');
+    } else {
+      check(!!prematureIdentity.error && !prematureIdentity.data.user, 'premature Auth deletion allowed without Storage erasure');
+    }
+    const retainedBytes = ok(await admin.storage.from(bucket).download(premature.path), 'read premature-deletion file');
+    check(await retainedBytes.text() === premature.content, 'Auth deletion alone does not erase uploaded file bytes');
     ok(await admin.auth.admin.signOut(target.session.access_token, 'global'), 'revoke target sessions');
     const refreshAfterRevoke = await target.client.auth.refreshSession({ refresh_token: target.session.refresh_token });
     check(!!refreshAfterRevoke.error && !refreshAfterRevoke.data.session, 'revoked refresh token cannot renew session');

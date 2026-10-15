@@ -236,7 +236,7 @@ browser connection check.
 separate, disposable local Supabase stack with real Auth and Storage services.
 The harness refuses hosted URLs (including Production and Staging), uses no
 repository secrets, blocks HTTP redirects, uploads synthetic user-owned files,
-checks owned-file deletion refusal, revokes refresh sessions, removes the target
+checks the actual owned-file deletion behavior, revokes refresh sessions, removes the target
 file through Storage API, deletes the Auth identity and checks the colleague's
 file bytes/session. Exact-fixture cleanup and unconditional stack/volume teardown
 follow. Only PASS labels are retained as a CI artifact; local credentials and
@@ -256,3 +256,11 @@ reservation disposal standard. Deletion cases have `reviewed_at`, not a distinct
 completion timestamp: apply the published 30-day standard through documented
 manual completion/disposal records until an accurate mechanism is verified.
 Do not infer case disposal from unrelated billing-event/push-delivery cleanup.
+
+The first disposable API execution (run `38756909297`) found a real version
+difference: local Auth Admin deletion succeeded while the user-owned Storage file
+was still present. The original refusal-only assertion failed, and exact cleanup
+and stack teardown succeeded. The corrected rehearsal uses a separate premature-
+deletion fixture to verify that Auth removal is not file erasure, whether a given
+version refuses or permits it. The target follows Storage-first removal. Do not
+rely on an automatic owned-file refusal or treat Auth success as Storage proof.
