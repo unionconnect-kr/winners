@@ -30,8 +30,13 @@ successfully without changing the canonical web source or production settings.
 Root regression: 980 checks, 969 passed, zero failed, 11 environment-dependent
 skips. The root has no npm test script; these ran with Node's test runner over
 the security and tests directories.
-Signed Xcode compilation and a physical save/share action must still be checked;
-JavaScript checks alone do not establish iPhone behavior.
+Signed Xcode archive/export succeeded for exact source
+`d94bd7da08e83002966f65c0ec5386d5f0869267` in GitHub run `38786406361`.
+Artifact `manee-ios-signed-5-1` contains the signed IPA, version 1.0 / build
+1.5.1, exported at 03:34 KST. Profile/team/app/production-APNs checks, native
+compilation and signature validation succeeded. The TestFlight upload step was
+skipped as designed. A physical save/share action must still be checked;
+successful compilation does not establish iPhone behavior.
 
 ## Operating boundary and remaining work
 
