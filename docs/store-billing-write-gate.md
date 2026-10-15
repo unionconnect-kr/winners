@@ -1,0 +1,292 @@
+# Staged business write enforcement
+
+
+Added explicit per-store billing enrollment, initially empty. Android ledger
+entitlement now guards 18 store-keyed business tables at the database, including
+writes through SECURITY DEFINER RPCs. Reads and existing membership checks remain
+unchanged. Both OLD and NEW store IDs are checked, so moving a row cannot bypass
+an expired source/destination store. The caller cannot alter enrollment or call
+the internal entitlement predicate. A member-facing invoker RPC returns only
+`enforced` and `canWrite`; it checks live session, membership and account ban.
+
+Confirmed on isolated PostgreSQL (PGlite), 4 scenario tests: empty enrollment;
+unauthorized policy access; all 18 write triggers; read preservation; cross-store
+updates; active/grace/canceled-before-expiry; expiry/hold/pause/pending; stale
+observations; Sandbox/Production separation; staff access restoration; superseded
+receipts and revoked owner membership. Staging deployment confirms 17 triggers,
+0 enrolled stores, no anonymous status grant and no client enrollment/probe grant.
+
+This is an Android pilot, not complete paid rollout. On 2026-10-14, the existing
+explicit-enrollment migration was applied to Production with zero enrolled stores.
+No live store is restricted. Attendance was originally excluded; the selected
+launch policy below supersedes that exclusion. Identity/account recovery, notifications, crew
+profile changes, indirect child records and storage are outside this first gate.
+Full account-erasure/cascade behavior, iOS entitlements, production-receipt
+refresh behavior, the remaining write surfaces, and on-device expiry behavior
+must be verified before production enrollment. Per-store Android
+product allocation, product-aware receipt verification and refresh are now
+implemented. Two separate Play products were verified simultaneously active in
+Sandbox on 2026-10-14; see `android-multi-store-billing.md`. This does not enable
+production billing or production write enforcement.
+
+Initial live recheck on 2026-10-14: staging and production each had 17 write-gate triggers
+and 0 enrolled stores. The authenticated access RPC exists in Production; anonymous
+callers cannot execute it. Three known owner stores still evaluate as write-entitled
+because none is enrolled.
+
+Android 1.16 adds an owner-facing per-store 이용권 screen to the native 더보기 menu.
+It reads the authenticated membership-checked access RPC and displays sandbox
+purchases separately from write entitlement. When the database rejects a direct
+business mutation with P4402, the owner is shown that status screen; staff are
+directed to the owner. An unavailable RPC is an unknown state, never an access
+grant. This is an internal setup build. Before the status migration, Production
+showed a connection-pending status; after refresh it reports the store as
+unenrolled and unrestricted. The
+status screen does not offer a real purchase until production receipt validation
+and the broader gate are complete.
+
+For a missing production status RPC (PGRST202), the screen says that the
+connection is being prepared; other failures remain unknown. Neither path
+claims write access. Android 1.16 / code 17 was rebuilt from commit
+`ce4e14cd7b9f9326b9379bef0e288763ddbe0520`: Actions run `38541291146`
+passed mobile tests, signed bundle verification and artifact upload. Final AAB
+SHA-256: `82355b47d77637d46802ff05b657960f42d6e1d44aea4cdb8e27c2373ade569e`.
+On-device screenshots confirm the owner screen opens for two selected stores;
+the refreshed Production RPC display remains to be checked on device.
+
+Security advisor review: the new private deny-by-default table reports informational
+RLS-without-policy, intentionally with all client grants revoked. Unrelated staging
+warnings remain for public SECURITY DEFINER ratio/snapshot RPCs and disabled leaked
+password protection. See https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection .
+
+Follow-up migration `20261014093800_monthly_net_payroll_billing_gate.sql` adds
+`monthly_net_payroll` as the 18th direct-key write surface. It uses the same
+OLD/NEW store checks; unenrolled stores remain unrestricted, and reads remain
+available. Staging confirms 18 gates, zero enrolled stores and an unrestricted sample store.
+This does not enroll a store or initiate a charge.
+
+The follow-up migration `20261014095000_sales_report_photo_billing_gate.sql`
+resolves a photo record's parent sales report on both sides of a mutation.
+This covers insert/update/delete of the child table while preserving reads;
+announcement read acknowledgements and attendance remain accessible. There
+are no configured Storage buckets in the connected staging or production
+projects as of this audit, so this migration adds no Storage policy.
+No store is enrolled or charged by this change.
+
+Production follow-up on 2026-10-14: the photo-child migration is installed.
+Production has 18 direct-key triggers and one photo-child trigger, zero enrolled
+stores, and the two sampled owner stores remain write-entitled. The Android
+staging regression workflow for commit `a6b078edbd2cc68abfc0b731a3bda5ecb8ec71e1`
+passed the app/security regression job before production deployment.
+
+## Read preservation before enrollment
+
+Audit on 2026-10-15 found that the owner fixed-cost loader calls
+`manee_prepare_fixed_costs` before its SELECT. This RPC copies previous-month
+costs and materializes recurring templates. When enrollment denies writes,
+its insert trigger can reject that RPC and the existing app then clears the
+fixed-cost list as a load failure. Migration
+`20261015112000_fixed_cost_read_billing_gate.sql` keeps membership and month
+checks, then returns without materializing costs if the store is not currently
+write-entitled. It leaves existing rows readable and the ordinary database
+write trigger unchanged. Local PostgreSQL tests cover expired enrollment with
+an existing row and both automatic write paths, recovery with a fresh receipt,
+another unenrolled store, and direct-write rejection. This migration was
+applied to Staging and Production on 2026-10-15. Production postflight confirms
+the function includes the entitlement skip and zero stores are enrolled.
+
+The original direct client mutation audit found these deliberate exclusions: `stores`
+settings (including the location used for employee clock-in), `crew` and
+membership/identity maintenance, `attendance` and edit requests, read
+acknowledgements, notification subscriptions, and tax reminder acknowledgements.
+No expiry behavior for those paths has been approved or enabled. Store creation,
+renaming, deletion and franchise management have separate account/recovery
+effects and must not be swept into an all-row `stores` billing trigger. The
+original gate therefore covered its listed business tables, not every possible
+mutation in the application. Production enrollment remains at zero until the
+remaining boundary and on-device lifecycle checks are complete.
+
+## Selected launch expiry policy — 2026-10-15
+
+The operator explicitly selected blocking attendance as well as business input
+when a store's subscription is no longer entitled. Migration
+`20261015130000_attendance_billing_gate.sql` adds the existing OLD/NEW store gate
+to `attendance` and `attendance_edit_requests`. It covers real employee clock
+RPCs, owner/manual edits/deletion, employee confirmations/correction requests,
+and approvals running through SECURITY DEFINER functions. Clock-out is also
+blocked if entitlement expires during an open shift; the existing open record
+remains unchanged and readable. Active/grace receipts and cancellation before
+expiry remain entitled; a fresh valid renewal/restore reopens attendance.
+
+The migration adds no enrollment and changes no read, identity/recovery,
+purchase or restore permissions. Other identity/store/notification exclusions
+above remain separate from business input. Native 1.21/code 22 is prepared with
+the corrected expiry explanation; 1.20 must not be used as acceptance evidence
+for this new policy because its access screen still says attendance is allowed.
+
+Six integration scenarios use the real staff clock/correction/confirmation and
+approval SQL against the existing RLS fixture. They cover unenrolled operation,
+expired clock-in/out, preserved open records/reads, owner and cross-store
+mutations, pending correction atomicity, renewal/restoration, cancellation,
+Sandbox isolation, account hold and stale receipt checks. The staff UI test
+also confirms a P4402 refusal keeps login and does not claim a successful clock.
+The migration is installed on Staging and Production. Both postflights
+confirm both triggers, zero enrolled stores, and no client enrollment or
+internal-predicate grants. Handset acceptance remains required before enrolling
+a live store. The updated source passes 923 root checks: 913 passed, zero failed,
+10 environment-dependent skips, plus 64/64 mobile checks. These do not prove a
+new signed binary or live handset acceptance.
+
+## Crew payroll follow-up — 2026-10-15
+
+The 1.21 handset screenshots confirm Play installation, the Songcheon active
+subscription screen and the new expiry explanation. At 21:17 KST the handset
+reports Google Play purchase/server verification complete after restore. A
+Production read confirms an ACTIVE, unexpired receipt checked at 21:17 KST.
+There is still no enrolled live store. A restart and actual expired attendance
+on the handset are not established by those screenshots.
+
+The crew exception also allowed customer updates to salary, wage type, tax,
+weekly allowance, insurance, probation, work condition and weekly hours. Migration
+`20261015122057_crew_payroll_billing_gate.sql` narrows that exception: those
+changes, payroll-setup completion, nonzero-pay crew creation, crew deletion and
+cross-store movement require the original store entitlement. Both OLD/NEW stores
+are checked. Existing RLS and record-identity restrictions remain in force.
+
+The established owner-approved zero-pay account connection stays available, as
+do personal-profile corrections and offboarding fields. A zero-pay identity
+cannot acquire paid wages or complete payroll setup while expired. Backend
+cleanup without a customer JWT remains possible. Hire/resignation dates, role
+and account/identity maintenance retain their existing permission boundaries;
+this is a financial-setup gate, not a claim to reject every crew-field change.
+
+Ten combined attendance/payroll integration scenarios pass, including real
+staff approval RPCs, restored financial setup, direct bypass attempts, preserved
+identity edits and backend cleanup. Root regression: 927 total, 917 pass, zero
+failures and 10 environment-dependent skips. No mobile assets changed, so the
+already published 1.21 binary remains the handset candidate.
+
+Staging deployment/postflight confirms the new trigger, zero enrolled stores,
+and no anonymous/authenticated direct execution of the trigger function. Security
+advisories are unchanged: the same 25 intentionally private RLS-without-policy
+INFO findings and four pre-existing warnings. Automatic approval review initially
+required explicit authorization for the broader payroll restriction. The user
+then approved that precise Production change on 2026-10-15 at 21:29 KST.
+The prepared migration was applied successfully after that approval. Production
+postflight confirms the trigger, zero enrolled stores and no anon/authenticated
+direct execution grant. Production advisors show 21 private RLS-without-policy
+INFO findings, three public-definer warnings and one password-protection warning
+in the categories already tracked. The selected Songcheon store
+still permits writes with its three open shifts preserved. No enrollment,
+receipt changes or business-record writes were performed. All five CI workflows
+for implementation commit `87d34c0` succeeded. No app rebuild is needed for this
+server-only change; 1.21 remains the installed handset version.
+
+## Bounded live expiry test — 2026-10-15
+
+At 21:39 KST the operator approved a maximum five-minute interruption for the
+selected Songcheon store, including its three open attendance records. Before
+activation, two five-second pg_cron canaries succeeded and unscheduled themselves.
+The second exercised the exact conditional deadline, scoped deletion and
+self-unscheduling structure used for recovery, without matching any enrollment.
+
+The live test began at 21:45:51.087 KST, with recovery scheduled for 21:49:51.087
+KST. A single transaction scheduled the five-second recovery job before inserting
+the exact store's temporary Sandbox enrollment. It checked the named active
+store, zero prior enrollments, a fresh ACTIVE Production receipt and expired
+Sandbox evidence. The resulting entitlement was false. No receipt, subscription,
+customer permission or business record was changed. Recovery only matches the
+selected store, Sandbox environment and this test's exact enabled_at marker.
+
+A rollback-only operator SQL probe with a synthetic customer subject confirmed
+that the live attendance trigger raises P4402 on an unchanged-field update.
+The target was one existing open record; all three remained open and no update
+persisted. This verifies the database trigger, not an employee handset session
+or client RLS. The user was asked to refresh the store-access screen during the
+window. A handset screenshot of the expired state is not yet established.
+
+The recovery job succeeded at 21:49:52.405 KST and removed itself. Postflight
+confirmed zero enrolled stores, restored write entitlement, no failed timer runs
+and the same three open attendance records. The Production receipt remained
+ACTIVE, with its original 2026-11-14T20:12:12.218Z expiry and a fresh worker check.
+The interruption lasted about four minutes and one second. No permanent
+enrollment or general paid rollout was enabled. Handset expiry display, employee
+session behavior and a cold restart still require independent device evidence;
+the server test does not mark those checks complete.
+
+At 22:03 KST the operator supplied `1000005335.jpg`, showing the Songcheon
+owner's store-access screen after recovery. It displays “매장 이용권 이용 중”,
+confirms Google Play subscription status and says input restrictions do not
+currently apply. The normal post-recovery handset display is now verified.
+The still image does not independently establish a cold restart, the temporary
+expired screen or employee-session write rejection. No repeat purchase or
+permanent enrollment is needed to record this evidence.
+
+## Public rollout cohort — new stores selected on 2026-10-15
+
+A Production aggregate read at 2026-10-15 22:40:51 KST found 15 nonarchived stores
+with a currently active, nonbanned owner. One has a current valid Production
+entitlement and 14 do not; enforcement enrollment remains zero. There are 17
+open attendance rows across this selected store set (not proof of 17 current
+workers). The counts do not classify internal/QA stores as paying customers.
+
+Opening public checkout and enrolling store write enforcement are separate
+changes. Automatically enrolling all existing stores would restrict business
+and attendance input for the 14 currently unentitled stores. At 22:45 KST the
+operator selected option 1: new stores only, keeping existing stores unchanged
+initially. No transition date or paid conversion for existing stores is implied.
+
+Migration `20261015134721_new_store_billing_rollout.sql` adds one private launch
+record, an operator-only idempotent launch action and an AFTER INSERT store
+trigger. Deployment leaves launched_at NULL and enrolls no store. After launch,
+each actual new INSERT atomically receives Production enforcement, including
+owner signup through the existing service-role bootstrap RPC. The trigger never
+uses client-controlled created_at and never backfills or enrolls a store on
+UPDATE, rename, archive or restoration. Prelaunch stores are preserved even if
+their timestamps are edited. Stores created before the future launch action
+also remain prelaunch stores; the observed 15-store count is not a frozen ID list.
+
+Shared policy-row locks allow concurrent inserts and serialize them with launch.
+A prelaunch insert must commit/roll back before launch completes; an insert
+waiting behind launch sees the activated policy. A missing policy fails the
+new insert closed. The private launch function uses SECURITY INVOKER; only the
+trigger uses SECURITY DEFINER with an empty search_path. No anon/authenticated/
+service_role policy-table or function access is granted. Existing store RLS and
+the owner/signup permissions are unchanged. This is enrollment, not payment or
+membership authorization; normal verified Production receipts still decide
+whether an enrolled store can write. Sandbox does not unlock it.
+
+Eight focused PostgreSQL-engine scenarios pass, covering preserved stores,
+idempotent launch, edited timestamps, role isolation, business/real clock denial,
+Production recovery versus Sandbox/expiry, service-role signup and atomic failure.
+Root regression: 948 checks, 937 pass, zero failures, 11 environment-dependent
+skips. A new disposable PostgreSQL concurrency suite exercises both launch/insert
+lock orders, stale repeatable-read rejection and parallel postlaunch creation;
+the Android CI requires it to pass without skipping alongside the three existing
+concurrency suites. Commit `bf521e1` passed all five CI workflows, including the
+real PostgreSQL rollout suite with zero skips (run `38747043268`, job
+`116463302415`). The complete CI regression also matched 948 / 937 / 0 / 11.
+
+Staging has the migration installed. A rollback-only activation/signup rehearsal
+confirmed a prelaunch store stays writable, no existing store is enrolled, the
+actual service-role owner bootstrap succeeds, and its unpaid new store receives
+Production enforcement and denies writes. Launch and all synthetic data were
+rolled back. The final policy is unlaunched, enrollment zero and no client launch
+grant. Advisors add only the intentionally private RLS-without-policy INFO entry
+(25 to 26); the existing three exposed-definer and one password warnings remain.
+See [RLS-without-policy explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+The same migration was installed on Production after those CI checks. At
+23:02:30 KST, postflight confirms launched_at NULL, enrollment zero, all 31 store
+rows retained, the INSERT trigger enabled, no authenticated policy update grant
+or service-role launch execution grant, and Songcheon still write-entitled.
+Production advisors changed only the intentional private policy-table INFO
+(21 to 22); the existing three exposed-definer and one password warnings remain.
+No Production launch action was called, and no receipt or business data changed.
+
+Before the real launch action, finish the handset/public-readiness gates, deploy
+and enable the approved public checkout path, and verify sufficient Play catalog
+slots/offers. Activating enforcement while new owners cannot purchase/restore is
+not a valid launch sequence. No public switch or real launch action has been
+activated; the current Android 1.21 assets have not changed.

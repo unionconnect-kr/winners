@@ -364,6 +364,7 @@
   /* Staging only: the banner is a flex item of <body>; stack it above the app instead of squeezing the app beside it. */
 body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:center}
 .environment-banner{width:100%;max-width:480px;margin:0 auto;padding:8px 12px;text-align:center;background:#fff3cd;color:#674c00;font-size:12px;}
+.reservation-time-fields{display:grid;grid-template-columns:90px minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center}.reservation-time-fields .field-input{min-width:0;width:100%;box-sizing:border-box}.reservation-time-fields input{text-align:center}
 </style>
 <link rel="stylesheet" href="/owner-ui.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>
@@ -1400,22 +1401,16 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
-  function setStoreLocation(storeName){
-    if(!navigator.geolocation){ showToast("이 기기에서는 위치 기능을 지원하지 않아요."); return; }
+  async function setStoreLocation(storeName){
+    const storeId=state.storeIdMap[storeName],alive=businessContextGuard();
+    if(!storeId){showToast('매장 정보를 찾지 못했어요.');return;}
     showToast("현재 위치를 확인하는 중이에요…");
-    navigator.geolocation.getCurrentPosition(async (pos)=>{
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const storeId = state.storeIdMap[storeName];
-      if(!storeId){ showToast("매장 정보를 찾지 못했어요."); return; }
-      try{
-        await db.from('stores').update({ lat, lng }).eq('id', storeId);
-        state.storeLocationMap[storeName] = { lat, lng };
-        render();
-        showToast(storeName+"의 위치를 저장했어요.");
-      }catch(e){ showToast("위치 저장에 실패했어요."); }
-    }, (err)=>{
-      showToast("위치를 가져오지 못했어요. 위치 권한을 허용해 주세요.");
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    try{
+      const pos=await staffCoordinates();if(!alive())return;
+      const saved=await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',storeId).select('id,lat,lng'));
+      if(!alive())return;
+      state.storeLocationMap[storeName]={lat:saved.lat,lng:saved.lng};render();showToast(storeName+'의 위치를 저장했어요.');
+    }catch(e){if(alive())showToast(staffErrorMessage(e));}
   }
   async function submitRenameStore(oldName){
     const input = document.getElementById("rename-store-input");
@@ -1543,7 +1538,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function clearStaffAuthView(){
     maneeViewEpoch++;   // in-flight lookups of the previous account are discarded when they arrive
     state.ownerReportHomeNotices=null;
-    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;
+    state.pushSubscribed=false;state.pushBusy=false;state.pushRegistrationError=null;state.ownerSetupLocationResult=null;
     state.staffClockBusy=null;state.staffAttendanceBusy=null;
     state.reservationSaving=null;state.checklistLoadFailed=false;state.homeChecklistFailed=false;
     state.salesReportSaving=null;
@@ -1568,6 +1563,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     state.role='landing'; state.landingMode='default'; state.loading=false;
   }
   function staffErrorMessage(error){
+    if(error && error.code==='P4402') return '매장 이용권이 만료되어 출퇴근과 업무 입력이 제한됩니다. 사장님께 구독 확인을 요청해 주세요. 기존 기록은 조회할 수 있어요.';
     if(error && error.code==='42501') return '접근 권한을 다시 확인해 주세요. 로그인이 필요하거나 매장 연결이 해제됐을 수 있어요.';
     const message=String(error && error.message || '');
     if(message.includes('Store location')) return '사장님이 매장 위치를 설정한 뒤 출퇴근을 기록할 수 있어요.';
@@ -1669,14 +1665,19 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(pos<0) state.attendance.push(value); else state.attendance[pos]=value;
     return value;
   }
+  function locationErrorMessage(error){
+    if(error?.reason==='precise-location-required')return '휴대폰 설정 → 앱 → 매니 테스트 → 권한 → 위치에서 정확한 위치 사용을 켜 주세요.';
+    if(error?.reason==='position-inaccurate')return '현재 위치의 오차가 커요. 매장 안의 창가 등 위치를 잘 확인할 수 있는 곳에서 다시 시도해 주세요.';
+    if(error?.code===1)return '위치 접근을 허용한 뒤 다시 시도해 주세요.';
+    if(error?.code===2)return '현재 위치를 확인하지 못했어요. 휴대폰의 위치 기능을 켠 뒤 다시 시도해 주세요.';
+    if(error?.code===3)return '위치 확인 시간이 초과됐어요. 매장 안에서 다시 시도해 주세요.';
+    return '현재 위치를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
   function staffCoordinates(){
     return new Promise((resolve,reject)=>{
       if(!navigator.geolocation){ reject(new Error('이 기기는 위치 확인을 지원하지 않아요.')); return; }
       navigator.geolocation.getCurrentPosition(p=>resolve({current_lat:p.coords.latitude,current_lng:p.coords.longitude}),
-        error=>reject(new Error(error?.code===1?'출퇴근 기록을 위해 위치 접근을 허용해 주세요.':
-          error?.code===2?'현재 위치를 확인하지 못했어요. 휴대폰의 위치 기능을 켠 뒤 다시 시도해 주세요.':
-          error?.code===3?'위치 확인 시간이 초과됐어요. 매장 안에서 다시 시도해 주세요.':
-          '현재 위치를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.')),{enableHighAccuracy:true,timeout:10000});
+        error=>reject(new Error(locationErrorMessage(error))),{enableHighAccuracy:true,timeout:10000});
     });
   }
   function staffAttendanceGuard(){
@@ -1759,6 +1760,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       '<div class="staff-personal-fields"><h3>매장에 전달할 내 정보</h3><p>연락처는 선택 입력이에요. 신규 직원으로 승인되면 매장에 전달돼요. 급여·근무조건은 사장님이 설정해요.</p>'+
       '<label for="staff-signup-phone">연락처 (선택)</label><input id="staff-signup-phone" type="tel" maxlength="24" autocomplete="tel" placeholder="010-0000-0000">'+
       '</div>'+
+      '<label class="signup-age-check" for="staff-signup-age-confirmed"><input id="staff-signup-age-confirmed" type="checkbox"><span>만 14세 이상입니다. (필수)</span></label>'+
+      '<p class="crew-code-hint">만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p>'+
       staffAuthButton('signup','가입하기')+'</div>'+staffAuthButton('login-screen','로그인 화면으로');
   }
   function renderStaffPersonalSummary(personal){
@@ -1949,7 +1952,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         if(!usernameCheck || usernameCheck.username!==normalizedUsername || !usernameCheck.available) throw new Error('아이디 중복확인을 먼저 해주세요.');
         const personal={phone:read('staff-signup-phone').trim()};
         if(personal.phone && (!/^[+0-9 ()-]{7,24}$/.test(personal.phone)||personal.phone.replace(/[^0-9]/g,'').length<7||personal.phone.replace(/[^0-9]/g,'').length>15)) throw new Error('연락처를 확인해 주세요.');
-        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal});
+        if(document.getElementById('staff-signup-age-confirmed')?.checked!==true) throw new Error('만 14세 이상임을 확인해 주세요.');
+        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal,age_14_plus_confirmed:true});
         const session=data.session || (await callManeeAuthApi('manee-login',{username,password})).session;
         await applyManeeAuthSession(session); await restoreManeeAuthIdentity(null,true); showToast('스텝 계정을 만들었어요. 매장 연결코드를 입력해 주세요.');
       }else if(action==='preview-link'){
@@ -2365,7 +2369,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
             state.myUsername = record.username;
             state.myStores = await computeMyStoresDb(record.username);
             await loadAllForStore(record.store);
-            state.onboardingStep = (state.storeOnboardingMap && !state.storeOnboardingMap[record.store]) ? ownerSetupInitialStep() : null;
+            state.onboardingStep = ownerSetupStartupStep();
             render();
             return;
           }
@@ -2412,7 +2416,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     state.store = storeName;
     await loadAllForStore(storeName);
     if(alive && !alive()) return;   // a newer login/logout took over while the stores were loading
-    state.onboardingStep = (state.storeOnboardingMap && !state.storeOnboardingMap[storeName]) ? ownerSetupInitialStep() : null;
+    state.onboardingStep = ownerSetupStartupStep();
     render();
   }
   async function switchOwnerStore(storeName){
@@ -2602,12 +2606,13 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const normalizedUsername = username.normalize("NFKC").trim().toLowerCase();
     const usernameCheck = state.ownerRequestUsernameCheck;
     if(!usernameCheck || usernameCheck.username !== normalizedUsername || !usernameCheck.available){ showToast("아이디 중복확인을 먼저 해주세요."); return; }
+    if(document.getElementById('owner-request-age-confirmed')?.checked!==true){showToast('만 14세 이상임을 확인해 주세요.');return;}
     state.ownerSignupBusy=true;
     const submitButton=document.getElementById("submit-owner-request-btn");
     if(submitButton){submitButton.disabled=true;submitButton.textContent="가입 처리 중…";}
     showToast("계정을 만드는 중이에요…");
     try{
-      const payload = { username, password:pw, display_name:name, store_name:storeName };
+      const payload = { username, password:pw, display_name:name, store_name:storeName, age_14_plus_confirmed:true };
       if(franchiseCode) payload.franchise_code = franchiseCode;
       const data = await callManeeAuthApi("manee-signup", payload);
       let session = data.session;
@@ -3007,6 +3012,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const password = pwInp.value||"";
     if(!franchiseName || !displayName || !username || !password){ showToast("모든 항목을 입력해 주세요."); return; }
     if(password.length < 8){ showToast("비밀번호는 8자 이상으로 만들어 주세요."); return; }
+    if(document.getElementById("new-franchise-age-confirmed")?.checked!==true){showToast("계정 사용자가 만 14세 이상임을 확인해 주세요.");return;}
     showToast("계정을 만드는 중이에요…");
     try{
       const { data:sessionData, error:sessionError } = await db.auth.getSession();
@@ -3014,7 +3020,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       const res = await fetch(SUPABASE_URL+"/functions/v1/manee-franchise-signup", {
         method: "POST",
         headers: { "Content-Type":"application/json", "apikey":SUPABASE_ANON_KEY, "Authorization":"Bearer "+sessionData.session.access_token },
-        body: JSON.stringify({ franchise_name:franchiseName, display_name:displayName, username, password })
+        body: JSON.stringify({ franchise_name:franchiseName, display_name:displayName, username, password, age_14_plus_confirmed:true })
       });
       const data = await res.json().catch(()=>null);
       if(!res.ok || !data || data.ok!==true) throw new Error((data&&data.message)||"계정을 만들지 못했어요.");
@@ -3896,6 +3902,42 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const button=document.getElementById('add-reservation-btn');
     if(button){button.disabled=busy;button.textContent=busy?'등록 중…':'예약 등록';}
   }
+  function reservationTime24(period,hour,minute){
+    if(!hour&&!minute)return '';
+    if(!['AM','PM'].includes(period)||!/^\d{1,2}$/.test(hour)||!/^\d{1,2}$/.test(minute))return null;
+    const h=Number(hour),m=Number(minute);
+    if(h<1||h>12||m<0||m>59)return null;
+    return String(h%12+(period==='PM'?12:0)).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  function readReservationTime(){
+    const hour=document.getElementById('res-hour-input');
+    if(!hour)return document.getElementById('res-time-input')?.value||'';
+    return reservationTime24(document.getElementById('res-period-input').value,hour.value,document.getElementById('res-minute-input').value);
+  }
+  function renderReservationTimeInput(){
+    const d=state.reservationDraft||{},parts=(d.time||'').split(':'),h=parts.length===2?Number(parts[0]):null;
+    const period=d.period||(h!==null&&h<12?'AM':'PM');
+    const hour=d.hour??(h===null?'':String(h%12||12)),minute=d.minute??parts[1]??'';
+    return '<div style="margin-top:8px"><span class="field-label">시간</span><div class="reservation-time-fields" role="group" aria-label="예약 시간">'+
+      '<select id="res-period-input" class="field-input" aria-label="오전 오후"><option value="AM"'+(period==='AM'?' selected':'')+'>오전</option><option value="PM"'+(period==='PM'?' selected':'')+'>오후</option></select>'+
+      '<input id="res-hour-input" class="field-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="시" aria-label="예약 시, 1부터 12" autocomplete="off" value="'+escapeHtml(hour)+'">'+
+      '<span aria-hidden="true">:</span><input id="res-minute-input" class="field-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="분" aria-label="예약 분, 0부터 59" autocomplete="off" value="'+escapeHtml(minute)+'">'+
+      '<input id="res-time-input" type="hidden" value="'+escapeHtml(d.time||'')+'"></div></div>';
+  }
+  function bindReservationTimeInputs(){
+    const hour=document.getElementById('res-hour-input'),minute=document.getElementById('res-minute-input'),period=document.getElementById('res-period-input');
+    if(!hour||!minute||!period)return;
+    const sync=()=>{
+      state.reservationDraft=state.reservationDraft||{};
+      Object.assign(state.reservationDraft,{hour:hour.value,minute:minute.value,period:period.value,time:readReservationTime()||''});
+      document.getElementById('res-time-input').value=state.reservationDraft.time;
+    };
+    [hour,minute].forEach(input=>{
+      input.addEventListener('input',()=>{input.value=input.value.replace(/[^0-9]/g,'').slice(0,2);sync();});
+      input.addEventListener('blur',()=>{if(input===minute&&/^\d$/.test(input.value))input.value=input.value.padStart(2,'0');sync();});
+    });
+    period.addEventListener('change',sync);
+  }
   async function addReservation(){
     if(state.reservationSaving?.storeId===currentStoreId()&&state.reservationSaving?.userId===state.authProfile?.user_id)return;
     const dateInp = document.getElementById("res-date-input");
@@ -3910,9 +3952,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const storeId = currentStoreId();
     if(!storeId){ showToast("매장 정보를 불러오는 중이에요. 잠시 후 다시 시도해 주세요."); return; }
     const resDate = (dateInp && dateInp.value) ? dateInp.value : bizToday();
-    const time=timeInp?.value||'',partyRaw=String(partyInp?.value||'').trim();
+    const time=readReservationTime(),partyRaw=String(partyInp?.value||'').trim();
     if(!isAttendanceDate(resDate)||resDate<bizToday()){showToast('예약 날짜는 오늘 이후의 올바른 날짜로 입력해 주세요.');dateInp?.focus();return;}
-    if(time&&!isValidTimeStr(time)){showToast('예약 시간을 확인해 주세요.');timeInp?.focus();return;}
+    if(time===null||(time&&!isValidTimeStr(time))){showToast('예약 시간은 1~12시, 분은 0~59로 입력해 주세요.');(document.getElementById('res-hour-input')||timeInp)?.focus();return;}
     if(partyRaw&&(!/^\d+$/.test(partyRaw)||!Number.isSafeInteger(Number(partyRaw))||Number(partyRaw)<1||Number(partyRaw)>2147483647)){
       showToast('예약 인원은 1명 이상의 정수로 입력해 주세요.');partyInp?.focus();return;
     }
@@ -3943,7 +3985,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       state.reservationDraft = {};
       state.showReservationForm = false;
       render();
-      showToast(isToday ? "예약을 등록했어요." : (formatDateLabel(resDate)+" 예약을 등록했어요. 그날 알림이 갈 거예요."));
+      showToast(isToday ? "예약을 등록했어요." : (formatDateLabel(resDate)+" 예약을 등록했어요."));
       if(isToday) sendReservationPush(res, storeId);
       if(state.role === "storeOwner" && state.myStores && state.myStores.length > 1) loadDashboardReservations();
     }catch(e){
@@ -5539,7 +5581,15 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     Promise.all([ loadShifts(state.store, monthKey()), loadAttendance(state.store, monthKey()), loadSalesReports(state.store, monthKey()), loadExpenseEntries(state.store, monthKey()), loadFixedExpenses(state.store, monthKey()), loadChecklistLog(state.store, monthKey()), loadPayAdjustments(state.store, monthKey()), loadMonthlyNetPayroll(state.store, monthKey()), loadMonthlyCostReview(state.store,monthKey()) ]).then(render);
   }
 
+  function setCrewCreateBusy(){
+    const pending=state.crewCreating;
+    const busy=!!(pending&&pending.storeId===currentStoreId()&&pending.userId===state.authProfile?.user_id);
+    const button=document.getElementById('add-crew-btn');
+    if(button){button.disabled=busy;button.textContent=busy?'등록 중…':'추가 완료';}
+  }
   async function addCrewMember(){
+    if(!canManageBusinessData())return;
+    if(state.crewCreating?.storeId===currentStoreId()&&state.crewCreating?.userId===state.authProfile?.user_id)return;
     const nameInput = document.getElementById("crew-name-input");
     const wageInput = document.getElementById("crew-wage-input");
     const wageTypeSelect = document.getElementById("crew-wagetype-select");
@@ -5559,8 +5609,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const healthCertInput = document.getElementById("crew-healthcert-input");
     const contractSignedBtn = document.getElementById("crew-contract-yes");
     const notesInput = document.getElementById("crew-notes-input");
+    if(!nameInput||!wageInput)return;
     const name = (nameInput.value||"").trim();
-    const wage = parseInt(wageInput.value||"0",10);
+    const wageRaw=String(wageInput.value||'').trim(),wage=Number(wageRaw);
     const wageType = wageTypeSelect ? wageTypeSelect.value : "hourly";
     const phone = (phoneInput.value||"").trim();
     const position = posSelect ? posSelect.value : "홀";
@@ -5578,25 +5629,33 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const healthCertExpiry = healthCertInput ? healthCertInput.value : "";
     const contractSigned = contractSignedBtn ? contractSignedBtn.classList.contains("active") : false;
     const notes = notesInput ? notesInput.value.trim() : "";
-    if(!name || !wage){ showToast("이름과 급여를 입력해 주세요."); return; }
+    if(!name){showToast('직원 이름을 입력해 주세요.');nameInput.focus();return;}
+    if(!/^\d+$/.test(wageRaw)||!Number.isSafeInteger(wage)||wage<1||wage>2147483647){showToast('급여는 1원 이상의 정수로 입력해 주세요.');wageInput.focus();return;}
     const storeId = state.storeIdMap[state.store];
-    const uniqueJoinCode = MANEE_STAFF_AUTH_ENABLED ? null : await genUniqueCode();
+    if(!storeId){showToast('매장 정보를 불러온 뒤 다시 시도해 주세요.');return;}
     const payload = {
       store_id: storeId, name, wage, wage_type: wageType, phone, position, is_manager: isManager, sales_access: salesAccess,
       tax33, weekly_allowance: weeklyAllowance, insurance4, insurance2, probation,
-      hire_date: hireDate || null, resign_date: resignDate || null, join_code: uniqueJoinCode,
+      hire_date: hireDate || null, resign_date: resignDate || null, join_code: null,
       work_condition: workCondition, weekly_hours: weeklyHours,
       health_cert_expiry: healthCertExpiry || null, contract_signed: contractSigned, notes
     };
+    const token={storeId,userId:state.authProfile?.user_id},alive=businessContextGuard();
+    state.crewCreating=token;setCrewCreateBusy();
     try{
+      if(!MANEE_STAFF_AUTH_ENABLED)payload.join_code=await genUniqueCode();
+      if(!alive())return;
       const { data, error } = await db.from('crew').insert(payload).select().single();
-      if(error) throw error;
+      if(error||!data?.id)throw error||new Error('Employee save was not confirmed');
+      if(!alive())return;
       state.crew.push(rowToCrew(data));
       nameInput.value=""; wageInput.value=""; phoneInput.value=""; if(weeklyHoursInput) weeklyHoursInput.value="";
       state.showAddCrewForm = false;
+      invalidateFinancialViews();
       render();
       showToast(name+"님을 추가했어요.");
-    }catch(e){ showToast("스텝 저장에 실패했어요."); }
+    }catch(e){if(alive())showToast("스텝 저장에 실패했어요.");}
+    finally{if(state.crewCreating===token){state.crewCreating=null;setCrewCreateBusy();}}
   }
   async function toggleProbation(id, val){
     return updateCrewRow(id,{probation:!!val});
@@ -5771,7 +5830,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     return html;
   }
   function ownerSignupDraft(){
-    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:''};
+    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:'',ageConfirmed:false};
     return state.ownerSignupDraft;
   }
   function renderOwnerSignup(){
@@ -5782,7 +5841,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     html+='<section'+(d.step===1?'':' hidden')+'>'+input('name','owner-request-name-input','사장님 이름','text','autocomplete="name" maxlength="80"')+'</section>';
     html+='<section'+(d.step===2?'':' hidden')+'>'+input('username','owner-request-username-input','아이디','text','autocomplete="username" maxlength="30" autocapitalize="none"')+'<button type="button" class="crew-code-btn" id="check-owner-username-btn">아이디 중복확인</button><p id="owner-request-username-status" role="status">'+(state.ownerRequestUsernameCheck?.username===d.username.normalize('NFKC').trim().toLowerCase()?(state.ownerRequestUsernameCheck.available?'사용할 수 있는 아이디예요.':'이미 사용 중인 아이디예요.'):'')+'</p>'+input('password','owner-request-password-input','비밀번호 · 8자 이상','password','autocomplete="new-password"')+input('confirm','owner-request-password-confirm-input','비밀번호 확인','password','autocomplete="new-password"')+'</section>';
     html+='<section'+(d.step===3?'':' hidden')+'>'+input('store','owner-request-store-input','매장 이름','text','maxlength="100"')+input('franchise','owner-request-franchise-code-input','프랜차이즈 코드 · 선택','text','maxlength="40"')+'<p>코드가 있는 경우 프랜차이즈 요금제가 적용돼요.</p></section>';
-    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
+    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<label class="signup-age-check" for="owner-request-age-confirmed"><input id="owner-request-age-confirmed" data-signup-age type="checkbox"'+(d.ageConfirmed===true?' checked':'')+'><span>만 14세 이상입니다. (필수)</span></label><p>만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p><p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
     html+='<div class="setup-actions"><button type="button" data-signup-back>이전</button>'+(d.step===4?'<button type="button" id="submit-owner-request-btn" class="setup-primary">가입하고 매장 준비하기</button>':'<button type="button" data-signup-next class="setup-primary">'+(d.step===0?'차근차근 시작하기':'다음')+'</button>')+'</div><button type="button" id="landing-back-btn" class="switch-link">로그인 화면으로</button></div>';
     return html;
   }
@@ -5805,6 +5864,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       ownerSignupDraft()[el.dataset.signupField]=el.value;
       if(el.dataset.signupField==='username'){state.ownerRequestUsernameCheck=null;const status=document.getElementById('owner-request-username-status');if(status)status.textContent='';}
     }));
+    const age=app.querySelector('[data-signup-age]');if(age)age.addEventListener('change',()=>{ownerSignupDraft().ageConfirmed=age.checked===true;});
     const next=app.querySelector('[data-signup-next]');if(next)next.onclick=ownerSignupNext;
     const back=app.querySelector('[data-signup-back]');if(back)back.onclick=()=>{if(state.ownerSignupBusy)return;const d=ownerSignupDraft();if(d.step>0){d.step--;render();}else landingBack();};
     app.querySelectorAll('[data-signup-field]').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ownerSignupNext();}}));
@@ -5820,14 +5880,32 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     }catch(e){}
     return {step:'location',statuses:{}};
   }
-  function rememberOwnerSetup(step,status){
+  function rememberOwnerSetup(step,status,paused=false){
     const p=ownerSetupProgress();
     if(status)p.statuses={...(p.statuses||{}),[state.onboardingStep]:status};
-    p.step=step;try{localSet(ownerSetupKey(),JSON.stringify(p));}catch(e){showToast('이 기기에서 진행 위치를 저장하지 못했어요. 등록한 매장 정보는 유지돼요.');}
+    p.step=step;p.paused=paused;try{localSet(ownerSetupKey(),JSON.stringify(p));}catch(e){showToast('이 기기에서 진행 위치를 저장하지 못했어요. 등록한 매장 정보는 유지돼요.');}
   }
   function ownerSetupInitialStep(){
     const step=ownerSetupProgress().step;
     return OWNER_SETUP_STEPS.includes(step)?step:'location';
+  }
+  function ownerSetupStartupStep(){
+    if(!state.storeOnboardingMap||state.storeOnboardingMap[state.store]||ownerSetupProgress().paused===true)return null;
+    return ownerSetupInitialStep();
+  }
+  function pauseOwnerSetup(){
+    if(state.role!=='storeOwner'||state.ownerSetupBusy)return;
+    rememberOwnerSetup(state.onboardingStep,undefined,true);
+    state.onboardingStep=null;state.section='dashboard';state.homeStore=state.store;render();
+  }
+  async function resumeOwnerSetup(){
+    if(state.role!=='storeOwner'||state.ownerSetupBusy)return;
+    const target=state.homeStore&&state.homeStore!=='__all__'?state.homeStore:state.store;
+    if(!state.myStores.includes(target))return;
+    const sid=state.storeIdMap[target],username=state.myUsername;
+    if(target!==state.store)await switchOwnerStore(target);
+    if(!ownerSetupAlive(sid,username))return;
+    state.ownerSetupDraft=null;state.onboardingStep=ownerSetupInitialStep();rememberOwnerSetup(state.onboardingStep);render();
   }
   function ownerSetupAlive(storeId,username){
     return state.role==='storeOwner' && currentStoreId()===storeId && state.myUsername===username;
@@ -5845,6 +5923,30 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const draft=state.ownerSetupDraft?.[id];
     return '<label class="setup-field">'+label+'<input data-setup-draft id="'+id+'" type="'+type+'" value="'+escapeHtml(draft??value??'')+'"'+(type==='number'?' inputmode="decimal"':'')+'></label>';
   }
+  function ownerSetupLocationFeedback(){
+    const result=state.ownerSetupLocationResult;
+    if(!result||result.storeId!==currentStoreId()||result.username!==state.myUsername)return '';
+    return '<p class="setup-note" role="status" aria-live="polite">'+escapeHtml(result.message)+'</p>';
+  }
+  async function saveOwnerSetupLocation(){
+    await ownerSetupMutation(async(sid,alive)=>{
+      const store=state.store,username=state.myUsername;
+      const feedback=message=>{if(alive())state.ownerSetupLocationResult={storeId:sid,username,message};};
+      feedback('현재 위치를 확인하는 중이에요…');render();
+      try{
+        const pos=await staffCoordinates();if(!alive())return;
+        feedback('매장 위치를 저장하는 중이에요…');render();
+        const saved=await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id,lat,lng'));
+        if(!alive())return;
+        if(saved.id!==sid||!Number.isFinite(saved.lat)||Math.abs(saved.lat)>90||!Number.isFinite(saved.lng)||Math.abs(saved.lng)>180)throw new Error('저장된 위치를 확인하지 못했어요. 다시 시도해 주세요.');
+        state.storeLocationMap[store]={lat:saved.lat,lng:saved.lng};
+        feedback('현재 위치로 저장했어요. 다음 단계로 진행해 주세요.');
+      }catch(e){
+        if(alive())feedback(staffErrorMessage(e));
+        throw new Error(staffErrorMessage(e));
+      }
+    });
+  }
   function ownerSetupSummary(){
     const statuses=ownerSetupProgress().statuses||{};
     const failed=state.reportDataFailed||new Set();
@@ -5856,7 +5958,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const step=state.onboardingStep,i=OWNER_SETUP_STEPS.indexOf(step),busy=!!state.ownerSetupBusy;
     let html='<div class="owner-setup"><p class="setup-eyebrow">'+escapeHtml(state.store)+' · 매장 준비 '+(i+1)+' / '+OWNER_SETUP_STEPS.length+'</p><progress max="'+OWNER_SETUP_STEPS.length+'" value="'+(i+1)+'" aria-label="매장 준비 진행"></progress><h2>'+OWNER_SETUP_LABELS[step]+'</h2><fieldset class="setup-fields"'+(busy?' disabled':'')+'>';
     if(step==='location'){
-      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>현재 위치를 매장 위치로 등록</button>';
+      html+='<p>매장 안에서 현재 위치를 등록해 주세요. 직원 출퇴근을 매장 100m 이내에서 기록하는 기준이에요.</p><div class="setup-note">'+(state.storeLocationMap?.[state.store]?'위치가 등록되어 있어요.':'지금 매장 밖이라면 나중에 설정하세요. 위치 등록 전에는 직원 출퇴근 기록을 사용할 수 없어요.')+'</div><button type="button" class="setup-primary" data-setup-location>'+(busy?'위치 등록 중…':'현재 위치를 매장 위치로 등록')+'</button>'+ownerSetupLocationFeedback();
     }else if(step==='cutoff'){
       html+='<p>이 시간 전까지의 매출·출퇴근·체크리스트를 전날 영업일로 묶어요.</p><label class="setup-field">영업일 기준 시간<select id="setup-cutoff" data-setup-draft>';
       const hour=Number(state.ownerSetupDraft?.['setup-cutoff']??storeCutoffHour(state.store));
@@ -5974,14 +6076,11 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const bind=(selector,fn)=>{const el=app.querySelector(selector);if(el)el.onclick=fn;};
     bind('[data-setup-next]',()=>nextOwnerSetup());bind('[data-setup-skip]',()=>nextOwnerSetup('나중에 설정'));bind('[data-setup-none]',()=>nextOwnerSetup('해당 없음'));
     bind('[data-setup-back]',()=>{const i=OWNER_SETUP_STEPS.indexOf(state.onboardingStep);state.onboardingStep=OWNER_SETUP_STEPS[Math.max(0,i-1)];rememberOwnerSetup(state.onboardingStep);render();});
-    bind('[data-setup-pause]',()=>{rememberOwnerSetup(state.onboardingStep);state.onboardingStep=null;state.section='dashboard';state.homeStore=state.store;render();});
+    bind('[data-setup-pause]',pauseOwnerSetup);
     app.querySelectorAll('[data-setup-goto]').forEach(el=>el.onclick=()=>{state.onboardingStep=el.dataset.setupGoto;rememberOwnerSetup(state.onboardingStep);render();});
     app.querySelectorAll('[data-setup-add]').forEach(el=>el.onclick=()=>addOwnerSetupRecord(el.dataset.setupAdd));
     bind('[data-setup-retry]',async()=>{const store=state.store;await Promise.all([loadVendors(store),loadFixedExpenses(store,monthKey())]);render();});
-    bind('[data-setup-location]',async()=>{
-      const sid=currentStoreId(),user=state.myUsername;
-      await ownerSetupMutation(async(_,alive)=>{const pos=await staffCoordinates();if(!alive()||!ownerSetupAlive(sid,user))return;await checkedBusinessMutation(db.from('stores').update({lat:pos.current_lat,lng:pos.current_lng}).eq('id',sid).select('id'));if(alive())state.storeLocationMap[state.store]={lat:pos.current_lat,lng:pos.current_lng};});
-    });
+    bind('[data-setup-location]',saveOwnerSetupLocation);
     bind('[data-setup-code]',()=>ownerSetupMutation(async(sid,alive)=>{const access=await staffPortal('owner_list',{store_id:sid});if(alive())state.ownerStaffAccess={...access,storeId:sid};}));
     bind('[data-setup-copy]',()=>{const a=state.ownerStaffAccess;if(a?.storeId===currentStoreId()&&a.store_join_code)copyCode(a.store_join_code);});
     bind('[data-setup-share]',async()=>{const a=state.ownerStaffAccess;if(a?.storeId!==currentStoreId()||!a.store_join_code)return;const text=state.store+' 매니 직원 초대\n직원으로 가입 후 매장코드 '+a.store_join_code+'를 입력해 주세요.\n'+location.origin+'/';try{if(navigator.share)await navigator.share({title:'매니 직원 초대',text});else copyCode(text);}catch(e){if(e.name!=='AbortError')showToast('공유하지 못했어요. 코드 복사를 이용해 주세요.');}});
@@ -6019,7 +6118,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         if(dist <= 100){ resolve({ ok:true }); }
         else{ resolve({ ok:false, reason:"매장에서 너무 멀어요 (약 "+Math.round(dist)+"m 떨어짐). 매장 근처에서 다시 시도해 주세요." }); }
       }, (err)=>{
-        resolve({ ok:false, reason:"위치 권한이 필요해요. 위치 접근을 허용한 후 다시 시도해 주세요." });
+        resolve({ ok:false, reason:locationErrorMessage(err) });
       }, { enableHighAccuracy: true, timeout: 10000 });
     });
   }
@@ -6589,17 +6688,23 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(state.section==='settings') return ownerSubHeader('매장 설정')+renderCrewManage('settings');
     if(state.section==='alerts') return ownerSubHeader('알림 모아보기')+renderHqNotices()+renderNotifDetails();
     let html='<h2>더보기</h2>';
-    return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
+    return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer" style="display:block;padding:14px 18px;color:inherit;text-decoration:none;">계정 삭제 요청 ↗</a><button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
+  }
+  function renderOwnerStorePicker(){
+    const stores=state.myStores||[],group=ownerRouteGroup();
+    if(stores.length===1)return '<div class="owner-picker" style="justify-content:flex-start">'+navIcon('store')+'<span>'+escapeHtml(stores[0])+'</span></div>';
+    let html='<label class="owner-picker">'+navIcon('store')+'<span class="sr-only">매장 선택</span><select id="owner-store-select" aria-label="매장 선택">';
+    if(group==='home')html+='<option value="__all__"'+(state.homeStore==='__all__'||!stores.includes(state.homeStore)?' selected':'')+'>내 매장 전체 · '+stores.length+'곳</option>';
+    stores.forEach(s=>html+='<option value="'+escapeHtml(s)+'"'+((group!=='home'&&s===state.store)||(group==='home'&&s===state.homeStore)?' selected':'')+'>'+escapeHtml(s)+'</option>');
+    return html+'</select><svg class="owner-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></label>';
   }
   function renderOwnerShell(){
+    if(state.myStores?.length===1&&state.store===state.myStores[0])state.homeStore=state.myStores[0];
     const group=ownerRouteGroup();
     const noticeCount=state.dashboardData?getNotifGroups().length:0;
     let html='<header class="owner-header"><div class="owner-topline"><div class="owner-logo"><img src="'+MASCOT_IMG_DATA+'" alt="매니"></div><div class="owner-header-right"><span class="owner-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 6 4 5 5-7 5 7 4-5-2 13H5Z"/></svg>사장님</span>'+
       '<button class="crew-code-btn owner-bell" id="owner-alert-shortcut" aria-label="'+(noticeCount?'전체 매장 확인할 일 '+noticeCount+'건':'알림 모아보기')+'">'+navIcon('bell')+(noticeCount?'<span class="owner-notice-count" aria-hidden="true">'+noticeCount+'</span>':'')+'</button></div></div>'+
-      '<label class="owner-picker">'+navIcon('store')+'<span class="sr-only">매장 선택</span><select id="owner-store-select" aria-label="매장 선택">';
-    if(group==='home') html+='<option value="__all__"'+(state.homeStore==='__all__'||!state.myStores.includes(state.homeStore)?' selected':'')+'>내 매장 전체 · '+state.myStores.length+'곳</option>';
-    state.myStores.forEach(s=>html+='<option value="'+escapeHtml(s)+'"'+((group!=='home'&&s===state.store)||(group==='home'&&s===state.homeStore)?' selected':'')+'>'+escapeHtml(s)+'</option>');
-    html+='</select><svg class="owner-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></label></header><main>';
+      renderOwnerStorePicker()+'</header><main>';
     if(!state.dashboardData&&!state.dashboardLoading) setTimeout(()=>{if(!state.dashboardData&&!state.dashboardLoading)loadDashboardData();},0);
     if(state.showAddStoreForm) html+=renderAddStoreForm();
     else if(state.showOwnerSalesForm) html+='<div class="owner-sales-form">'+renderSalesReportForm()+'</div>';
@@ -6622,8 +6727,53 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}};
     });
   }
+  async function openNativeNotification(data,isCurrent=()=>true){
+    if(state.loading||!state.splashDone||!state.authProfile?.user_id)return 'pending';
+    if(state.role!=='storeOwner')return 'rejected';
+    const store=(state.myStores||[]).find(name=>state.storeIdMap[name]===data.storeId);
+    if(!store){showToast('이 알림의 매장에 접근할 수 없어요.');return 'rejected';}
+    const kinds=['test','attendance_in','attendance_out','reservation_created','reservation_cancelled','reservation_upcoming','reservation_due','report_closed','monthly_costs'];
+    if(!kinds.includes(data.kind))return 'rejected';
+    const alive=maneeLoadGuard('notificationNavigation'),valid=()=>alive()&&isCurrent();
+    const go=async()=>{
+      try{
+        if(!valid())return;
+        const permission=await db.rpc('manee_android_push_context',{p_store_id:data.storeId});
+        if(!valid())return;
+        if(permission.error||permission.data!==true){showToast('알림을 열 수 없어요. 로그인과 매장 접근 권한을 확인해 주세요.');render();return;}
+        state.showOwnerSalesForm=false;state.showReservationForm=false;state.reservationDraft={};state.showAddStoreForm=false;
+        state.salesEditingId=null;state.salesEditDate=null;state.expenseEditDraft=null;state.editingExpenseEntryId=null;
+        state.ownerStoreChoice=null;state.costEditKey=null;state.costLinkKey=null;state.costAddRequest=null;
+        state.store=store;state.homeStore=store;
+        if(data.kind.startsWith('reservation_'))state.section='reservations';
+        else if(data.kind.startsWith('attendance_')){
+          state.section='schedule';state.scheduleTab='attendance';
+          state.selectedDate=isAttendanceDate(data.eventDate)?data.eventDate:bizToday();
+          [state.monthYear,state.monthNum]=state.selectedDate.split('-').slice(0,2).map(Number);
+        }else if(data.kind==='report_closed'||data.kind==='monthly_costs'){
+          const key=/^\d{4}-(0[1-9]|1[0-2])$/.test(data.monthKey||'')?data.monthKey:bizToday().slice(0,7);
+          [state.monthYear,state.monthNum]=key.split('-').map(Number);
+          state.section='sales';state.salesSectionTab='report';state.showVatDetail=false;state.vatData=null;
+          state.costReviewOpen=data.kind==='monthly_costs';
+        }else state.section='settings';
+        await loadAllForStore(store);
+        if(valid()){render();window.scrollTo(0,0);}
+      }catch(e){if(valid()){state.loading=false;render();showToast('알림 화면을 불러오지 못했어요. 다시 시도해 주세요.');}}
+    };
+    if(state.pendingConfirm)return 'pending';
+    if(state.showOwnerSalesForm||state.showReservationForm||state.expenseEditDraft||state.showAddStoreForm||state.costEditKey||state.costAddRequest){
+      askConfirm('작성 중인 내용을 닫고 알림 화면으로 이동할까요? 저장하지 않은 입력은 반영되지 않아요.',go);
+      return 'handled';
+    }
+    await go();return 'handled';
+  }
   function ownerNavigateFromOverview(section,go){
     const needsStore=!['dashboard','more','alerts'].includes(section);
+    if(needsStore&&state.myStores?.length===1){
+      const sole=state.myStores[0];
+      if(state.store===sole){state.homeStore=sole;go();return;}
+      state.ownerStoreChoice={section,go};return chooseOwnerWorkStore(sole);
+    }
     if(needsStore&&state.homeStore==='__all__'){
       state.ownerStoreChoice={section,go};render();
       return;
@@ -6799,6 +6949,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     else if(state.section === "sales") html += renderSalesSection();
     else html += renderSchedule();
     }
+    if(isHq || isFranchise) html += '<p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청하기 ↗</a></p>';
     html += '<button class="switch-link" id="switch-user-btn">다른 사용자로 전환</button>';
     html += '</main>';
     html += '<nav class="bottom-nav">';
@@ -7225,6 +7376,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       html += '<label class="field-label">담당자 이름</label><input class="field-input" id="new-franchise-display-name-input" type="text" placeholder="담당자 이름" style="margin-bottom:8px;">';
       html += '<label class="field-label">아이디</label><input class="field-input" id="new-franchise-username-input" type="text" placeholder="아이디 (4~30자)" style="margin-bottom:8px;">';
       html += '<label class="field-label">비밀번호</label><input class="field-input" id="new-franchise-password-input" type="password" placeholder="비밀번호 (8자 이상)" style="margin-bottom:10px;">';
+      html += '<label class="signup-age-check" for="new-franchise-age-confirmed"><input id="new-franchise-age-confirmed" type="checkbox"><span>계정 사용자가 만 14세 이상임을 확인했습니다. (필수)</span></label>';
       html += '<button class="landing-btn primary" id="create-franchise-auth-btn" style="margin:0;">계정 만들기</button>';
       html += '</div>';
     }
@@ -7449,7 +7601,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       html += '<button id="show-reservation-form-btn" style="width:100%;margin-top:10px;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:800;cursor:pointer;background:var(--brick);color:#fff;">+ 예약 등록</button>';
     }else{
       html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">';
-      html += '<div class="row2"><div><label class="field-label">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+bizToday()+'" min="'+bizToday()+'"></div><div><label class="field-label">시간</label><input id="res-time-input" type="time" class="field-input"></div></div>';
+      html += '<div><label class="field-label" for="res-date-input">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div>'+renderReservationTimeInput();
       html += '<div style="margin-top:8px;"><label class="field-label">인원</label><input id="res-party-input" type="number" min="1" placeholder="인원수" class="field-input"></div>';
       html += '<div class="row2" style="margin-top:8px;"><div><label class="field-label">예약자명</label><input id="res-name-input" type="text" placeholder="이름" class="field-input"></div><div><label class="field-label">연락처</label><input id="res-phone-input" type="text" placeholder="선택" class="field-input"></div></div>';
       html += '<div style="margin-top:8px;"><label class="field-label">메모</label><input id="res-memo-input" type="text" placeholder="선택 (창가자리, 알러지 등)" class="field-input"></div>';
@@ -7670,7 +7822,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(page==='help'){
       return '<section class="category team-card"><p class="team-card-title team-title-lg">출퇴근은 어떻게 기록되나요?</p><p class="team-sub">홈의 출근·퇴근 버튼은 매장에서 약 100m 이내에서만 기록돼요. 매장의 영업일 기준 시간 전에 출근하면 전날 영업일 기록으로 저장돼요.</p></section>'+
         '<section class="category team-card"><p class="team-card-title team-title-lg">예정 근무와 실제 근무</p><p class="team-sub">스케줄은 근무 예정이에요. 실제 출퇴근 기록과 매니저의 근무 확인 여부를 함께 확인하세요. 근무 확인이 끝난 시간만 예상 급여에 반영돼요.</p></section>'+
-        '<section class="category team-card"><p class="team-card-title team-title-lg">근무기록이 다르게 보이나요?</p><p class="team-sub">매장명, 날짜, 실제 출근·퇴근 시간을 확인한 뒤 '+(mgr?'사장님':'매니저나 사장님')+'께 알려 주세요.</p></section>';
+        '<section class="category team-card"><p class="team-card-title team-title-lg">근무기록이 다르게 보이나요?</p><p class="team-sub">매장명, 날짜, 실제 출근·퇴근 시간을 확인한 뒤 '+(mgr?'사장님':'매니저나 사장님')+'께 알려 주세요.</p></section>'+
+        '<section class="category team-card"><p class="team-card-title team-title-lg">계정 삭제</p><p class="team-sub">매니 계정과 연결된 개인정보의 삭제를 요청할 수 있어요.</p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청하기 ↗</a></section>';
     }
     return '';
   }
@@ -8699,7 +8852,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function renderOwnerReservations(){
     let html="";
-      const isMultiStore = state.myStores && state.myStores.length > 1;
+      const isMultiStore = state.myStores && state.myStores.length > 1 && state.homeStore==='__all__';
       html += '<div class="day-panel" style="margin-bottom:14px;">';
       html += '<h3 style="margin:0 0 6px;display:flex;align-items:center;gap:8px;"><span style="width:26px;height:26px;border-radius:50%;background:var(--brick);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none">'+navIcon('calendar')+'</svg></span>예약</h3>';
       if(isMultiStore){
@@ -8722,6 +8875,15 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         }else{
           html += '<p class="crew-code-hint" style="margin-bottom:8px;">오늘 등록된 예약이 없어요 · '+escapeHtml(state.store)+'</p>';
         }
+        const upcomingRes = (state.upcomingReservations||[]).filter(r=>r.date>bizToday()).slice().sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+        if(upcomingRes.length){
+          html += '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">';
+          html += '<p class="crew-code-hint" style="margin-bottom:8px;">다가오는 예약 '+upcomingRes.length+'건</p>';
+          upcomingRes.forEach(r=>{
+            html += '<div class="pay-list-item"><span class="d">'+escapeHtml(formatDateLabel(r.date))+' '+escapeHtml(r.time||'--:--')+' '+escapeHtml(r.customerName||'예약')+'</span><span style="display:flex;align-items:center;gap:8px;">'+(r.partySize?r.partySize+'명':'')+'<button class="crew-del" data-cancelres="'+escapeHtml(String(r.id))+'">취소</button></span></div>';
+          });
+          html += '</div>';
+        }
       }
       if(!state.showReservationForm){
         html += '<button id="show-reservation-form-btn" style="width:100%;margin-top:10px;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:800;cursor:pointer;background:var(--brick);color:#fff;">+ 예약 등록</button>';
@@ -8733,7 +8895,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
           html += '</select></div>';
           html += '<p class="crew-code-hint" style="margin-bottom:8px;">지금 "'+escapeHtml(state.store)+'" 매장에 등록돼요.</p>';
         }
-        html += '<div class="row2"><div><label class="field-label">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div><div><label class="field-label">시간</label><input id="res-time-input" type="time" class="field-input" value="'+escapeHtml(state.reservationDraft.time||"")+'"></div></div>';
+      html += '<div><label class="field-label" for="res-date-input">날짜</label><input id="res-date-input" type="date" class="field-input" value="'+(state.reservationDraft.date||bizToday())+'" min="'+bizToday()+'"></div>'+renderReservationTimeInput();
         html += '<div style="margin-top:8px;"><label class="field-label">인원</label><input id="res-party-input" type="number" min="1" placeholder="인원수" class="field-input" value="'+escapeHtml(state.reservationDraft.party||"")+'"></div>';
         html += '<div class="row2" style="margin-top:8px;"><div><label class="field-label">예약자명</label><input id="res-name-input" type="text" placeholder="이름" class="field-input" value="'+escapeHtml(state.reservationDraft.name||"")+'"></div><div><label class="field-label">연락처</label><input id="res-phone-input" type="text" placeholder="선택" class="field-input" value="'+escapeHtml(state.reservationDraft.phone||"")+'"></div></div>';
         html += '<div style="margin-top:8px;"><label class="field-label">메모</label><input id="res-memo-input" type="text" placeholder="선택 (창가자리, 알러지 등)" class="field-input" value="'+escapeHtml(state.reservationDraft.memo||"")+'"></div>';
@@ -9074,8 +9236,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function renderMonthlyReportActions(){
     if(!canManageBusinessData())return '';
-    const last=monthKey()+'-'+pad(daysInMonth(state.monthYear,state.monthNum)),ready=state.salesReports.some(r=>r.date===last);
-    return '<div class="day-panel monthly-report-actions"><h3>'+(ready?'이번 달 보고서를 볼 수 있어요':'입력된 자료로 보고서 미리보기')+'</h3><p class="crew-code-hint">월 말일 매출보고 후 바로 볼 수 있어요. 누락 비용·미확정 급여가 있으면 잠정 보고서로 표시해요.</p><div class="cost-buttons"><button id="current-report-pdf">PDF 보기·저장</button><button id="current-report-excel">엑셀 저장</button><button id="open-month-costs">'+(currentCostReview()?.review?.completed_at?'비용 확인 완료 · 수정':'보고서 완성을 위한 비용 확인')+'</button></div></div>';
+    return '<section class="day-panel monthly-report-actions" aria-label="보고서 저장"><div class="report-card-heading"><h3>이번 달 보고서</h3><span class="report-badge">입력된 자료 기준</span></div><p class="report-description">지금까지 입력한 내역을 PDF와 엑셀로 저장해요. 마감 전에는 잠정 보고서로 표시돼요.</p><div class="report-export-buttons"><button type="button" class="report-button report-button-primary" id="current-report-pdf"'+(state.reportDownloading?' disabled':'')+'>PDF 저장</button><button type="button" class="report-button" id="current-report-excel"'+(state.reportDownloading?' disabled':'')+'>엑셀 저장</button></div>'+renderReportExportStatus()+'<button type="button" class="report-cost-link" id="open-month-costs">'+(currentCostReview()?.review?.completed_at?'비용 확인 완료 · 수정하기':'빠진 비용 확인하기')+'<span aria-hidden="true">›</span></button></section>';
   }
   function renderMonthlyCostEntry(item){
     const esc=escapeHtml,today=ownerDateKeyKst(),last=monthKey()+'-'+pad(daysInMonth(state.monthYear,state.monthNum)),date=today.slice(0,7)===monthKey()?today:last;
@@ -9124,13 +9285,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     finally{state.costSaving=false;}
   }
   async function downloadCurrentReport(type){
-    if(state.reportDownloading||!canManageBusinessData())return;const alive=reportActionGuard();state.reportDownloading=true;
-    try{const r=await db.rpc('manee_report_preview',{p_store_id:currentStoreId(),p_month_key:monthKey()});if(r.error||!r.data?.snapshot)throw Error('Report unavailable');if(!alive())return;
-      const closing=r.data,assets=await loadReportAssets();if(!alive())return;
-      if(type==='pdf'){const bytes=await window.MANEE_REPORTS.pdfBytes(closing,assets);if(!alive())return;const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),a=document.createElement('a');a.href=url;a.download=reportDownloadName(closing,'pdf');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-      else{if(typeof XLSX==='undefined')throw Error('Excel unavailable');const rows=window.MANEE_REPORTS.excelRows(closing),wb=XLSX.utils.book_new();for(const [key,name] of [['summary','월말 요약'],['sales','일별 매출'],['expenses','지출 상세'],['daily','날짜별 합계'],['vendors','거래처별 합계'],['fixed','고정비']]){const ws=XLSX.utils.aoa_to_sheet(rows[key]);styleWorksheet(ws,rows[key]);XLSX.utils.book_append_sheet(wb,ws,name);}if(alive())XLSX.writeFile(wb,reportDownloadName(closing,'xlsx'));}
-    }catch(e){if(alive())showToast('보고서를 만들지 못했어요. 매출 금액 또는 연결 상태를 확인한 후 다시 시도해 주세요.');}
-    finally{state.reportDownloading=false;}
+    if(!canManageBusinessData())return;
+    return downloadReport(type,'manee_report_preview',{p_store_id:currentStoreId(),p_month_key:monthKey()});
   }
   function bindMonthlyCostEvents(){
     const on=(id,fn)=>{const el=document.getElementById(id);if(el)el.onclick=fn;};
@@ -9179,53 +9335,118 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     finally{if(alive())state.reportHistoryLoading=false;}
   }
   function renderClosingControls(){
-    const key=state.monthYear+'-'+String(state.monthNum).padStart(2,'0'),rows=state.reportHistory||[],current=rows.filter(r=>r.month_key===key);
-    let html='<div class="day-panel"><h3>매니 월말 리포트 · PDF·엑셀</h3><p class="crew-code-hint">실제 세후급여와 영업일 매출보고를 확인한 뒤 월말에 마감하세요. PDF와 엑셀은 같은 마감 버전을 사용해요. 입력된 지출 기준 예상 수익이며 실제 순이익과 차이가 날 수 있어요.</p>';
-    if(canManageBusinessData())html+='<label><input type="checkbox" id="month-close-confirm"> 이번 달 매출·급여·보험료·원천세·지출·고정비를 확인했고 같은 비용을 중복 입력하지 않았어요.</label>'+(current.length?'<label class="field-label">정정 이유 (5자 이상)<input type="text" class="field-input" id="month-close-reason" maxlength="1000"></label>':'')+'<button type="button" id="month-close-btn">'+(current.length?'정정 마감 · 새 버전 만들기':'이번 달 마감 · PDF 만들기')+'</button>';
-    html+='<p class="crew-code-hint">급여가 추정치이거나 영업 예정일의 매출보고가 빠지면 마감할 수 없어요. 직원 실제 세후급여와 매장 휴무일을 확인하세요.</p><h4>과거 마감 보고서</h4>';
-    if(state.reportHistoryFailed)html+='<p role="alert">마감 기록 조회 실패</p>';
-    else if(state.reportHistoryLoading)html+='<p>마감 기록을 불러오는 중이에요.</p>';
-    else if(!rows.length)html+='<p>아직 마감한 보고서가 없어요.</p>';
-    rows.slice(0,state.reportHistoryLimit||12).forEach(r=>html+='<div class="setup-row" style="flex-wrap:wrap;"><span>'+r.month_key+' · 버전 '+r.revision+'</span><button type="button" data-closing-pdf="'+r.id+'">PDF</button><button type="button" data-closing-excel="'+r.id+'">엑셀</button></div>');
-    if(rows.length>(state.reportHistoryLimit||12))html+='<button id="report-history-more">이전 보고서 더 보기</button>';
-    return html+'<button id="report-history-retry">마감 기록 새로고침</button></div>';
+    const key=monthKey(),rows=state.reportHistory||[],current=rows.filter(r=>r.month_key===key),esc=escapeHtml;
+    let html='<section class="day-panel report-closing" aria-labelledby="report-closing-title"><div class="report-card-heading"><h3 id="report-closing-title">'+state.monthNum+'월 마감</h3><span class="report-badge">'+(current.length?'마감 버전 '+esc(current[0].revision):'마감 전')+'</span></div><p class="report-description">한 달 내역을 확정해 보관해요. PDF와 엑셀은 같은 마감 내역으로 저장돼요.</p>';
+    if(canManageBusinessData())html+='<label class="report-confirm"><input type="checkbox" id="month-close-confirm"><span><strong>이번 달 내역을 모두 확인했어요</strong><small>매출·세후급여·보험료·원천세·지출·고정비를 확인하고, 같은 비용을 중복 입력하지 않았어요.</small></span></label>'+(current.length?'<label class="field-label" for="month-close-reason">정정 이유<input type="text" class="field-input" id="month-close-reason" maxlength="1000" minlength="5" placeholder="변경한 내용을 5자 이상 적어 주세요"></label>':'')+'<button type="button" class="report-button report-button-primary report-close-button" id="month-close-btn"'+(state.monthClosing||state.reportDownloading?' disabled':'')+'>'+(state.monthClosing?'마감하는 중…':current.length?'정정하고 새 버전 저장':'마감하고 PDF 저장')+'</button>';
+    html+=renderReportExportStatus('closing')+'<details class="report-help"><summary>마감 전에 확인해 주세요</summary><p>월말부터 마감할 수 있어요. 영업일의 매출보고와 직원의 실제 세후급여가 모두 입력되어야 해요. 매장 휴무일도 확인해 주세요.</p><p>입력된 지출 기준 예상 수익이며, 실제 순이익과 차이가 날 수 있어요.</p></details></section><section class="day-panel report-history" aria-labelledby="report-history-title"><div class="report-card-heading"><h3 id="report-history-title">마감한 보고서</h3><button type="button" class="report-refresh" id="report-history-retry"'+(state.reportHistoryLoading?' disabled':'')+' aria-label="마감 기록 새로고침">새로고침</button></div>';
+    html+=renderReportExportStatus('history');
+    if(state.reportHistoryFailed)html+='<p class="report-empty" role="alert">마감 기록을 불러오지 못했어요.<br>새로고침을 눌러 다시 확인해 주세요.</p>';
+    else if(state.reportHistoryLoading)html+='<p class="report-empty" role="status">마감 기록을 불러오고 있어요.</p>';
+    else if(!rows.length)html+='<div class="report-empty"><strong>아직 마감한 보고서가 없어요</strong><p>월 마감을 완료하면 여기에 보관돼요.</p></div>';
+    rows.slice(0,state.reportHistoryLimit||12).forEach(r=>html+='<div class="report-history-row"><div><strong>'+esc(r.month_key)+'</strong><span>버전 '+esc(r.revision)+'</span></div><div class="report-history-files"><button type="button" class="report-button" data-closing-pdf="'+esc(r.id)+'" aria-label="'+esc(r.month_key)+' 버전 '+esc(r.revision)+' PDF 저장"'+(state.reportDownloading?' disabled':'')+'>PDF</button><button type="button" class="report-button" data-closing-excel="'+esc(r.id)+'" aria-label="'+esc(r.month_key)+' 버전 '+esc(r.revision)+' 엑셀 저장"'+(state.reportDownloading?' disabled':'')+'>엑셀</button></div></div>');
+    if(rows.length>(state.reportHistoryLimit||12))html+='<button type="button" class="report-button report-more" id="report-history-more">이전 보고서 더 보기</button>';
+    return html+'</section>';
   }
   function reportActionGuard(){
     const sid=currentStoreId(),uid=state.authProfile?.user_id,epoch=maneeViewEpoch,key=monthKey();return ()=>sid===currentStoreId()&&uid===state.authProfile?.user_id&&epoch===maneeViewEpoch&&key===monthKey();
   }
   async function closeCurrentMonth(){
-    if(!canManageBusinessData()||state.monthClosing)return;
+    if(!canManageBusinessData()||state.monthClosing||state.reportDownloading)return;
     if(!document.getElementById('month-close-confirm')?.checked){showToast('매출·급여·납부 지출·고정비 확인을 체크해 주세요.');return;}
     const sid=currentStoreId(),key=monthKey(),alive=reportActionGuard(),scope=sid+':'+key;
     if(state.closeRequest?.scope!==scope)state.closeRequest={scope,id:crypto.randomUUID()};
     const request=state.closeRequest.id,reason=document.getElementById('month-close-reason')?.value.trim()||null;
     if((state.reportHistory||[]).some(r=>r.month_key===key)&&(!reason||reason.length<5)){showToast('정정 이유를 5자 이상 입력해 주세요.');return;}
-    state.monthClosing=true;
+    state.monthClosing=true;syncReportExportButtons();document.getElementById('month-close-btn').textContent='마감하는 중…';
     try{const r=await db.rpc('manee_close_month',{p_store_id:sid,p_month_key:key,p_request_id:request,p_amendment_reason:reason});
       if(!alive())return;if(r.error||!r.data?.id)throw Error(r.error?.message||'Closing failed');
-      state.closeRequest=null;await loadReportHistory(state.store);if(!alive())return;render();showToast('마감 버전을 저장했어요. PDF를 만들고 있어요.');await downloadClosingReport(r.data.id,'pdf');
+      state.closeRequest=null;await loadReportHistory(state.store);if(!alive())return;render();showToast('마감 버전을 저장했어요. PDF를 만들고 있어요.');await downloadClosingReport(r.data.id,'pdf','closing');
     }catch(e){if(alive())showToast('마감하지 못했어요. 영업일 보고 누락·실제 세후급여·월말 날짜를 확인해 주세요.');}
-    finally{state.monthClosing=false;}
+    finally{state.monthClosing=false;syncReportExportButtons();const button=document.getElementById('month-close-btn');if(button)button.textContent=(state.reportHistory||[]).some(r=>r.month_key===monthKey())?'정정하고 새 버전 저장':'마감하고 PDF 저장';}
   }
-  let maneeReportAssetsPromise=null;
+  let maneeReportAssetsPromise=null,maneeReportModelPromise=null;
+  function loadReportModel(){
+    if(!maneeReportModelPromise)maneeReportModelPromise=loadReportScript('/report-assets/monthly-report.js').catch(e=>{maneeReportModelPromise=null;throw e;});
+    return maneeReportModelPromise;
+  }
   function loadReportScript(src){
-    return new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.onload=resolve;script.onerror=()=>{script.remove();reject(Error('Report asset unavailable'));};document.head.appendChild(script);});
+    return new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      const fail=()=>{clearTimeout(timer);script.remove();reject(Error('Report asset unavailable'));};
+      const timer=setTimeout(fail,20000);
+      script.src=src;script.onload=()=>{clearTimeout(timer);resolve();};script.onerror=fail;
+      document.head.appendChild(script);
+    });
   }
   async function loadReportAssets(){
-    if(!maneeReportAssetsPromise)maneeReportAssetsPromise=(async()=>{await loadReportScript('/report-assets/pdf-lib.min.js');await loadReportScript('/report-assets/fontkit.umd.min.js');await loadReportScript('/report-assets/monthly-report.js');const r=await fetch('/report-assets/NanumGothic-Regular.ttf');if(!r.ok)throw Error('Report font unavailable');return {PDFLib:window.PDFLib,fontkit:window.fontkit,fontBytes:await r.arrayBuffer()};})().catch(e=>{maneeReportAssetsPromise=null;throw e;});
+    if(!maneeReportAssetsPromise)maneeReportAssetsPromise=(async()=>{
+      await loadReportModel();
+      await loadReportScript('/report-assets/pdf-lib.min.js');
+      await loadReportScript('/report-assets/fontkit.umd.min.js');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+      try{const r=await fetch('/report-assets/NanumGothic-Regular.ttf',{signal:controller.signal});if(!r.ok)throw Error('Report font unavailable');return {PDFLib:window.PDFLib,fontkit:window.fontkit,fontBytes:await r.arrayBuffer()};}
+      finally{clearTimeout(timer);}
+    })().catch(e=>{maneeReportAssetsPromise=null;throw e;});
     return maneeReportAssetsPromise;
   }
   function reportDownloadName(closing,extension){
     const safe=String(closing.snapshot.store_name).replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_');return '매니_'+safe+'_'+closing.month_key+(closing.status==='provisional'?'_잠정':'_v'+closing.revision)+'.'+extension;
   }
-  async function downloadClosingReport(id,type){
-    if(state.reportDownloading)return;const alive=reportActionGuard();state.reportDownloading=true;
-    try{const r=await db.rpc('manee_closed_report',{p_closing_id:id});if(r.error||!r.data?.snapshot)throw Error('Report unavailable');if(!alive())return;
-      const closing=r.data,assets=await loadReportAssets();if(!alive())return;
-      if(type==='pdf'){const bytes=await window.MANEE_REPORTS.pdfBytes(closing,assets);if(!alive())return;const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),a=document.createElement('a');a.href=url;a.download=reportDownloadName(closing,'pdf');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-      else{if(typeof XLSX==='undefined')throw Error('Excel unavailable');const sheets=window.MANEE_REPORTS.excelRows(closing),wb=XLSX.utils.book_new();for(const [key,name] of [['summary','월말 요약'],['sales','일별 매출'],['expenses','지출 상세'],['daily','날짜별 합계'],['vendors','거래처별 합계'],['fixed','고정비']]){const ws=XLSX.utils.aoa_to_sheet(sheets[key]);styleWorksheet(ws,sheets[key]);XLSX.utils.book_append_sheet(wb,ws,name);}if(!alive())return;XLSX.writeFile(wb,reportDownloadName(closing,'xlsx'));}
-    }catch(e){if(alive())showToast('다운로드하지 못했어요. 저장된 마감 기록은 유지돼요. 다시 시도해 주세요.');}
-    finally{state.reportDownloading=false;}
+  async function downloadClosingReport(id,type,area='history'){
+    return downloadReport(type,'manee_closed_report',{p_closing_id:id},area);
+  }
+  function renderReportExportStatus(area='current'){
+    const feedback=state.reportExportFeedback,active=feedback?.scope===currentStoreId()+':'+monthKey()&&feedback.area===area;
+    return '<p class="report-export-status" data-report-export-status="'+escapeHtml(area)+'" data-kind="'+(active?feedback.kind:'')+'" role="status" aria-live="polite"'+(active?'':' hidden')+'>'+(active?escapeHtml(feedback.message):'')+'</p>';
+  }
+  function setReportExportFeedback(message,kind='progress',area='current'){
+    state.reportExportFeedback={scope:currentStoreId()+':'+monthKey(),area,message,kind};
+    document.querySelectorAll('[data-report-export-status]').forEach(el=>{const active=el.dataset.reportExportStatus===area;el.hidden=!active;el.textContent=active?message:'';el.dataset.kind=active?kind:'';});
+    syncReportExportButtons();
+  }
+  function syncReportExportButtons(){
+    document.querySelectorAll('#current-report-pdf,#current-report-excel,[data-closing-pdf],[data-closing-excel]').forEach(el=>{el.disabled=!!state.reportDownloading;el.setAttribute('aria-busy',String(!!state.reportDownloading));});
+    const close=document.getElementById('month-close-btn');if(close)close.disabled=!!(state.reportDownloading||state.monthClosing);
+  }
+  async function saveReportFile(bytes,filename,mimeType){
+    if(window.MANEE_NATIVE?.saveFile)return window.MANEE_NATIVE.saveFile({bytes,filename,mimeType});
+    // Native Android must never silently fall back to an unsupported blob download.
+    if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');
+    const url=URL.createObjectURL(new Blob([bytes],{type:mimeType})),a=document.createElement('a');
+    try{a.href=url;a.download=filename;document.body.appendChild(a);a.click();}
+    finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+    return {status:'downloaded'};
+  }
+  async function downloadReport(type,rpc,payload,area='current'){
+    if(state.reportDownloading||!['pdf','excel'].includes(type))return;
+    const alive=reportActionGuard(),label=type==='pdf'?'PDF':'엑셀',feedback=(message,kind)=>setReportExportFeedback(message,kind,area);state.reportDownloading=true;
+    let phase='load',timer;
+    feedback((type==='pdf'?'PDF를':'엑셀을')+' 만들고 있어요…');
+    try{
+      // Allow the progress message to paint before generating a large report.
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const r=await Promise.race([db.rpc(rpc,payload),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Report request timed out')),35000);})]);
+      clearTimeout(timer);
+      if(r.error||!r.data?.snapshot)throw Error('Report unavailable');if(!alive())return;
+      const closing=r.data;let bytes,mimeType,extension;phase='generate';
+      if(type==='pdf'){
+        const assets=await loadReportAssets();if(!alive())return;
+        bytes=await window.MANEE_REPORTS.pdfBytes(closing,assets);mimeType='application/pdf';extension='pdf';
+      }else{
+        await loadReportModel();if(!alive())return;
+        if(typeof XLSX==='undefined')throw Error('Excel unavailable');
+        const wb=window.MANEE_REPORTS.excelWorkbook(closing,XLSX);
+        bytes=XLSX.write(wb,{bookType:'xlsx',type:'array'});mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';extension='xlsx';
+      }
+      if(!alive())return;phase='save';
+      feedback(window.MANEE_NATIVE?.saveFile?'저장할 위치를 선택해 주세요.':'다운로드를 시작하고 있어요…');
+      const result=await saveReportFile(bytes,reportDownloadName(closing,extension),mimeType);
+      if(!alive())return;
+      if(result?.status==='cancelled')feedback('저장을 취소했어요.','cancelled');
+      else feedback(result?.status==='saved'?label+' 파일을 저장했어요.':'다운로드를 시작했어요. 다운로드 목록을 확인해 주세요.','success');
+    }catch(e){
+      if(alive())feedback(phase==='load'?'보고서를 불러오지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.':phase==='save'?'파일을 저장하지 못했어요. 저장 공간과 위치를 확인하고 다시 시도해 주세요.':'보고서를 만들지 못했어요. 입력한 매출·비용을 확인하고 다시 시도해 주세요.','error');
+    }finally{clearTimeout(timer);state.reportDownloading=false;syncReportExportButtons();}
   }
   function renderMonthlyReport(){
     if(state.showVatDetail) return renderVatDetail();
@@ -10370,6 +10591,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     bindVendorExpenseDefault('quick-');
     const addQuickExpenseBtn = document.getElementById("add-quick-expense-btn");
     if(addQuickExpenseBtn) addQuickExpenseBtn.addEventListener("click", addQuickExpenseEntry);
+    bindReservationTimeInputs();
     const addReservationBtn = document.getElementById("add-reservation-btn");
     if(addReservationBtn) addReservationBtn.addEventListener("click", addReservation);
     const showReservationFormBtn = document.getElementById("show-reservation-form-btn");
@@ -10542,6 +10764,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     });
     const addCrewBtn = document.getElementById("add-crew-btn");
     if(addCrewBtn) addCrewBtn.addEventListener("click", addCrewMember);
+    setCrewCreateBusy();
     const showAddCrewBtn = document.getElementById("show-add-crew-btn");
     if(showAddCrewBtn) showAddCrewBtn.addEventListener("click", ()=>{ state.showAddCrewForm = true; render(); });
     const cancelAddCrewBtn = document.getElementById("cancel-add-crew-btn");
@@ -10897,14 +11120,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
 
   function bindOwnerEvents(){
+    bindReservationTimeInputs();
     setReservationBusy();
-    app.querySelectorAll('[data-owner-setup-resume]').forEach(el=>el.onclick=async()=>{
-      const target=state.homeStore&&state.homeStore!=='__all__'?state.homeStore:state.store;
-      if(!state.myStores.includes(target))return;
-      if(target!==state.store)await switchOwnerStore(target);
-      if(state.role!=='storeOwner'||state.store!==target)return;
-      state.ownerSetupDraft=null;state.onboardingStep=ownerSetupInitialStep();render();
-    });
+    app.querySelectorAll('[data-owner-setup-resume]').forEach(el=>el.onclick=resumeOwnerSetup);
     if(state.showOwnerSalesForm) bindSalesReportEvents();
     const notifSummaryToggleBtn = document.getElementById("notif-summary-toggle-btn");
     if(notifSummaryToggleBtn) notifSummaryToggleBtn.addEventListener("click", ()=>{
@@ -11181,9 +11399,12 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   async function syncAuthAcrossTabs(){
     const shownUser = state.authProfile && state.authProfile.user_id;
     if(!shownUser || state.role === "landing") return;
+    const alive = maneeLoadGuard('auth-tab-sync');
     let uid = null;
     try{
-      const { data } = await db.auth.getSession();
+      const { data, error } = await db.auth.getSession();
+      // A failed refresh is not evidence of logout. An older lookup must never clear a new login.
+      if(error || !alive() || state.role === "landing") return;
       uid = data && data.session && data.session.user ? data.session.user.id : null;
     }catch(e){ return; }
     if(uid === shownUser) return;

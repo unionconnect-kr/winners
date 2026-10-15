@@ -227,9 +227,19 @@ test('V2-04: the last 7 days use one business day, separate "not entered" / 0 wo
   // the lookup itself is the stores' own last-7-days query, not the month view
   assert.ok(html.includes('sales_reports").select("date,total_sales").eq("store_id",id).gte("date",salesFrom).lte("date",salesTo)'));
 });
+test('owner store picker shows the sole store directly and keeps multiple stores selectable',()=>{
+  const src=slice('  function renderOwnerStorePicker(){','  function renderOwnerShell(){');
+  const state={myStores:['A'],store:'A',homeStore:'A'};
+  const render=new Function('state','ownerRouteGroup','navIcon','escapeHtml',src+';return renderOwnerStorePicker;')(state,()=> 'home',()=>'',s=>String(s));
+  assert.match(render(),/<span>A<\/span>/);assert.doesNotMatch(render(),/<select|<option/);
+  state.myStores.push('B');const multiple=render();
+  assert.match(multiple,/<select id="owner-store-select"/);
+  assert.match(multiple,/<option value="A" selected>A<\/option>/);
+  assert.match(multiple,/<option value="B">B<\/option>/);
+});
 test('owner header follows the mockup and AI / store-request are independent detail screens', ()=>{
   const shell=slice('  function renderOwnerShell(){','  function bindOwnerUIEvents(){');
-  assert.ok(shell.indexOf('owner-bell')<shell.indexOf('class="owner-picker"'));                       // bell is in the top row, the picker is the second row
+  assert.ok(shell.indexOf('owner-bell')>=0&&shell.indexOf('owner-bell')<shell.indexOf('renderOwnerStorePicker()'));                       // bell is in the top row, the picker is the second row
   assert.ok(/if\(state\.showAddStoreForm\) html\+=renderAddStoreForm\(\);\s*else if\(state\.showOwnerSalesForm\)/.test(shell));   // one body at a time
   assert.ok(shell.includes("else if(state.section==='ai') html+=renderAiChatSection()"));
   assert.ok(slice('  function renderAiChatSection(){','  function renderAdminSettingsSection(){').includes("ownerDetailHeader('AI 물어보기'"));

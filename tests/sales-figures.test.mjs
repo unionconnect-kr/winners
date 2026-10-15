@@ -41,13 +41,14 @@ function report(salesReports,{fixed=0,expense=0,failed=[]}={}){
   const state={role:'storeOwner',store:'A',monthYear:2026,monthNum:10,storeFoodLimitMap:{},storeLaborLimitMap:{},
     salesReports,expenseEntries:[],crew:[],fixedExpenses:fixed?[{id:'f',name:'월세',amount:fixed}]:[],showFixedExpenseManage:false,classifyVendor:null,showVatDetail:false,
     reportDataFailed:new Set(failed)};
-  const ctx=vm.createContext({state,console,escapeHtml:s=>String(s),daysInMonth:()=>30,
+  const ctx=vm.createContext({state,console,currentStoreId:()=>state.store,escapeHtml:s=>String(s),daysInMonth:()=>30,
     computeVendorBreakdown:()=>expense?[{name:'v',amount:expense}]:[],calcCrewPay:()=>({pay:0,hours:0,days:0}),
     navIcon:()=>'',renderRoleAvatar:()=>'',ownerRouteButton:()=>'',pad:n=>String(n).padStart(2,'0'),
     renderMonthlyReportActions:()=>'',renderMonthlyCostReview:()=>'',renderFixedExpenseManage:()=>'',labelWithIcon:(i,l)=>l,renderSalesReportRows:()=>'',renderVatSummaryCard:()=>'',
     canManageBusinessData:()=>true,MANEE_STAFF_AUTH_ENABLED:false,formatLimit:n=>String(n)});
   vm.runInContext([line(/  const DEFAULT_LABOR_RATIO_LIMIT[^\n]*\n/),line(/  const FOOD_LIMIT_UNKNOWN_TEXT[^\n]*\n/),
-    ...['renderClosingControls','getTaxRate', 'getTaxLabel', 'computeNetPay', 'payrollAdjustmentSnapshot', 'settleNetPayroll', 'crewSettlementFrom', 'summarizeNetPayroll'].map(fnText),
+    line(/  function monthKey\([^\n]*\n/),
+    ...['renderClosingControls','renderReportExportStatus','getTaxRate', 'getTaxLabel', 'computeNetPay', 'payrollAdjustmentSnapshot', 'settleNetPayroll', 'crewSettlementFrom', 'summarizeNetPayroll'].map(fnText),
     ...['summarizeSalesFigures','foodRatioLimit','laborRatioLimit','foodRatioVerdict','laborRatioVerdict','foodRatioColor','foodRatioNote','renderMonthlyReport'].map(fnText),
     ';this.render=renderMonthlyReport;'].join('\n'),ctx);
   return ctx.render();

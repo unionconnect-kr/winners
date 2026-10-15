@@ -21,7 +21,7 @@ function harness(options={}){
   };
   const context=createContext({
     MANEE_IS_STAGING:true,SUPABASE_URL:'https://offline.invalid',SUPABASE_ANON_KEY:'test-public',state,db,console,
-    fetch:async(url,args)=>{calls.push({recoveryUrl:url,request:args});return {ok:!options.recoveryError,json:async()=>options.recoveryError?{message:'처리 실패'}:options.recoveryResponse||{ok:true}};},app:{addEventListener(){}},document:{getElementById(id){return {value:options.inputs?.[id]||''};}},
+    fetch:async(url,args)=>{calls.push({recoveryUrl:url,request:args});return {ok:!options.recoveryError,json:async()=>options.recoveryError?{message:'처리 실패'}:options.recoveryResponse||{ok:true}};},app:{addEventListener(){}},document:{getElementById(id){return {value:options.inputs?.[id]||'',checked:id==='staff-signup-age-confirmed'?options.ageConfirmed===true:false};}},
     navigator:{geolocation:{getCurrentPosition(resolve){resolve({coords:{latitude:37.5,longitude:127}});}}},
     localGet:k=>storage.has(k)?{value:storage.get(k)}:null,localSet:(k,v)=>storage.set(k,v),localDelete:k=>storage.delete(k),
     render(){calls.push('render');},showToast(message){calls.push({toast:message});},
@@ -84,7 +84,7 @@ test('Failed clock-out keeps existing record unchanged, while revoked access cle
   await revoked.context.clockAuthStaff('out');assert.equal(revoked.state.attendance.length,0);assert.equal(revoked.state.role,'landing');
 });
 test('Staff signup calls only the employee endpoint and then opens connection portal',async()=>{
-  const h=harness({inputs:{'staff-signup-name':'Worker','staff-signup-username':'worker','staff-signup-password':'synthetic-password','staff-signup-confirm':'synthetic-password','staff-signup-phone':'010-0000-0000','staff-signup-bank':'테스트은행','staff-signup-account':'000-000-0000','staff-signup-holder':'Worker'}});
+  const h=harness({ageConfirmed:true,inputs:{'staff-signup-name':'Worker','staff-signup-username':'worker','staff-signup-password':'synthetic-password','staff-signup-confirm':'synthetic-password','staff-signup-phone':'010-0000-0000','staff-signup-bank':'테스트은행','staff-signup-account':'000-000-0000','staff-signup-holder':'Worker'}});
   const checkButton={dataset:{staffAuthAction:'check-staff-username'},disabled:false};checkButton.closest=()=>checkButton;
   await h.context.handleStaffAuthClick({target:checkButton});
   const button={dataset:{staffAuthAction:'signup'},disabled:false};button.closest=()=>button;
@@ -145,4 +145,22 @@ test('Recovery failure does not display success or discard the form',async()=>{
   const h=harness({recoveryError:true,state:{landingMode:'account-recovery'},inputs:{'recovery-username':'worker','recovery-code-input':'123456','recovery-new-password':'password-a','recovery-confirm-password':'password-a'}});
   await assert.rejects(()=>h.context.handleAccountRecoveryAction('recovery-reset'));
   assert.equal(h.state.landingMode,'account-recovery');assert.equal(h.calls.some(c=>c.toast),false);
+});
+test('expired-store attendance refusal explains the restriction and preserves staff login',async()=>{
+ const h=harness({memberships:[staff],rpcError:{code:'P4402',message:'expired'},state:{role:'staff',store:'Staff Store',storeIdMap:{'Staff Store':'store-staff'},authProfile:{user_id:'verified-user'},myCrewId:'crew-self',attendance:[]}});
+ await h.context.clockAuthStaff('in');
+ assert.equal(h.state.role,'staff');assert.equal(h.state.staffClockBusy,false);
+ assert.ok(h.calls.some(c=>c.toast?.includes('출퇴근') && c.toast?.includes('제한')));
+ assert.equal(h.calls.some(c=>c.toast?.includes('처리됐어요')),false);
+});
+
+
+test('Staff signup refuses an unchecked age confirmation without making a signup request',async()=>{
+ const h=harness({state:{staffSignupUsernameCheck:{username:'worker',available:true}},inputs:{'staff-signup-name':'Worker','staff-signup-username':'worker','staff-signup-password':'synthetic-password','staff-signup-confirm':'synthetic-password'}});
+ const button={dataset:{staffAuthAction:'signup'},disabled:false};button.closest=()=>button;
+ await h.context.handleStaffAuthClick({target:button});
+ assert.equal(h.calls.some(c=>c.edge==='manee-staff-signup'),false);
+ assert.ok(h.calls.some(c=>c.toast?.includes('14세')));
+ assert.match(h.context.renderStaffSignup(),/id="staff-signup-age-confirmed" type="checkbox"/);
+ assert.doesNotMatch(h.context.renderStaffSignup(),/id="staff-signup-age-confirmed"[^>]* checked/);
 });

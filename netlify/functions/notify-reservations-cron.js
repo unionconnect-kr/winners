@@ -5,6 +5,7 @@ const { blockExternalService } = require("./lib/manee-environment.cjs");
 // 스케줄은 netlify.toml에서 설정합니다 (아무도 앱을 안 열어도 실행됨).
 
 const webpush = require('web-push');
+const {sendNativePush}=require('./lib/native-push.cjs');
 const {getVapidDetails}=require('./lib/push-vapid.cjs');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -77,6 +78,10 @@ exports.handler = async () => {
         )
       );
 
+      // APNs recipients are independently authorized at send time. Native
+      // failures do not undo existing browser delivery or leak device tokens.
+      try { const native=await sendNativePush(supabase,{storeId});totalSent+=native.sent; }
+      catch { console.warn('Native reservation notification unavailable'); }
       list.forEach(r => notifiedIds.push(r.id));
     }
 

@@ -2,7 +2,7 @@
   'use strict';
   const categories={food:'식자재',beverage:'주류·음료',supplies:'소모품',insurance:'보험료 납부',payroll_tax:'급여 원천세 납부',utilities:'공과금',fees:'수수료',tax:'기타 세금',other:'기타'};
   const disclaimer=['이 보고서는 입력된 매출·지출, 인건비·고정비를 기준으로 계산한 참고자료입니다.','입력 누락, 재고 및 비용 반영 시점 등에 따라 실제 순이익과 차이가 날 수 있습니다.'];
-  const won=n=>n===null||n===undefined?'계산 보류':Number(n).toLocaleString('ko-KR')+'원';
+  const won=n=>n===null||n===undefined?'계산 보류':(Number(n)===0?0:Number(n)).toLocaleString('ko-KR')+'원';
   const category=e=>categories[e.category]||'미분류';
   function validate(closing){
     const r=closing?.snapshot,draft=closing?.status==='provisional';
@@ -35,6 +35,65 @@
   function excelRows(closing){
     const r=validate(closing),g=groupExpenses(r.expenses);
     return {summary:summaryRows(closing),sales:[['날짜','총매출','할인','반품','실매출','카드','현금','기타 결제','배민','쿠팡','요기요'],...r.sales.map(d=>[d.date,d.gross,d.discount,d.refund,d.net,d.card,d.cash,d.emoney,d.delivery_baemin,d.delivery_coupang,d.delivery_yogiyo])],expenses:[['날짜','거래처','분류','금액','내용'],...g.days.flatMap(d=>d.entries.map(e=>[e.date,e.description||'',category(e),e.amount,e.memo||'']))],daily:[['날짜','건수','합계'],...g.days.map(d=>[d.date,d.entries.length,d.amount])],vendors:[['거래처','건수','첫 지출일','마지막 지출일','합계'],...g.vendors.map(v=>[v.name,v.count,v.first,v.last,v.amount])],fixed:[['고정비','금액'],...r.fixed.map(e=>[e.name,e.amount])]};
+  }
+  function reportTime(value){
+    const date=new Date(value);
+    if(!value||Number.isNaN(date.getTime()))return '기준 시각 확인 필요';
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).map(p=>[p.type,p.value]));
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} KST`;
+  }
+  // Report-only formatting: keep exported amounts numeric and other app exports unchanged.
+  function excelWorkbook(closing,XLSX){
+    const data=excelRows(closing),wb=XLSX.utils.book_new();
+    data.summary=data.summary.map(row=>row[0]==='기준 시각'?[row[0],reportTime(row[1])]:row.map(v=>v===null?'계산 보류':v));
+    const specs=[
+      ['summary','월말 요약',[36,58]],
+      ['sales','일별 매출',[16,...Array(10).fill(20)]],
+      ['expenses','지출 상세',[16,30,20,20,56]],
+      ['daily','날짜별 합계',[16,12,20]],
+      ['vendors','거래처별 합계',[32,12,16,16,20]],
+      ['fixed','고정비',[40,20]],
+    ];
+    const moneyFormat='#,##0"원";[Red]-#,##0"원";0"원"';
+    const countLabels={'영업 보고 일수':'일','미입력 영업일':'일','급여 추정 인원':'명','급여 계산 보류 인원':'명'};
+    const moneyColumns={sales:[1,2,3,4,5,6,7,8,9,10],expenses:[3],daily:[2],vendors:[4],fixed:[1]};
+    const ink='243B32',green='0F3D2E',light='EAF3ED',line='DDE5DF';
+    const displayWidth=text=>Array.from(text).reduce((n,ch)=>n+(ch.codePointAt(0)>255?2:1),0);
+    for(const [key,name,widths] of specs){
+      const rows=data[key],ws=XLSX.utils.aoa_to_sheet(rows),summary=key==='summary';
+      ws['!cols']=widths.map(wch=>({wch}));ws['!rows']=[];
+      ws['!margins']={left:0.3,right:0.3,top:0.45,bottom:0.45,header:0.2,footer:0.2};
+      rows.forEach((row,r)=>{
+        if(!row.length){ws['!rows'][r]={hpt:12};return;}
+        const header=r===0||(summary&&row[0]==='항목'),profit=summary&&row[0]==='지출 기준 예상 수익';
+        const emphasized=summary&&['실매출','지출','고정비'].includes(row[0]);
+        const note=summary&&['계산 기준','가불','집계 기준','안내'].includes(row[0]);
+        let height=header?32:28;
+        for(let c=0;c<widths.length;c++){
+          const addr=XLSX.utils.encode_cell({r,c}),cell=ws[addr];if(!cell)continue;
+          const numeric=cell.t==='n';
+          const money=numeric&&(summary?!countLabels[row[0]]:moneyColumns[key].includes(c));
+          if(numeric)cell.z=money?moneyFormat:summary?'0"'+countLabels[row[0]]+'"':row[c]===0?'0':'#,##0';
+          cell.s={
+            font:{name:'맑은 고딕',sz:header?12:11,bold:header||profit||emphasized,color:{rgb:header?'FFFFFF':profit?green:note?'52655B':ink}},
+            fill:{patternType:'solid',fgColor:{rgb:header?green:profit?'DCECE1':emphasized?light:summary&&c===0?'F2F6F3':r%2===0&&!summary?'F5F8F5':'FFFFFF'}},
+            alignment:{horizontal:numeric?'right':header&&!summary?'center':'left',vertical:'center',wrapText:true},
+            border:{bottom:{style:'hair',color:{rgb:line}}},
+          };
+          if(cell.z)cell.s.numFmt=cell.z;
+          const display=numeric?XLSX.SSF.format(cell.z,cell.v):String(cell.v??'');
+          // CJK glyphs use roughly twice a Latin character's width. Explicit row heights
+          // also work in Android viewers that do not automatically fit wrapped cells.
+          const lines=display.split('\n').reduce((n,text)=>n+Math.max(1,Math.ceil(displayWidth(text)/(widths[c]-5))),0);
+          height=Math.max(height,lines*17+12);
+        }
+        ws['!rows'][r]={hpt:Math.min(height,409)};
+      });
+      if(!summary&&rows.length>1)ws['!autofilter']={ref:ws['!ref']};
+      XLSX.utils.book_append_sheet(wb,ws,name);
+    }
+    wb.Props={Title:'매니 월간 보고서 · '+closing.snapshot.month_key,Subject:closing.snapshot.store_name,Author:'MANEE'};
+    return wb;
   }
   async function pdfBytes(closing,options){
     const r=validate(closing),g=groupExpenses(r.expenses),lib=options.PDFLib,doc=await lib.PDFDocument.create();doc.registerFontkit(options.fontkit);
@@ -107,5 +166,5 @@
     pages.forEach((p,i)=>{page=p;rule(70);text(disclaimer[0],34,56,7,muted);text(disclaimer[1],34,44,7,muted);text('MANEE · 우리가게 매니저',34,24,8,green);right((i+1)+' / '+pages.length,24,8,muted);});
     return doc.save();
   }
-  root.MANEE_REPORTS={validate,summaryRows,excelRows,pdfBytes,groupExpenses,disclaimer};
+  root.MANEE_REPORTS={validate,summaryRows,excelRows,excelWorkbook,pdfBytes,groupExpenses,disclaimer};
 })(typeof window==='undefined'?globalThis:window);

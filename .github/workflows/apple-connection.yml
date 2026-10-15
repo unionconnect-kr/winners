@@ -1,0 +1,31 @@
+name: Apple upload connection check
+
+on:
+  push:
+    branches: [codex/ios-build-preparation]
+    paths:
+      - '.github/workflows/apple-connection.yml'
+      - 'mobile/scripts/check-apple-connection.mjs'
+      - 'mobile/scripts/check-apple-connection.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-build-preparation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test checker with disposable keys
+        run: node --test mobile/scripts/check-apple-connection.test.mjs
+      - name: Verify app access without displaying credentials
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node mobile/scripts/check-apple-connection.mjs

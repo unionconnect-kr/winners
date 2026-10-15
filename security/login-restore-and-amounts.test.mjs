@@ -43,7 +43,7 @@ function restoreHarness(){
   const ctx=vm.createContext({state,console,render(){log.render++;},
     showToast:m=>log.toast.push(m),staffErrorMessage:e=>'err:'+(e&&e.code),maneeTakeSuperseded:()=>false,adminEntryLandingMode:()=>'x',MANEE_STAFF_AUTH_ENABLED:true,MANEE_ADMIN_AUTH_ENABLED:false,
     localGet:()=>null,localSet:(k,v)=>{log.localSet.push([k,v]);},localDelete(){},
-    DEFAULT_STORES:[],DEFAULT_STORE_LIST:[],
+    DEFAULT_STORES:[],DEFAULT_STORE_LIST:[],currentStoreId:()=>state.storeIdMap[state.store],
     loadAllForStore:async s=>{log.loadAll.push(s);const g=h.gates['loadAll#'+log.loadAll.length];if(g)await g.promise;},loadStaffHome:async(...a)=>{log.staffHome.push(a);},
     db:{
       auth:{getSession:async()=>({data:h.current?{session:{user:{id:h.current}}}:null,error:null}),
@@ -57,8 +57,8 @@ function restoreHarness(){
         return {data,error:null};
       },
       from:builder}});
-  vm.runInContext([line(/  let maneeViewEpoch[^\n]*\n/),line(/  let maneeRestoreSeq[^\n]*\n/,true),line(/  function maneeRestoreGuard\(\)[^\n]*\n/,true),
-    ...['resolveIdentity','clearStaffAuthView','staffPortal','restoreManeeAuthIdentity','restoreManeeAuthIdentityRun','restoreManeeAuthOwner','restoreManeeAuthOwnerRun','loadStoreList','becomeStoreOwner'].map(n=>fnText(n,/Run$/.test(n))),
+  vm.runInContext([line(/  let maneeViewEpoch[^\n]*\n/),line(/  let maneeRestoreSeq[^\n]*\n/,true),line(/  function maneeRestoreGuard\(\)[^\n]*\n/,true),line(/  const OWNER_SETUP_STEPS[^\n]*\n/),
+    ...['ownerSetupKey','ownerSetupProgress','ownerSetupInitialStep','ownerSetupStartupStep','resolveIdentity','clearStaffAuthView','staffPortal','restoreManeeAuthIdentity','restoreManeeAuthIdentityRun','restoreManeeAuthOwner','restoreManeeAuthOwnerRun','loadStoreList','becomeStoreOwner'].map(n=>fnText(n,/Run$/.test(n))),
     ';this.api={resolveIdentity,clearStaffAuthView,restoreManeeAuthIdentity,restoreManeeAuthOwner,loadStoreList,becomeStoreOwner};'].join('\n'),ctx);
   return {h,state,log,api:ctx.api,gate:(key)=>{const d=deferred();h.gates[key]=d;return d;}};
 }

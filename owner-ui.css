@@ -388,3 +388,44 @@ body:has(.expense-editor-overlay) .toast{z-index:110}
 .owner-ui .owner-report-home-notice button{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:11px 12px;border:0;border-radius:9px;background:#315f45;color:#fff;font:inherit;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;}
 .owner-ui .owner-report-home-notice .home-report-footnote{font-size:11px;color:#66766b;}
 .owner-ui .owner-report-home-notice button:focus-visible{outline:3px solid #a1bda8;outline-offset:3px;}
+
+/* Monthly reports: clear export feedback, closing confirmation and saved history. */
+.report-card-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.report-card-heading h3{margin:0!important;color:var(--ink)}
+.report-badge{display:inline-block;padding:4px 8px;border-radius:7px;background:#edf4ef;color:#42624e;font-size:11px;font-weight:650}
+.report-description{margin:0 0 16px;font-size:13px;line-height:1.7;color:var(--ink-soft);word-break:keep-all;overflow-wrap:anywhere}
+.report-export-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.report-button{min-height:46px;min-width:44px;padding:11px 14px;border:1px solid #d7e4db;border-radius:12px;background:#f0f6f2;color:#21583c;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.report-button-primary{background:var(--brick);border-color:var(--brick);color:#fff}
+.report-button:disabled{opacity:.55;cursor:wait}
+.report-button:focus-visible,.report-cost-link:focus-visible,.report-refresh:focus-visible,.report-help summary:focus-visible{outline:3px solid #80bda0;outline-offset:3px}
+.report-cost-link{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 0 0;margin-top:16px;border:0;border-top:1px solid var(--line);background:transparent;color:#42624e;font:inherit;font-size:13px;font-weight:650;text-align:left}
+.report-cost-link span{font-size:21px}
+.report-export-status{margin:12px 0 0;padding:11px 12px;border-radius:10px;background:#edf4ef;color:#365641;font-size:13px;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
+.report-export-status[data-kind=error]{background:#fff0ed;color:#a13a30}
+.report-export-status[data-kind=success]{background:#e8f5eb;color:#20633d}
+.report-export-status[hidden]{display:none}
+.report-confirm{display:flex;align-items:flex-start;gap:11px;padding:15px 13px;margin:18px 0;background:#f3f7f4;border:1px solid #e2ebe5;border-radius:12px;cursor:pointer}
+.report-confirm input[type=checkbox]{flex:0 0 22px;width:22px;height:22px;min-height:22px;margin:1px 0 0;accent-color:var(--brick)}
+.report-confirm span{min-width:0}
+.report-confirm strong{display:block;font-size:14px;line-height:1.5;color:var(--ink)}
+.report-confirm small{display:block;margin-top:6px;font-size:12px;line-height:1.7;color:var(--ink-soft);word-break:keep-all;overflow-wrap:anywhere}
+.report-close-button,.report-more{width:100%}
+.report-help{margin-top:16px;padding-top:6px;color:var(--ink-soft);font-size:12px;line-height:1.7}
+.report-help summary{padding:10px 0;cursor:pointer;font-weight:650}
+.report-help p{margin:6px 0 10px;word-break:keep-all;overflow-wrap:anywhere}
+.report-refresh{border:0;border-radius:9px;background:transparent;color:#52735f;padding:8px;font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.report-refresh:disabled{opacity:.55}
+.report-empty{padding:23px 8px 17px;text-align:center;font-size:13px;line-height:1.7;color:var(--ink-soft)}
+.report-empty strong{font-size:14px;font-weight:650;color:#50665a}
+.report-empty p{margin:6px 0 0;font-size:12px}
+.report-history-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 0;border-top:1px solid var(--line)}
+.report-history-row strong{display:block;font-size:14px;color:var(--ink)}
+.report-history-row span{display:block;margin-top:3px;font-size:12px;color:var(--ink-soft)}
+.report-history-files{display:flex;gap:7px}
+.report-history-files .report-button{min-height:44px;padding:9px 12px;font-size:13px}
+
+/* Required age attestation: retain a visible checkbox in every signup surface. */
+.signup-age-check{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0 10px!important;line-height:1.5;font-size:14px;color:var(--ink);cursor:pointer}
+.signup-age-check input[type="checkbox"]{width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;flex:0 0 20px;margin:1px 0 0!important;padding:0!important;accent-color:var(--brick)}
+.signup-age-check span{flex:1;min-width:0}

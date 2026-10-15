@@ -5,6 +5,8 @@ import {createHash} from 'node:crypto';
 import {Script,createContext} from 'node:vm';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const hashes=JSON.parse(readFileSync(new URL('fixtures/owner-preserved-functions.json',import.meta.url),'utf8'));
+// addCrewMember baseline reviewed for Android 1.11 duplicate/stale/amount guards.
+// Payload and legacy-code behavior are exercised in crew-create-interactions.test.mjs.
 for(const [name,hash] of Object.entries(hashes))test('Preserve original business contract: '+name,()=>{
   const pattern=new RegExp('^  (?:async )?function '+name+'\\([^\\n]*\\n[\\s\\S]*?(?=^  (?:async )?function |^  // |^  [a-zA-Z].*=|$$(?![\\s\\S]))','m');
   const body=html.match(pattern)?.[0];assert.ok(body,name);

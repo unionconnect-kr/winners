@@ -45,6 +45,15 @@ test('store changes synchronize home and work context, including same-store sele
  state.homeStore='__all__';await context.switchOwnerStore('B');assert.equal(state.homeStore,'B');assert.equal(loaded.length,1);
  await context.switchOwnerStore('unknown');assert.equal(state.store,'B');assert.equal(state.homeStore,'B');
 });
+test('one-store owner enters work directly and sees a store label instead of a selector',()=>{
+ const state={homeStore:'__all__',store:'A',myStores:['A']};let navigated=0;
+ const context={state,render(){throw Error('Unexpected chooser');},ownerRouteGroup:()=> 'home',navIcon:()=>'',escapeHtml:s=>s};vm.createContext(context);
+ vm.runInContext(section('ownerNavigateFromOverview','bindOwnerUIEvents')+section('renderOwnerStorePicker','renderOwnerShell'),context);
+ context.ownerNavigateFromOverview('checklist',()=>navigated++);
+ assert.equal(navigated,1);assert.equal(state.homeStore,'A');assert.equal(state.ownerStoreChoice,undefined);
+ assert.doesNotMatch(context.renderOwnerStorePicker(),/<select|__all__/);
+ state.myStores=['A','B'];assert.match(context.renderOwnerStorePicker(),/<select/);
+});
 test('overview opens store choices without preselecting a store; direct routes do not prompt',()=>{
  const state={homeStore:'__all__',store:'A',myStores:['A','B']};let navigated=0;
  const context={state,render(){}};vm.createContext(context);

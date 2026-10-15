@@ -135,14 +135,14 @@ test('Logout never wipes unrelated app data (no clear() on either storage)',()=>
 });
 
 // ---------- multi-tab sync ----------
-function syncHarness({role='storeOwner',shown='user-A',session,active=null,superseded=false}){
+function syncHarness({role='storeOwner',shown='user-A',session,active=null,superseded=false,getSession}){
   const calls=[];
-  const ctx=vm.createContext({state:{role,authProfile:shown?{user_id:shown}:null},db:{auth:{getSession:async()=>({data:{session}})}},
+  const ctx=vm.createContext({state:{role,authProfile:shown?{user_id:shown}:null},db:{auth:{getSession:getSession|| (async()=>({data:{session}}))}},
     location:{reload:()=>calls.push('reload')},clearStaffAuthView(){calls.push('clear');},localDelete(){},render(){calls.push('render');},showToast:m=>calls.push('toast:'+m),
     maneeActiveUser:()=>active,maneeTakeSuperseded:()=>superseded,
-    MANEE_ADMIN_AUTH_ENABLED:false});
-  vm.runInContext(fn('leaveToLoginScreen')+fn('syncAuthAcrossTabs'),ctx);
-  return {calls,run:()=>ctx.syncAuthAcrossTabs()};
+    MANEE_ADMIN_AUTH_ENABLED:false,maneeViewEpoch:0,maneeLoadSeq:{}});
+  vm.runInContext(fn('maneeLoadGuard')+fn('leaveToLoginScreen')+fn('syncAuthAcrossTabs'),ctx);
+  return {calls,ctx,run:()=>ctx.syncAuthAcrossTabs()};
 }
 test('Another tab logged out: this tab returns to the login screen',async()=>{
   const h=syncHarness({session:null});await h.run();
@@ -160,6 +160,33 @@ test('Events about the same account, or a session-only sign-in this tab still ho
 });
 test('The login screen is left alone',async()=>{
   const h=syncHarness({role:'landing',shown:null,session:null});await h.run();assert.deepEqual(h.calls,[]);
+});
+test('A session lookup error on foreground return does not masquerade as logout',async()=>{
+  const h=syncHarness({getSession:async()=>({data:{session:null},error:{name:'AuthRetryableFetchError',message:'offline'}})});
+  await h.run();assert.deepEqual(h.calls,[]);assert.equal(h.ctx.state.authProfile.user_id,'user-A');
+  h.ctx.db.auth.getSession=async()=>({data:{session:{user:{id:'user-A'}}},error:null});
+  await h.run();assert.deepEqual(h.calls,[]);
+  h.ctx.db.auth.getSession=async()=>({data:{session:null},error:null});
+  await h.run();assert.ok(h.calls.includes('clear'),'a confirmed logout still clears the view');
+});
+test('A delayed foreground session result cannot clear a newly signed-in account',async()=>{
+  let resolve;const pending=new Promise(r=>resolve=r);
+  const h=syncHarness({getSession:()=>pending});const task=h.run();
+  h.ctx.state.authProfile={user_id:'user-B'};h.ctx.maneeViewEpoch++;
+  resolve({data:{session:null},error:null});await task;
+  assert.deepEqual(h.calls,[]);assert.equal(h.ctx.state.authProfile.user_id,'user-B');
+});
+test('A delayed pre-logout lookup cannot clear a fresh login to the same account',async()=>{
+  let resolve;const pending=new Promise(r=>resolve=r);
+  const h=syncHarness({getSession:()=>pending});const task=h.run();
+  h.ctx.maneeViewEpoch++; // logout followed by a fresh login of user-A
+  resolve({data:{session:null},error:null});await task;assert.deepEqual(h.calls,[]);
+});
+test('Foreground and focus lookups apply only the latest session result',async()=>{
+  const results=[];const h=syncHarness({getSession:()=>new Promise(resolve=>results.push(resolve))});
+  const old=h.run(),latest=h.run();
+  results[1]({data:{session:{user:{id:'user-A'}}},error:null});await latest;
+  results[0]({data:{session:null},error:null});await old;assert.deepEqual(h.calls,[]);
 });
 test('Sync ignores this tab\'s own actions and re-checks on storage changes and when the tab becomes visible',()=>{
   const init=fn('initAuthTabSync');
