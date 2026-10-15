@@ -130,12 +130,15 @@ testing is not public release; Play's review/publish outcome is a separate step.
 
 At 22:45 KST the operator chose public paid enforcement for new stores only;
 existing stores keep their current access initially. The private inactive rollout
-migration and new-store trigger are implemented and installed on Staging.
+migration and new-store trigger are implemented and installed on Staging and
+Production, both unlaunched with zero enrollment.
 Rollback-only testing covers the real service-role owner bootstrap and preserves
 all prelaunch stores. Root regression is 948 total / 937 passed / 0 failed /
 11 environment-dependent skips; the new real-PostgreSQL concurrency gate is
-required in Android CI. Production installation and the latest CI remain pending
-at this checkpoint. Installation alone does not launch checkout/enforcement,
+required in Android CI and passed without skipping. Commit `bf521e1` passed all
+five CI workflows. Production postflight at 23:02:30 KST preserved all 31 store
+rows and Songcheon write access, with no client policy-update or service-role
+launch grant. Installation alone does not launch checkout/enforcement,
 and the installed 1.21 assets do not change. See `store-billing-write-gate.md`.
 
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,

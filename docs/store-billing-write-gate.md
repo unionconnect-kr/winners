@@ -264,7 +264,9 @@ Root regression: 948 checks, 937 pass, zero failures, 11 environment-dependent
 skips. A new disposable PostgreSQL concurrency suite exercises both launch/insert
 lock orders, stale repeatable-read rejection and parallel postlaunch creation;
 the Android CI requires it to pass without skipping alongside the three existing
-concurrency suites. Its CI result remains pending at this source checkpoint.
+concurrency suites. Commit `bf521e1` passed all five CI workflows, including the
+real PostgreSQL rollout suite with zero skips (run `38747043268`, job
+`116463302415`). The complete CI regression also matched 948 / 937 / 0 / 11.
 
 Staging has the migration installed. A rollback-only activation/signup rehearsal
 confirmed a prelaunch store stays writable, no existing store is enrolled, the
@@ -274,6 +276,14 @@ rolled back. The final policy is unlaunched, enrollment zero and no client launc
 grant. Advisors add only the intentionally private RLS-without-policy INFO entry
 (25 to 26); the existing three exposed-definer and one password warnings remain.
 See [RLS-without-policy explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+The same migration was installed on Production after those CI checks. At
+23:02:30 KST, postflight confirms launched_at NULL, enrollment zero, all 31 store
+rows retained, the INSERT trigger enabled, no authenticated policy update grant
+or service-role launch execution grant, and Songcheon still write-entitled.
+Production advisors changed only the intentional private policy-table INFO
+(21 to 22); the existing three exposed-definer and one password warnings remain.
+No Production launch action was called, and no receipt or business data changed.
 
 Before the real launch action, finish the handset/public-readiness gates, deploy
 and enable the approved public checkout path, and verify sufficient Play catalog
