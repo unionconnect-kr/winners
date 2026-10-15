@@ -55,6 +55,61 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 class ManeeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(ManeeStoreKitPlugin())
+        bridge?.registerPluginInstance(ManeeReportFilesPlugin())
+    }
+}
+
+@objc(ManeeReportFilesPlugin)
+public class ManeeReportFilesPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ManeeReportFilesPlugin"
+    public let jsName = "ManeeReportFiles"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "save", returnType: CAPPluginReturnPromise)
+    ]
+    private var presentingReport = false
+
+    @objc func save(_ call: CAPPluginCall) {
+        guard let encoded = call.getString("data"), encoded.utf8.count <= 44_739_244,
+              let data = Data(base64Encoded: encoded), !data.isEmpty, data.count <= 32 * 1024 * 1024,
+              let filename = call.getString("filename"), !filename.isEmpty, filename.utf8.count <= 240,
+              !filename.contains("/"), !filename.contains("\\"), !filename.contains(":"),
+              filename.rangeOfCharacter(from: .controlCharacters) == nil,
+              let mime = call.getString("mimeType"),
+              (mime == "application/pdf" && filename.lowercased().hasSuffix(".pdf")) ||
+              (mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" && filename.lowercased().hasSuffix(".xlsx")) else {
+            call.reject("저장할 보고서 파일을 확인해 주세요."); return
+        }
+        DispatchQueue.main.async { [self] in
+            guard !presentingReport, let controller = bridge?.viewController,
+                  controller.viewIfLoaded?.window != nil, controller.presentedViewController == nil else {
+                call.reject("열려 있는 창을 닫고 다시 저장해 주세요."); return
+            }
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("manee-report-" + UUID().uuidString, isDirectory: true)
+            let file = directory.appendingPathComponent(filename, isDirectory: false)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
+                    attributes: [.protectionKey: FileProtectionType.complete])
+                try data.write(to: file, options: [.atomic, .completeFileProtection])
+            } catch {
+                try? FileManager.default.removeItem(at: directory)
+                call.reject("보고서 파일을 준비하지 못했어요. 저장 공간을 확인해 주세요."); return
+            }
+            presentingReport = true
+            let activity = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+            activity.completionWithItemsHandler = { [self] _, completed, _, error in
+                try? FileManager.default.removeItem(at: directory)
+                presentingReport = false
+                if error != nil { call.reject("파일 저장·공유를 완료하지 못했어요.") }
+                else { call.resolve(["status": completed ? "shared" : "cancelled"]) }
+            }
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = controller.view
+                popover.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.midY, width: 1, height: 1)
+                popover.permittedArrowDirections = []
+            }
+            controller.present(activity, animated: true)
+        }
     }
 }
 

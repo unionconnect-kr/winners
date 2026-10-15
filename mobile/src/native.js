@@ -16,7 +16,9 @@ window.MANEE_GEOLOCATION = {
 import { registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { createBillingClient } from './billing.mjs';
+import { reportBytesToBase64 } from './report-file.js';
 const storeKit=registerPlugin('ManeeStoreKit');
+const reportFiles=registerPlugin('ManeeReportFiles');
 let getContext=()=>null,pushTask=null,dialog=null,closing=false,refreshed=null;
 const messages={billing_not_ready:'구독 연결을 준비하고 있어요.',service_not_ready:'서비스 연결을 준비하고 있어요.',
  owner_access_denied:'사장님 계정으로 로그인하고 매장을 선택해 주세요.',authentication_required:'다시 로그인해 주세요.',
@@ -125,6 +127,10 @@ async function openSettings(){
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }
 window.MANEE_NATIVE={
+ async saveFile({bytes,filename,mimeType}){
+  return reportFiles.save({data:reportBytesToBase64(bytes),filename,mimeType});
+ },
+ subscriptionDenied(){if(getContext()?.role==='storeOwner')openSettings();},
  configure(context){getContext=context;},openSettings,
  refresh(){
   const c=getContext();if(!c?.userId||!c.storeId)return;

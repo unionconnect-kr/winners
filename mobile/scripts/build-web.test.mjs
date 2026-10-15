@@ -19,6 +19,13 @@ test('build isolates environments and leaves canonical web/backend sources untou
     vm.runInNewContext(read('www/app-config.js'), sandbox);
     assert.equal(sandbox.window.MANEE_CONFIG.environment, environment);
     const html = read('www/index.html');
+    assert.match(html, /signup-age-check/);
+    assert.match(html, /window\.MANEE_NATIVE\.saveFile/);
+    assert.match(html, /\['android','ios'\]\.includes/);
+    assert.match(html, /result\?\.status==='shared'/);
+    assert.match(html, /error\?\.code==="P4402"/);
+    assert.match(read('www/native.js'), /ManeeReportFiles/);
+    assert.doesNotMatch(read('www/native.js'), /ManeePlayBilling/);
     assert.match(html, /const MANEE_STAFF_AUTH_ENABLED = true/);
     assert.doesNotMatch(html, /navigator\.geolocation|location\.origin|'"serviceWorker" in navigator'/);
     assert.doesNotMatch(html, /fetch\("\/\.netlify\/functions\//);

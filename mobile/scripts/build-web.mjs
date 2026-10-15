@@ -49,10 +49,17 @@ replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\
 if (platform === 'android') {
   replaceOnce('    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());',
     '    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());\n    document.getElementById("native-subscription-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSubscriptionStatus());');
+}
+// Both native clients use the same server write gate and must explain refusal.
   replaceOnce('    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)',
     '    if(error?.code==="P4402") window.MANEE_NATIVE.subscriptionDenied();\n    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)');
   replaceOnce("    if(error && error.code==='42501'){clearStaffAuthView();render();}",
     "    if(error?.code==='P4402'){showToast('매장 이용권을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
+if (platform === 'ios') {
+  replaceOnce("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
+    "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
+  replaceOnce("else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'",
+    "else if(result?.status==='shared')feedback(label+' 파일 저장·공유를 완료했어요.','success');\n      else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'");
 }
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
   "        await window.MANEE_NATIVE.prepareLogout();\n        const { error } = await db.auth.signOut({ scope: 'local' });");
