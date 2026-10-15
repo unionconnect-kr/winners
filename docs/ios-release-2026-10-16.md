@@ -41,8 +41,12 @@ successful compilation does not establish iPhone behavior.
 ## Operating boundary and remaining work
 
 App Store Connect app ID `6820833544`, bundle `kr.co.manee.app`, company team
-`J7AWFKW86N`. The secure browser login has not yet established a signed-in
-session. An entered credential form is not login success. The iPhone can use its
+`J7AWFKW86N`. The secure browser login established a signed-in company administrator session
+on 2026-10-16. Fresh TestFlight inspection shows no uploaded build. The updated
+Developer Program agreement requires the separate account holder to review and
+accept; the administrator cannot accept it. Apple reports a 2026-10-29 deadline
+for continued membership-resource access and requires acceptance for new app
+submission. No agreement was accepted by the assistant. The iPhone can use its
 own Apple account for TestFlight; it need not sign into iCloud with the developer
 account. MANEE itself uses the existing MANEE owner/employee credentials.
 
@@ -64,3 +68,19 @@ After Apple access and a reviewed upload path are ready: upload the newest signe
 build, verify Apple processing, arrange TestFlight access, and check owner/staff
 login, session restart, PDF/XLSX save/share, permission/error handling, notifications
 and purchase/restore/expiry. Only then prepare the App Store review submission.
+
+## App Store Connect live preflight
+
+The existing paid-apps agreement, bank configuration, Korean/US tax forms and
+listed compliance records displayed active status. No bank/tax data was changed.
+There is one existing subscription group with one monthly product,
+`manee.store1.monthly`, in Prepare for Submission. Price/trial and additional
+store products still require verification. Version 1.0 is Prepare for Submission
+with no selected build and empty reviewer login/contact fields. Nothing was
+submitted to Apple review, no tester invitation was sent and no charge occurred.
+
+The operator has installed TestFlight. Current signed build 1.5.1 is an artifact,
+not a TestFlight-processed build; do not present it as already installable.
+The exact upload path still needs preparation/review because the existing uploader
+is manual/main-only and the cumulative mobile source has not been merged to main.
+
