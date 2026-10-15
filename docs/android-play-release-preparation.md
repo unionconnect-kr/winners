@@ -171,6 +171,23 @@ retrieved records or found by the focused public lookup. Request those two
 values from the operator; do not invent them or use a different entity's license.
 See [Google's required Korean developer details](https://support.google.com/googleplay/android-developer/answer/3255733).
 
+The operator subsequently supplied the company registry image and explicitly
+approved entering/saving the extracted license and issuer at 23:42:41 KST. An
+initial automatic approval review had refused image-derived entry without that
+direct confirmation; the fields remained empty until approval. The approved
+values were entered, all three account fields saved, and Console displayed
+saved changes with the save/cancel controls disabled. No personal contact
+details from the registry image were copied into the account or repository.
+
+Publishing overview was then checked again: the account-details blocker is gone
+and Console now says changes can be sent for review, with the ten-change submit
+button enabled. This supersedes the pending-fields blocker above. The ten app
+changes are still unsubmitted. Managed publishing is currently disabled, so a
+future review submission would lead to publication when Google approves; do not
+confuse this ready-to-submit state with review approval or actual publication.
+The remaining handset, erasure/retention and complete candidate-review gates
+still apply; public checkout and new-store enforcement remain unactivated.
+
 User decision: proceed toward Android/iOS launch, deferring optional physical GPS,
 long background-session and missing historical-backup checks. These are not passed.
 
