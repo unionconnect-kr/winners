@@ -2,6 +2,7 @@
 const {createHash}=require('node:crypto');
 const {createClient}=require('@supabase/supabase-js');
 const {blockExternalService}=require('./lib/manee-environment.cjs');
+const {production}=require('../../config/environments.json');
 
 const response=(statusCode,body)=>({statusCode,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'},body:JSON.stringify(body)});
 const digest=value=>createHash('sha256').update(value).digest('hex');
@@ -18,7 +19,7 @@ exports.handler=async(event)=>{
   if(!/^[a-z0-9가-힣._-]{4,30}$/.test(username)||contact.length<5||contact.length>120||/[<>\x00-\x1f\x7f]/.test(contact))
     return response(400,{error:'invalid_request',message:'아이디와 연락 가능한 이메일 또는 전화번호를 확인해 주세요.'});
   const url=process.env.SUPABASE_URL,secret=process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if(url!=='https://bhwuuxcrzxespkjlmqxr.supabase.co'||!secret)return response(503,{error:'service_not_ready'});
+  if(url!==production.supabaseUrl||!secret)return response(503,{error:'service_not_ready'});
   const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
   // No account lookup or account existence disclosure. Contact is used only for
   // the manual verification response and is never sent back to the caller.

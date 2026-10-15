@@ -37,7 +37,7 @@ function handler({blocked=false,rpc}={}){
   const calls=[];
   const client={rpc:async(name,args)=>{calls.push({name,args});return rpc?.(name,args)??{data:name==='consume_auth_rate_limit'?true:null,error:null};}};
   const context={exports,Buffer,process:{env:{SUPABASE_URL:'https://bhwuuxcrzxespkjlmqxr.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'secret'}},
-    require:name=>name==='node:crypto'?{createHash}:name==='@supabase/supabase-js'?{createClient:()=>client}:{blockExternalService:()=>blocked}};
+    require:name=>name==='node:crypto'?{createHash}:name==='@supabase/supabase-js'?{createClient:()=>client}:name==='../../config/environments.json'?{production:{supabaseUrl:'https://bhwuuxcrzxespkjlmqxr.supabase.co'}}:{blockExternalService:()=>blocked}};
   vm.runInNewContext(source,context);
   return {call:body=>exports.handler({httpMethod:'POST',headers:{'x-nf-client-connection-ip':'192.0.2.1'},body:JSON.stringify(body)}),calls};
 }
