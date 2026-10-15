@@ -424,3 +424,8 @@ body:has(.expense-editor-overlay) .toast{z-index:110}
 .report-history-row span{display:block;margin-top:3px;font-size:12px;color:var(--ink-soft)}
 .report-history-files{display:flex;gap:7px}
 .report-history-files .report-button{min-height:44px;padding:9px 12px;font-size:13px}
+
+/* Required age attestation: retain a visible checkbox in every signup surface. */
+.signup-age-check{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0 10px!important;line-height:1.5;font-size:14px;color:var(--ink);cursor:pointer}
+.signup-age-check input[type="checkbox"]{width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;flex:0 0 20px;margin:1px 0 0!important;padding:0!important;accent-color:var(--brick)}
+.signup-age-check span{flex:1;min-width:0}

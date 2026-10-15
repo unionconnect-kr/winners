@@ -13,7 +13,12 @@ verifyAndroidAssets({environment:'production',firebaseProject:'manee-production-
   info:JSON.parse(unpack('base/assets/public/build-info.json')),
   appConfig:unpack('base/assets/public/app-config.js'),
   environments:JSON.parse(readFileSync(new URL('../../config/environments.json',import.meta.url),'utf8'))});
-assert.doesNotMatch(unpack('base/assets/public/index.html'), /매니 Android 테스트 · 테스트 데이터만 입력해 주세요/);
+const packagedHtml=unpack('base/assets/public/index.html');
+assert.doesNotMatch(packagedHtml, /매니 Android 테스트 · 테스트 데이터만 입력해 주세요/);
+for(const id of ['staff-signup-age-confirmed','owner-request-age-confirmed','new-franchise-age-confirmed']) {
+  assert.ok(packagedHtml.includes(id), 'Required signup age confirmation missing from signed bundle: '+id);
+}
+assert.match(packagedHtml,/age_14_plus_confirmed\s*:\s*true/, 'Signed bundle must send the explicit confirmation.');
 assert.doesNotMatch(unpack('base/assets/public/native.js'), /ManeeStoreKit|ios-billing|ios-push/);
 const verified = execFileSync('jarsigner',['-J-Duser.language=en','-verify',aab],{encoding:'utf8'});
 assert.match(verified,/jar verified\./);
