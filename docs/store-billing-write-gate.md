@@ -222,3 +222,20 @@ currently apply. The normal post-recovery handset display is now verified.
 The still image does not independently establish a cold restart, the temporary
 expired screen or employee-session write rejection. No repeat purchase or
 permanent enrollment is needed to record this evidence.
+
+## Public rollout cohort — decision still required
+
+A Production aggregate read at 2026-10-15 22:40:51 KST found 15 nonarchived stores
+with a currently active, nonbanned owner. One has a current valid Production
+entitlement and 14 do not; enforcement enrollment remains zero. There are 17
+open attendance rows across this selected store set (not proof of 17 current
+workers). The counts do not classify internal/QA stores as paying customers.
+
+Opening public checkout and enrolling store write enforcement are separate
+changes. Automatically enrolling all existing stores would restrict business
+and attendance input for the 14 currently unentitled stores. The operator must
+choose the rollout cohort/timing before that customer-facing behavior changes:
+new stores created after a recorded launch cutoff, keeping the existing 15
+unchanged initially, or a separately announced transition for existing stores
+as well. The latter also needs its effective date. No cohort enrollment,
+grandfathering rule, cutoff timestamp or public switch was activated by this read.

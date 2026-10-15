@@ -75,6 +75,12 @@ billing/FCM/deletion processing facts. The privacy source was obtained through
 the authenticated source workflow after automated public reads failed. Unknown
 contracts/retention terms remain pending. All five CI workflows for the inventory
 implementation `1ae641a` succeeded; the installed Android 1.21 is unchanged.
+The next Staging rehearsal passed nine SQL assertions for synthetic deletion,
+session invalidation, blocker handling, retained business data and other-employee
+preservation; all fixtures rolled back and independent cleanup counts were zero.
+Five additional local rehearsal checks pass, including detection of omitted
+personal cleanup and damaged colleague attendance. This is database/session-root
+evidence, not real identity verification or a successful Auth/Storage API erasure.
 
 The Production write gate still has zero enrolled stores. The remaining business
 write surfaces and subscription lifecycle on a handset have not passed the

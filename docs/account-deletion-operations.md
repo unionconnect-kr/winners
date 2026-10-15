@@ -177,3 +177,44 @@ source, not seven additional live customer-deletion tests.
 
 Current Supabase references: [User Management](https://supabase.com/docs/guides/auth/managing-user-data)
 and [Delete Objects](https://supabase.com/docs/guides/storage/management/delete-objects).
+
+## Staging synthetic execution rehearsal — 2026-10-15
+
+The actual Staging database passed nine SQL checks using fresh, transaction-only
+identities, sessions, one store, two employees and related records. The rehearsal
+executes the existing inventory body before and after the example deletion plan;
+it does not copy that logic into a second independent implementation.
+
+It verifies live-session detection, target/crew/history discovery, atomic refusal
+of unresolved Auth deletion, the remaining monthly-review foreign-key blocker
+after notification cleanup, session invalidation, profile/membership/Android
+device cleanup, retained target attendance/review records, visible test-case
+retention, and exact preservation of the other employee. An inner exception rolls
+back every fixture before the report is returned. Fifteen existing business/private
+table fingerprints match their original state, synthetic Auth rows are absent,
+and the outer transaction ends with another ROLLBACK. At 22:37 KST an independent
+Staging read found zero matching synthetic profiles, stores, cases and devices.
+An explicit negative push-subscription identity avoids advancing its sequence.
+
+Reproduce by rendering the template and executing the output only against the
+selected Staging connector project:
+
+```sh
+node scripts/render-deletion-staging-rehearsal.mjs --project-ref obpkzecgswnfuyhwvncd
+```
+
+The renderer rejects unspecified/other/Production refs; the caller must still
+select that same actual project, because the SQL cannot independently discover
+the hosted project identity. The template is not a customer erasure command.
+The standalone inventory retains its read-only transaction wrapper; its reused
+body runs inside the rehearsal's disposable write transaction.
+
+Five new local PostgreSQL-engine/generator checks pass, alongside the unchanged
+seven inventory checks. They include deliberately omitted personal-history cleanup
+and deliberately damaged other-employee attendance; both cause the rehearsal to
+fail and roll back. The real Staging checks are a separate nine-assertion rehearsal,
+not nine completed customer deletions. No real sign-in, claimant identity proof,
+Auth Admin API request, Storage object erasure, Google cancellation, processor
+cleanup or customer-specific retention decision was tested. The retained crew
+record is not proof of irreversible anonymization merely because name/phone were
+replaced. Those operational limits remain before claiming a full real-case erasure.
