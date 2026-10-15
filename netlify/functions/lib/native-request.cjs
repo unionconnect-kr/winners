@@ -33,7 +33,7 @@ async function ownerContext(user,storeId){
 }
 function failure(error,event){
  const known={authentication_required:401,owner_access_denied:403,invalid_request:400,purchase_mismatch:409,subscription_unavailable:503,
-  billing_not_ready:503,service_not_ready:503,push_not_ready:503,other_store_subscribed:409};
+  billing_not_ready:503,service_not_ready:503,push_not_ready:503,other_store_subscribed:409,other_platform_subscribed:409};
  const code=Object.hasOwn(known,error?.message)?error.message:'native_service_failed';
  return response(known[code]||503,{error:code},event);
 }

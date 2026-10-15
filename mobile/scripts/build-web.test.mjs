@@ -26,6 +26,11 @@ test('build isolates environments and leaves canonical web/backend sources untou
     assert.match(html, /error\?\.code==="P4402"/);
     assert.match(read('www/native.js'), /ManeeReportFiles/);
     assert.doesNotMatch(read('www/native.js'), /ManeePlayBilling/);
+    assert.match(html, /native-subscription-btn/);
+    assert.match(html, /manee_ios_push_context/);
+    assert.match(read('www/native.js'), /pushNotificationActionPerformed/);
+    assert.match(read('www/native.js'), /manee_ios_push/);
+    assert.match(html, /return nativeAndroidPushAction\("enable"\)/);
     assert.match(html, /const MANEE_STAFF_AUTH_ENABLED = true/);
     assert.doesNotMatch(html, /navigator\.geolocation|location\.origin|'"serviceWorker" in navigator'/);
     assert.doesNotMatch(html, /fetch\("\/\.netlify\/functions\//);

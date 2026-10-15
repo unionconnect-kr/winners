@@ -124,14 +124,14 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "pending", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "finish", returnType: CAPPluginReturnPromise)
     ]
-    private let productId = "manee.store1.monthly"
+    private let productIds = Set((1...10).map { "manee.store\($0).monthly" })
     private var updates: Task<Void, Never>?
 
     public override func load() {
         updates = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self = self else { return }
-                if case .verified(let transaction) = result, transaction.productID == self.productId {
+                if case .verified(let transaction) = result, self.productIds.contains(transaction.productID) {
                     self.notifyListeners("transactionUpdated", data: ["transactionId": String(transaction.id)], retainUntilConsumed: true)
                 }
             }
@@ -139,17 +139,34 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     deinit { updates?.cancel() }
 
+    private func approvedProduct(_ product: Product) -> Bool {
+        guard let subscription = product.subscription,
+              subscription.subscriptionPeriod.unit == .month, subscription.subscriptionPeriod.value == 1,
+              product.priceFormatStyle.currencyCode == "KRW", product.price == Decimal(9900),
+              !product.isFamilyShareable else { return false }
+        if product.id == "manee.store1.monthly" {
+            guard let offer = subscription.introductoryOffer else { return false }
+            return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 1
+        }
+        return subscription.introductoryOffer == nil
+    }
+
     @objc func products(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId"), productIds.contains(productId) else {
+            call.reject("매장 구독 상품을 확인해 주세요."); return
+        }
         Task {
             do {
                 guard let product = try await Product.products(for: [productId]).first else {
                     call.reject("상품을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return
                 }
-                var item: JSObject = ["id": product.id, "name": product.displayName, "price": product.displayPrice]
+                var item: JSObject = ["id": product.id, "name": product.displayName, "price": product.displayPrice,
+                    "monthly": product.subscription?.subscriptionPeriod.unit == .month && product.subscription?.subscriptionPeriod.value == 1,
+                    "priceApproved": approvedProduct(product)]
                 if let subscription = product.subscription {
                     let eligible = await subscription.isEligibleForIntroOffer
                     let offer = subscription.introductoryOffer
-                    item["oneMonthFree"] = eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 1
+                    item["oneMonthFree"] = product.id == "manee.store1.monthly" && eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 1
                 }
                 call.resolve(item)
             } catch { call.reject("상품 정보를 확인하지 못했어요.") }
@@ -157,6 +174,9 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func purchase(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId"), productIds.contains(productId) else {
+            call.reject("매장 구독 상품을 확인해 주세요."); return
+        }
         guard let value = call.getString("appAccountToken"), let account = UUID(uuidString: value) else {
             call.reject("매장 연결을 다시 확인해 주세요."); return
         }
@@ -165,13 +185,16 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 guard let product = try await Product.products(for: [productId]).first else {
                     call.reject("상품을 불러오지 못했어요."); return
                 }
+                guard approvedProduct(product) else {
+                    call.reject("월 구독 상품과 요금을 확인해 주세요."); return
+                }
                 switch try await product.purchase(options: [.appAccountToken(account)]) {
                 case .success(let result):
                     guard case .verified(let transaction) = result else {
                         call.reject("구매 검증에 실패했어요."); return
                     }
                     // Finish only after the server confirms the entitlement was saved.
-                    call.resolve(["status": "purchased", "signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)])
+                    call.resolve(["status": "purchased", "signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""])
                 case .userCancelled: call.resolve(["status": "cancelled"])
                 case .pending: call.resolve(["status": "pending"])
                 @unknown default: call.reject("구매 상태를 확인하지 못했어요.")
@@ -183,13 +206,13 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     private func currentTransactions() async -> [JSObject] {
         var items: [String: JSObject] = [:]
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result, transaction.productID == productId {
-                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)]
+            if case .verified(let transaction) = result, productIds.contains(transaction.productID) {
+                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""]
             }
         }
         for await result in Transaction.unfinished {
-            if case .verified(let transaction) = result, transaction.productID == productId {
-                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)]
+            if case .verified(let transaction) = result, productIds.contains(transaction.productID) {
+                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""]
             }
         }
         return Array(items.values)
@@ -212,7 +235,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         Task {
             for await result in Transaction.unfinished {
-                if case .verified(let transaction) = result, transaction.id == id, transaction.productID == productId {
+                if case .verified(let transaction) = result, transaction.id == id, productIds.contains(transaction.productID) {
                     await transaction.finish()
                     call.resolve(); return
                 }

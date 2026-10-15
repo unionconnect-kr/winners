@@ -44,9 +44,9 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
   '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),openNativeNotification);\n  // END MANEE_ENVIRONMENT');
-replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button>${platform === 'android' ? '<button id="native-subscription-btn">매장 이용권<span>›</span></button>' : ''}<button data-owner-setup-resume>`);
+replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button><button id="native-subscription-btn">매장 이용권<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
-if (platform === 'android') {
+{
   replaceOnce('    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());',
     '    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());\n    document.getElementById("native-subscription-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSubscriptionStatus());');
 }
@@ -56,6 +56,7 @@ if (platform === 'android') {
   replaceOnce("    if(error && error.code==='42501'){clearStaffAuthView();render();}",
     "    if(error?.code==='P4402'){showToast('매장 이용권을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
 if (platform === 'ios') {
+  replaceOnce("db.rpc('manee_android_push_context'","db.rpc('manee_ios_push_context'");
   replaceOnce("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
     "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
   replaceOnce("else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'",
@@ -64,7 +65,7 @@ if (platform === 'ios') {
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
   "        await window.MANEE_NATIVE.prepareLogout();\n        const { error } = await db.auth.signOut({ scope: 'local' });");
 html = html.replaceAll('navigator.geolocation', 'window.MANEE_GEOLOCATION');
-if (platform === 'android') {
+{
   const pushAdapter = `  async function nativeAndroidPushAction(action){
     if(state.pushBusy)return;
     const alive=maneeLoadGuard("pushSubscription");
@@ -88,6 +89,8 @@ if (platform === 'android') {
   replaceOnce('  async function subscribeToPush(){', '  async function subscribeToPush(){\n    return nativeAndroidPushAction("enable");');
   replaceOnce('  async function unsubscribeFromPush(){', '  async function unsubscribeFromPush(){\n    return nativeAndroidPushAction("disable");');
   replaceOnce('출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.', '출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.');
+}
+if (platform === 'android') {
   // Let Capacitor inset the WebView below system bars and above the keyboard.
   replaceOnce('viewport-fit=cover', 'viewport-fit=contain');
   if (!androidProduction) {
