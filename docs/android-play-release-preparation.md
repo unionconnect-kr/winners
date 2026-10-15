@@ -2,11 +2,17 @@
 
 ## Current release gate — 2026-10-15
 
-Latest candidate preparation: the operator selected restricting attendance
-input on subscription expiry. Source now prepares 1.21/code 22 with matching
-staff/access-screen copy and a new attendance/edit-request billing migration;
-see `store-billing-write-gate.md`. The published internal build remains 1.20.
-The new candidate has not yet been signed, uploaded or accepted on a handset.
+Latest internal release: the operator selected restricting attendance input
+on subscription expiry. Android 1.21/code 22 includes matching staff/access-screen
+and pre-purchase copy plus the attendance/edit-request billing migration;
+see `store-billing-write-gate.md`. Signed candidate run `38715814211` succeeded
+from `c06a0a350c3e8db28c4d9c0e0e41f046a279f27c`. Its AAB SHA-256 is
+`312f14fd0e0d6eb4dc9eff3a13d976f5940bde33f13f3033ae1b46ff3fd1aca7`.
+The exact artifact was published to Play internal testing on 2026-10-15 at
+18:56 KST. Play displays latest 22 (1.21), active, available to internal testers.
+Both environments have the attendance gates and zero enrolled stores. The five
+source CI workflows also succeeded. Native handset acceptance remains pending;
+the earlier 1.20 web-page screenshot does not establish the new expiry behavior.
 
 Play internal testing has accepted Android 1.19/code 20. The pilot owner
 completed a real Play subscription for one store, and the handset reports it
