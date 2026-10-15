@@ -137,3 +137,42 @@ internal-predicate grants. Handset acceptance remains required before enrolling
 a live store. The updated source passes 923 root checks: 913 passed, zero failed,
 10 environment-dependent skips, plus 64/64 mobile checks. These do not prove a
 new signed binary or live handset acceptance.
+
+## Crew payroll follow-up — 2026-10-15
+
+The 1.21 handset screenshots confirm Play installation, the Songcheon active
+subscription screen and the new expiry explanation. At 21:17 KST the handset
+reports Google Play purchase/server verification complete after restore. A
+Production read confirms an ACTIVE, unexpired receipt checked at 21:17 KST.
+There is still no enrolled live store. A restart and actual expired attendance
+on the handset are not established by those screenshots.
+
+The crew exception also allowed customer updates to salary, wage type, tax,
+weekly allowance, insurance, probation, work condition and weekly hours. Migration
+`20261015122057_crew_payroll_billing_gate.sql` narrows that exception: those
+changes, payroll-setup completion, nonzero-pay crew creation, crew deletion and
+cross-store movement require the original store entitlement. Both OLD/NEW stores
+are checked. Existing RLS and record-identity restrictions remain in force.
+
+The established owner-approved zero-pay account connection stays available, as
+do personal-profile corrections and offboarding fields. A zero-pay identity
+cannot acquire paid wages or complete payroll setup while expired. Backend
+cleanup without a customer JWT remains possible. Hire/resignation dates, role
+and account/identity maintenance retain their existing permission boundaries;
+this is a financial-setup gate, not a claim to reject every crew-field change.
+
+Ten combined attendance/payroll integration scenarios pass, including real
+staff approval RPCs, restored financial setup, direct bypass attempts, preserved
+identity edits and backend cleanup. Root regression: 927 total, 917 pass, zero
+failures and 10 environment-dependent skips. No mobile assets changed, so the
+already published 1.21 binary remains the handset candidate.
+
+Staging deployment/postflight confirms the new trigger, zero enrolled stores,
+and no anonymous/authenticated direct execution of the trigger function. Security
+advisories are unchanged: the same 25 intentionally private RLS-without-policy
+INFO findings and four pre-existing warnings. Production deployment was rejected
+by automatic approval review because this payroll/employee-record restriction
+extends beyond its recognized attendance authorization. It is NOT installed in
+Production; no retry or indirect execution was used. Obtain explicit approval
+for that precise production change before applying it. No enrollment is part of
+this migration.

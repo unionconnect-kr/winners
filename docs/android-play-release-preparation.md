@@ -11,8 +11,13 @@ from `c06a0a350c3e8db28c4d9c0e0e41f046a279f27c`. Its AAB SHA-256 is
 The exact artifact was published to Play internal testing on 2026-10-15 at
 18:56 KST. Play displays latest 22 (1.21), active, available to internal testers.
 Both environments have the attendance gates and zero enrolled stores. The five
-source CI workflows also succeeded. Native handset acceptance remains pending;
-the earlier 1.20 web-page screenshot does not establish the new expiry behavior.
+source CI workflows also succeeded. User screenshots now confirm Play-installed
+1.21, Songcheon's active subscription display, the expiry explanation and a
+successful purchase restore/server verification at 21:17 KST. App restart and
+actual expired attendance on the handset remain unverified. The payroll-setup
+follow-up passes 927 root checks (917 pass, 10 skips, zero failures) and is
+installed on Staging; its Production deployment is blocked by automatic approval
+review pending explicit authorization for the broader payroll restriction.
 
 Play internal testing has accepted Android 1.19/code 20. The pilot owner
 completed a real Play subscription for one store, and the handset reports it
