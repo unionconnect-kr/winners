@@ -240,8 +240,10 @@ checks the actual owned-file deletion behavior, revokes refresh sessions, remove
 file through Storage API, deletes the Auth identity and checks the colleague's
 file bytes/session. Exact-fixture cleanup and unconditional stack/volume teardown
 follow. Only PASS labels are retained as a CI artifact; local credentials and
-stack logs are removed. The remote-target guard passes locally. The full API
-result is pending CI and must not yet be reported as passed.
+stack logs are removed. The remote-target guard passes locally. The corrected full API execution succeeded in CI run `38757428736` on
+`db48db4`: twelve assertions passed, exact fixture cleanup completed, and the
+throwaway containers/volumes were removed. All six workflows on that commit
+succeeded. This is real local API evidence, not a hosted customer deletion.
 
 The API stack intentionally has no MANEE migrations or customer data. It tests
 the supported API sequence alongside the existing application SQL rehearsal;
@@ -264,3 +266,9 @@ and stack teardown succeeded. The corrected rehearsal uses a separate premature-
 deletion fixture to verify that Auth removal is not file erasure, whether a given
 version refuses or permits it. The target follows Storage-first removal. Do not
 rely on an automatic owned-file refusal or treat Auth success as Storage proof.
+
+The operator subsequently selected reservation **appointment time plus seven
+days** (168 hours), replacing the earlier completion/cancellation basis. The
+retention implementation and explicit inactive/activation boundary are recorded
+in `docs/reservation-retention.md`. The 30-day deletion-case and other processor
+retention questions are separate and are not closed by that reservation change.

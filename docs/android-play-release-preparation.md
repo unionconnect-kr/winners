@@ -196,8 +196,9 @@ long background-session and missing historical-backup checks. These are not pass
 All five existing workflows for `a8b5dba` succeeded. A browser now verifies the
 complete public privacy → deletion guide → signed-out intake connection. No
 additional case was submitted. A new local-only Auth/Storage API rehearsal is
-prepared in a dedicated workflow; its complete result is pending, not accepted
-on the strength of its local target-guard check alone.
+verified in dedicated CI run `38757428736`: twelve assertions, exact fixture
+cleanup and disposable stack teardown succeeded. All six workflows on `db48db4`
+succeeded. It is not a real customer identity-verification/erasure case.
 
 The next handset batch uses the already installed Play 1.21 and does not require
 another checkout. First fully close/reopen the app and confirm the selected
@@ -541,3 +542,16 @@ Production receipt acceptance remains disabled. Multi-store product allocation,
 iOS parity, staff access during owner nonpayment and final paid rollout still need
 implementation and validation. The current single fixed product/one-store binding
 must not be advertised as supporting arbitrary additional store subscriptions.
+
+### Reservation retention follow-up — 2026-10-16 KST
+
+The operator selected appointment time plus seven days, with immediate
+cancellation deletion retained. A private invoker-only batched purge and date
+index are installed on Staging and Production. Six local retention tests pass;
+the exact Staging rollback rehearsal passes five live assertions with the
+original four reservations unchanged and zero fixtures. Production has 21 rows,
+all due under the selected rule, no invalid time values and **no scheduled purge**.
+Installation erased none. Activating the prepared cron would permanently erase
+those 21 reservation rows; that real-data effect needs explicit confirmation.
+No new Android binary is needed for this server and notice change. See
+`docs/reservation-retention.md` for implementation and the separate backup limits.
