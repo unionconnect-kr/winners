@@ -14,6 +14,17 @@ test('unenrolled store is shown as unenforced despite a sandbox purchase',()=>{
  assert.match(view.message,/입력 제한이 적용되지/);
  assert.equal(view.testActive,true);
 });
+test('verified production subscription is shown when the write gate is not enforced',()=>{
+ const view=subscriptionView({enforced:false,canWrite:true},{testOnly:false,active:true});
+ assert.match(view.title,/이용 중/);
+ assert.match(view.message,/구독이 확인/);
+ assert.match(view.message,/입력 제한이 적용되지/);
+ assert.equal(view.testActive,false);
+});
+test('sandbox purchase alone cannot produce an active subscription label',()=>{
+ const view=subscriptionView({enforced:false,canWrite:true},{testOnly:true,active:false,testActive:true});
+ assert.match(view.title,/준비 중/);
+});
 test('unknown server response never claims access',()=>{
  const view=subscriptionView(null,{active:true});
  assert.match(view.title,/확인할 수 없/);
