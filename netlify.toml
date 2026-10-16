@@ -19,3 +19,10 @@
 
 [functions."notify-monthly-costs-cron"]
 schedule = "0 1 * * *"
+
+# Netlify disables HTTP routes for these scheduled-only workers.
+[functions."ios-push-scheduled"]
+  schedule = "* * * * *"
+
+[functions."ios-billing-scheduled"]
+  schedule = "* * * * *"
