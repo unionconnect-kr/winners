@@ -1,5 +1,6 @@
 const {response,preflight,authenticate,ownerContext,failure}=require('./lib/native-request.cjs');
 const {configured,apple,verifyPurchase,currentRecord,entitlement}=require('./lib/apple-billing.cjs');
+const {checkoutPolicy}=require('./lib/ios-checkout.cjs');
 exports.handler=async event=>{
  const early=preflight(event);if(early)return early;
  try{
@@ -9,9 +10,8 @@ exports.handler=async event=>{
   const context=await ownerContext(user,body.storeId);
   if(!configured())return response(200,{ready:false,appAccountToken:context.appAccountToken,
    productId:context.productId,subscriptions:[]},event);
-  // Explicit server feature gate remains off until sandbox and entitlement QA.
   const privacyUrl=process.env.IOS_PRIVACY_URL,termsUrl=process.env.IOS_TERMS_URL;
-  const purchasesEnabled=process.env.IOS_PURCHASES_ENABLED==='true'&&context.catalogEnabled===true&&[privacyUrl,termsUrl].every(url=>typeof url==='string'&&/^https:\/\/[^\s]+$/.test(url));
+  const policy=checkoutPolicy(body.storeId,context),purchasesEnabled=policy.enabled;
   if(body.action==='prepare'&&(!purchasesEnabled||context.otherStoreSubscribed)){
    if(context.otherStoreSubscribed)throw Error('other_store_subscribed');
    throw Error('billing_not_ready');
@@ -20,10 +20,11 @@ exports.handler=async event=>{
   let records=[];
   if(body.action==='verify'){
    if(!context.productId)throw Error('billing_not_ready');
+   if(policy.sandboxOnly&&!purchasesEnabled)throw Error('billing_not_ready');
    // TestFlight signs Sandbox transactions. Both paths still use Apple's
    // cryptographic verifier and fresh server status, never unverified JWS claims.
    let mismatch;
-   for(const environment of ['Production','Sandbox']){
+   for(const environment of policy.sandboxOnly?['Sandbox']:['Production','Sandbox']){
     try{records=[await verifyPurchase(apple(process.env,environment),body.signedTransaction,context.appAccountToken,context.productId)];break;}
     catch(error){mismatch=error;}
    }
