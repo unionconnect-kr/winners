@@ -81,3 +81,11 @@ test('APNs rejection diagnostics are bounded and never include provider response
  assert.equal(push.apnsResult(400,'{"reason":"BadDeviceToken"}').expired,true);
  assert.equal(push.apnsResult(503,'invalid').expired,false);
 });
+
+
+test('push signing validity is distinguishable without exposing private key parse failures',()=>{
+ for(const key of ['invalid secret','',Buffer.from('invalid secret').toString('base64')]){
+  assert.throws(()=>push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'TESTKEY123',APNS_PRIVATE_KEY:key}),/^(Error: push_signing_key_invalid|Error: push_not_ready)$/);
+ }
+ assert.equal(push.apnsResult(403,'{"reason":"BadEnvironmentKeyIdInToken"}').reason,'BadEnvironmentKeyIdInToken');
+});

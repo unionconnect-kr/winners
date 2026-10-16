@@ -13,7 +13,7 @@ function apnsPayload(notification){
   ...(/^\d{4}-(0[1-9]|1[0-2])$/.test(notification.monthKey||'')?{monthKey:notification.monthKey}:{}),
   ...(/^\d{4}-\d{2}-\d{2}$/.test(notification.eventDate||'')?{eventDate:notification.eventDate}:{})};
 }
-const apnsReasons=new Set(['BadDeviceToken','DeviceTokenNotForTopic','TopicDisallowed','BadTopic','MissingTopic','InvalidProviderToken','ExpiredProviderToken','Forbidden','Unregistered','TooManyRequests','InternalServerError','ServiceUnavailable','Shutdown']);
+const apnsReasons=new Set(['BadEnvironmentKeyIdInToken','BadEnvironmentKeyInToken','BadDeviceToken','DeviceTokenNotForTopic','TopicDisallowed','BadTopic','MissingTopic','InvalidProviderToken','ExpiredProviderToken','Forbidden','Unregistered','TooManyRequests','InternalServerError','ServiceUnavailable','Shutdown']);
 function apnsResult(status,body){
  if(status===200)return {sent:true,expired:false};
  let reason;try{reason=JSON.parse(body).reason;}catch{}
@@ -25,8 +25,10 @@ function providerToken(env=process.env,now=Math.floor(Date.now()/1000)){
  if(cached&&cached.keyId===env.APNS_KEY_ID&&cached.key===env.APNS_PRIVATE_KEY&&cached.issued<=now&&now-cached.issued<3000)return cached.value;
  const header=Buffer.from(JSON.stringify({alg:'ES256',kid:env.APNS_KEY_ID})).toString('base64url');
  const payload=Buffer.from(JSON.stringify({iss:env.APNS_TEAM_ID,iat:now})).toString('base64url');
- const key=createPrivateKey(env.APNS_PRIVATE_KEY.replace(/\\n/g,'\n'));
- if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')throw Error('push_not_ready');
+ let key;try{
+  key=createPrivateKey(env.APNS_PRIVATE_KEY.replace(/\\n/g,'\n'));
+  if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')throw Error();
+ }catch{throw Error('push_signing_key_invalid');}
  const input=header+'.'+payload;
  const value=input+'.'+sign('sha256',Buffer.from(input),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
  cached={keyId:env.APNS_KEY_ID,key:env.APNS_PRIVATE_KEY,issued:now,value};return value;
@@ -64,7 +66,7 @@ async function sendNativePush(db,{storeId,userId=null,kind='notice'},env=process
  const {data,error}=await db.rpc('manee_ios_push_targets',{p_store_id:storeId,p_user_id:userId});
  if(error)throw Error('push_targets_unavailable');
  let sent=0,failed=0;const failureReasons={};
- const recordFailure=reason=>{const safe=apnsReasons.has(reason)||['push_timeout','push_connection_failed','push_connection_closed','push_request_failed','push_response_invalid','push_not_ready','invalid_device'].includes(reason)?reason:'PushTransportError';failureReasons[safe]=(failureReasons[safe]||0)+1;};
+ const recordFailure=reason=>{const safe=apnsReasons.has(reason)||['push_timeout','push_connection_failed','push_connection_closed','push_request_failed','push_response_invalid','push_not_ready','push_signing_key_invalid','invalid_device','ApnsRejected'].includes(reason)?reason:'PushTransportError';failureReasons[safe]=(failureReasons[safe]||0)+1;};
  for(let at=0;at<(data||[]).length;at+=10){
   await Promise.all(data.slice(at,at+10).map(async target=>{
    try{
