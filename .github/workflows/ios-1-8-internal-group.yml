@@ -1,0 +1,31 @@
+name: Connect exact iOS 1.8.1 internal QA
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ios-1-8-internal-group.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-ios-1-8-1-internal-connect
+  cancel-in-progress: false
+jobs:
+  connect:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test exact build and group guards without credentials
+        run: node --test .github/scripts/ios-1-8-internal-group.test.mjs
+      - name: Connect processed 1.8.1 only to the existing internal QA group
+        env:
+          MANEE_INTERNAL_BUILD: 'ios-20261016-1.8.1'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/ios-1-8-internal-group.mjs
