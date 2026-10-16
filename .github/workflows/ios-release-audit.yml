@@ -1,0 +1,31 @@
+name: MANEE Apple release readiness audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ios-release-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manee-apple-release-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate read-only identity and credential redaction
+        run: node --test .github/scripts/ios-release-audit.test.mjs
+      - name: Read fixed MANEE metadata, subscription and review readiness
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/ios-release-audit.mjs
