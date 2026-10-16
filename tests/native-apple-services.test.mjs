@@ -81,3 +81,23 @@ test('APNs rejection diagnostics are bounded and never include provider response
  assert.equal(push.apnsResult(400,'{"reason":"BadDeviceToken"}').expired,true);
  assert.equal(push.apnsResult(503,'invalid').expired,false);
 });
+
+
+test('push signing validity is distinguishable without exposing private key parse failures',()=>{
+ for(const key of ['invalid secret','',Buffer.from('invalid secret').toString('base64')]){
+  assert.throws(()=>push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'TESTKEY123',APNS_PRIVATE_KEY:key}),/^(Error: push_signing_key_invalid|Error: push_not_ready)$/);
+ }
+ assert.equal(push.apnsResult(403,'{"reason":"BadEnvironmentKeyIdInToken"}').reason,'BadEnvironmentKeyIdInToken');
+});
+
+
+test('PEM copied through an environment editor supports literal and escaped line endings',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const pem=privateKey.export({format:'pem',type:'pkcs8'});
+ const values=[pem,pem.replaceAll('\n','\\n'),pem.replaceAll('\n','\\\\n'),pem.replaceAll('\n','\\r\\n'),JSON.stringify(pem)];
+ for(const value of values){
+  const jwt=push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'FORMATKEY1',APNS_PRIVATE_KEY:value});
+  const [h,p,sig]=jwt.split('.');
+  assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
+ }
+});
