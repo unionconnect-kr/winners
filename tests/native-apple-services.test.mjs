@@ -101,3 +101,27 @@ test('PEM copied through an environment editor supports literal and escaped line
   assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
  }
 });
+
+test('Apple billing signs valid ES256 tokens after environment PEM normalization',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const pem=privateKey.export({format:'pem',type:'pkcs8'});
+ const formats=[pem,pem.replaceAll('\n',''),pem.replaceAll('\n',' '),pem.replaceAll('\n','\\n'),pem.replaceAll('\n','\\\\n'),pem.replaceAll('\n','\\r\\n'),JSON.stringify(pem)];
+ for(const value of formats){
+  const env={APPLE_IAP_KEY_ID:'TESTKEY123',APPLE_IAP_ISSUER_ID:token,APPLE_IAP_PRIVATE_KEY:value,APPLE_IAP_ENVIRONMENT:'Production'};
+  assert.equal(billing.signingReady(env),true);
+  const api=billing.apple(env),jwt=api.client.createBearerToken();
+  const [h,p,sig]=jwt.split('.'),claims=JSON.parse(Buffer.from(p,'base64url'));
+  assert.equal(claims.bid,'kr.co.manee.app');assert.equal(claims.aud,'appstoreconnect-v1');
+  assert.equal(claims.exp-claims.iat,300);
+  assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
+ }
+});
+test('Apple billing rejects invalid and non-P256 keys with bounded diagnostics',()=>{
+ const wrongCurve=generateKeyPairSync('ec',{namedCurve:'secp384r1'}).privateKey.export({format:'pem',type:'pkcs8'});
+ for(const key of ['private secret',wrongCurve,'"invalid JSON']){
+  const env={APPLE_IAP_KEY_ID:'TESTKEY123',APPLE_IAP_ISSUER_ID:token,APPLE_IAP_PRIVATE_KEY:key,APPLE_IAP_ENVIRONMENT:'Sandbox'};
+  assert.equal(billing.signingReady(env),false);
+  assert.throws(()=>billing.apple(env),/^Error: billing_signing_key_invalid$/);
+ }
+ assert.equal(billing.signingReady({}),false);
+});

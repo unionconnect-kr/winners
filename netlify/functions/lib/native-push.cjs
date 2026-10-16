@@ -1,6 +1,7 @@
 'use strict';
 const http2=require('node:http2');
-const {createPrivateKey,sign}=require('node:crypto');
+const {sign}=require('node:crypto');
+const {appleSigningKey}=require('./apple-signing-key.cjs');
 let cached;
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const labels={test:'아이폰 알림이 연결됐어요.',attendance_in:'매장에 출근 기록이 등록됐어요.',attendance_out:'매장에 퇴근 기록이 등록됐어요.',
@@ -20,26 +21,13 @@ function apnsResult(status,body){
  return {sent:false,expired:status===410||(status===400&&reason==='BadDeviceToken'),reason:apnsReasons.has(reason)?reason:'ApnsRejected',status};
 }
 function configured(env=process.env){return !!env.APNS_KEY_ID&&!!env.APNS_PRIVATE_KEY&&env.APNS_TEAM_ID==='J7AWFKW86N';}
-function signingKey(value){
- // Environment editors may retain literal escaped line endings from a PEM paste.
- // Base64 inside the PEM never contains backslashes; normalize only line endings.
- let pem=value.trim();
- if(pem.startsWith('"')){try{const decoded=JSON.parse(pem);if(typeof decoded==='string')pem=decoded;}catch{throw Error('push_signing_key_invalid');}}
- pem=pem.replace(/\\+r\\+n|\\+n|\\+r/g,'\n');
- // A single-line environment input can strip real PEM newlines entirely.
- const compact=pem.match(/^-----BEGIN PRIVATE KEY-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END PRIVATE KEY-----$/);
- if(compact){const body=compact[1].replace(/\s/g,'');pem='-----BEGIN PRIVATE KEY-----\n'+body.match(/.{1,64}/g).join('\n')+'\n-----END PRIVATE KEY-----\n';}
- const key=createPrivateKey(pem);
- if(key.asymmetricKeyType!=='ec'||key.asymmetricKeyDetails?.namedCurve!=='prime256v1')throw Error('push_signing_key_invalid');
- return key;
-}
 function providerToken(env=process.env,now=Math.floor(Date.now()/1000)){
  if(!configured(env))throw Error('push_not_ready');
  if(cached&&cached.keyId===env.APNS_KEY_ID&&cached.key===env.APNS_PRIVATE_KEY&&cached.issued<=now&&now-cached.issued<3000)return cached.value;
  const header=Buffer.from(JSON.stringify({alg:'ES256',kid:env.APNS_KEY_ID})).toString('base64url');
  const payload=Buffer.from(JSON.stringify({iss:env.APNS_TEAM_ID,iat:now})).toString('base64url');
  let key;try{
-  key=signingKey(env.APNS_PRIVATE_KEY);
+  key=appleSigningKey(env.APNS_PRIVATE_KEY);
  }catch{throw Error('push_signing_key_invalid');}
  const input=header+'.'+payload;
  const value=input+'.'+sign('sha256',Buffer.from(input),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
