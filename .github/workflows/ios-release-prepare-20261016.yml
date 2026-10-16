@@ -1,0 +1,31 @@
+name: Prepare exact iOS 1.8.1 release metadata
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ios-release-prepare-20261016.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-apple-release-prepare
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate exact app, build, draft state and credential redaction
+        run: node --test .github/scripts/ios-release-prepare.test.mjs
+      - name: Prepare existing MANEE review metadata without submitting
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MANEE_RELEASE_PREPARE: ios-20261016-1.8.1
+        run: node .github/scripts/ios-release-prepare.mjs
