@@ -69,3 +69,15 @@ test('additional products require exact allocated product and transaction bindin
  assert.equal(billing.validateTransaction(t,'Production',token,t.productId).productId,t.productId);
  assert.throws(()=>billing.validateTransaction({...t,productId:'manee.store11.monthly'},'Production',token,'manee.store11.monthly'));
 });
+
+
+test('APNs rejection diagnostics are bounded and never include provider response content',()=>{
+ assert.deepEqual(push.apnsResult(200,''),{sent:true,expired:false});
+ for(const reason of ['InvalidProviderToken','ExpiredProviderToken','DeviceTokenNotForTopic','BadDeviceToken','Unregistered']){
+  const result=push.apnsResult(reason==='Unregistered'?410:403,JSON.stringify({reason,token:'secret',debug:'private'}));
+  assert.equal(result.reason,reason);assert.doesNotMatch(JSON.stringify(result),/secret|private/);
+ }
+ assert.equal(push.apnsResult(400,'{"reason":"unknown private value"}').reason,'ApnsRejected');
+ assert.equal(push.apnsResult(400,'{"reason":"BadDeviceToken"}').expired,true);
+ assert.equal(push.apnsResult(503,'invalid').expired,false);
+});
