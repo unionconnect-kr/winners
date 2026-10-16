@@ -89,3 +89,15 @@ test('push signing validity is distinguishable without exposing private key pars
  }
  assert.equal(push.apnsResult(403,'{"reason":"BadEnvironmentKeyIdInToken"}').reason,'BadEnvironmentKeyIdInToken');
 });
+
+
+test('PEM copied through an environment editor supports literal and escaped line endings',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const pem=privateKey.export({format:'pem',type:'pkcs8'});
+ const values=[pem,pem.replaceAll('\n','\\n'),pem.replaceAll('\n','\\\\n'),pem.replaceAll('\n','\\r\\n'),JSON.stringify(pem)];
+ for(const value of values){
+  const jwt=push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'FORMATKEY1',APNS_PRIVATE_KEY:value});
+  const [h,p,sig]=jwt.split('.');
+  assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
+ }
+});
