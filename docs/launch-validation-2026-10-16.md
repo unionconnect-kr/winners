@@ -44,20 +44,41 @@
   with approved or device-verified billing.
 - Apple Business was checked after secure login: existing free/paid agreements,
   banking and tax forms are active. An updated Paid Applications Schedule needs
-  acceptance. Its final checkbox and Agree button remain untouched.
-- Existing privacy answers are a draft with nine linked-to-user data types,
+  acceptance. The operator explicitly approved acceptance on October 16. The
+  checkbox and Agree action were applied, but Apple opened additional two-factor
+  authentication. Two secure-auth handoffs ended with user takeover and the
+  rendered code-entry screen remained pending. Contract acceptance is NOT yet
+  verified. Never copy a verification code supplied in chat into the browser.
+- Existing privacy answers were published after explicit operator approval,
+  with nine linked-to-user data types,
   used for App Functionality: name, phone, user ID, device ID, other financial
   info, precise location, photos/videos, other user content and purchase history.
   Publication explicitly binds the company to accuracy, legal compliance and
-  updates; the final Publish confirmation is pending operator approval.
+  updates. The final Publish action completed, its dialog closed and the Publish
+  button became disabled.
 - App download pricing was missing and has been configured as free with KOR as
-  the base territory; subscription prices stay KRW 9,900. The availability wizard
-  is prepared for South Korea but has NOT been saved. Automatic approval review
-  rejected that save because the exact Apple territory restriction lacked
-  explicit user authorization. Do not retry via another route before approval.
-- Apple’s Add for Review preflight returned privacy-publication and app-price
-  requirements. No review was submitted. Screenshot count alone does not prove
+  the base territory; subscription prices stay KRW 9,900. South Korea-only
+  availability was saved after explicit operator approval. Readback shows
+  대한민국 / 앱 출시 후 사용 가능; other territories are unavailable. The earlier
+  automatic approval rejection is resolved by that explicit approval.
+- After privacy publication and price setup, Apple’s app preflight passed.
+  App 1.0 (1.8.1) was added to the submission draft and now shows 심사 준비됨.
+  The draft’s final 심사를 위해 제출 action has NOT been clicked. This is not
+  submission, approval or public launch. Screenshot count alone does not prove
   display-family coverage or subscription-paywall screenshot completeness.
+- The first subscription review note now explains exact Korean monthly pricing,
+  first-store trial eligibility, separate additional-store products, restoration
+  and management paths, and separation of demo access from actual purchase.
+  First group Korean display name/description, South Korea-only availability,
+  disabled Family Sharing and disabled multi-seat purchasing were verified.
+- First subscription Add for Review preflight explicitly failed with
+  심사 정보 스크린샷을 추가해야 합니다. The actual iPhone purchase/paywall
+  screenshot remains required; marketing or Android purchase images are not
+  substitutes for this missing iOS review evidence.
+- IOS_PRIVACY_URL and IOS_TERMS_URL were saved in Netlify for Production /
+  Functions only, using the existing manee.co.kr privacy policy and Apple
+  standard EULA. No secret scopes, keys or purchase gates were changed. The
+  next production deploy applies these links; device link QA remains pending.
 - Public App Store launch and Google approval are not yet verified.
 
 ## Release corrections verified in production
@@ -82,8 +103,10 @@
 
 ## Continuation after operator confirmations
 
-1. Resolve the exact Paid Applications Schedule, privacy-publication and Apple
-   territory confirmations. Preserve the configured reviewer account and 1.8.1.
+1. Complete Apple’s additional two-factor authentication and read back the Paid
+   Applications Schedule status. The privacy/territory approvals and changes
+   are complete; do not ask for those confirmations again. Preserve 1.8.1 and
+   the existing synthetic review account and submission draft.
 2. Complete subscription review screenshots and notes, check required display
    families, and enable only the intended sandbox/catalog checkout configuration.
 3. Perform physical TestFlight StoreKit purchase/restore and entitlement lifecycle
