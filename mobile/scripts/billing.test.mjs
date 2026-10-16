@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBillingClient} from '../src/billing.mjs';
 function setup({fail=false,ready=true,pending=[],change=false}={}){
- let c={userId:'owner',storeId:'store'},finished=[],purchases=0,calls=[];
+ let c={userId:'owner',storeId:'store',role:'storeOwner'},finished=[],purchases=0,calls=[];
  const client=createBillingClient({getContext:()=>c,storeKit:{
-  pending:async()=>({transactions:pending}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed'}]}),
+  products:async()=>({monthly:true,priceApproved:true}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
   purchase:async()=>{purchases++;return {status:'purchased',transactionId:'1',signedTransaction:'signed'};},
   finish:async t=>finished.push(t.transactionId)},
  request:async(_c,_name,body)=>{calls.push(body.action);if(body.action==='verify'){
@@ -24,4 +24,14 @@ test('configuration failure and interrupted purchases prevent new charges',async
 test('restore verifies server state and account changes cannot finish a transaction',async()=>{
  const restored=setup();await restored.client.restore();assert.deepEqual(restored.finished,['1']);
  const switched=setup({change:true});await assert.rejects(()=>switched.client.purchase(),/계정/);assert.deepEqual(switched.finished,[]);
+});
+test('purchases bound to another store are neither finished nor charged again',async()=>{
+ const h=setup({pending:[{transactionId:'foreign',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'other-store'}]});
+ await assert.rejects(()=>h.client.purchase(),/다른 매장/);
+ assert.equal(h.purchases(),0);assert.deepEqual(h.finished,[]);assert.equal(h.calls.includes('verify'),false);
+});
+test('another product does not block this store and sync ignores foreign bindings',async()=>{
+ const h=setup({pending:[{transactionId:'foreign',signedTransaction:'signed',productId:'manee.store2.monthly',appAccountToken:'other-store'}]});
+ await h.client.sync();assert.deepEqual(h.finished,[]);
+ await h.client.purchase();assert.equal(h.purchases(),1);assert.deepEqual(h.finished,['1']);
 });

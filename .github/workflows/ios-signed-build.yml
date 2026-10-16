@@ -2,7 +2,7 @@ name: iOS signed archive
 
 on:
   push:
-    branches: [main, codex/ios-build-preparation]
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016]
     paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
     inputs:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   archive:
-    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation')
+    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016')
     runs-on: macos-15
     timeout-minutes: 60
     defaults:

@@ -2,6 +2,17 @@
 const http2=require('node:http2');
 const {createPrivateKey,sign}=require('node:crypto');
 let cached;
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const labels={test:'아이폰 알림이 연결됐어요.',attendance_in:'매장에 출근 기록이 등록됐어요.',attendance_out:'매장에 퇴근 기록이 등록됐어요.',
+ reservation_created:'새 예약이 등록됐어요.',reservation_cancelled:'예약이 취소됐어요.',reservation_upcoming:'곧 예정된 예약이 있어요.',
+ reservation_due:'예약 시간이 됐어요.',report_closed:'월말 보고서가 마감됐어요.',monthly_costs:'월말 보고서에 필요한 비용을 확인해 주세요.',notice:'매장에 확인할 새 알림이 있어요.'};
+function apnsPayload(notification){
+ if(!uuid.test(notification.storeId||'')||!Object.hasOwn(labels,notification.kind))throw Error('invalid_notification');
+ return {aps:{alert:{title:'매니',body:labels[notification.kind]},sound:'default'},storeId:notification.storeId,kind:notification.kind,
+  ...(uuid.test(notification.eventId||'')?{eventId:notification.eventId}:{}),
+  ...(/^\d{4}-(0[1-9]|1[0-2])$/.test(notification.monthKey||'')?{monthKey:notification.monthKey}:{}),
+  ...(/^\d{4}-\d{2}-\d{2}$/.test(notification.eventDate||'')?{eventDate:notification.eventDate}:{})};
+}
 function configured(env=process.env){return !!env.APNS_KEY_ID&&!!env.APNS_PRIVATE_KEY&&env.APNS_TEAM_ID==='J7AWFKW86N';}
 function providerToken(env=process.env,now=Math.floor(Date.now()/1000)){
  if(!configured(env))throw Error('push_not_ready');
@@ -17,7 +28,7 @@ function providerToken(env=process.env,now=Math.floor(Date.now()/1000)){
 async function sendApns(token,notification,env=process.env){
  if(!/^[0-9a-f]{32,512}$/.test(token)||token.length%2)throw Error('invalid_device');
  // Generic content avoids displaying customer/staff financial data on lock screens.
- const payload=JSON.stringify({aps:{alert:{title:'매니',body:notification.kind==='test'?'아이폰 알림이 연결됐어요.':'매장에 확인할 새 알림이 있어요. 매니에서 확인해 주세요.'},sound:'default'},storeId:notification.storeId});
+ const payload=JSON.stringify(apnsPayload(notification));
  const jwt=providerToken(env);
  return new Promise((resolve,reject)=>{
   // App Store/TestFlight provisioning uses the production APNs environment.
@@ -29,7 +40,8 @@ async function sendApns(token,notification,env=process.env){
   client.on('goaway',()=>end(Error('push_connection_closed')));
   client.once('connect',()=>{
    request=client.request({':method':'POST',':path':'/3/device/'+token,authorization:'bearer '+jwt,
-    'apns-topic':'kr.co.manee.app','apns-push-type':'alert','apns-priority':'10','apns-expiration':'0','content-type':'application/json'});
+    'apns-topic':'kr.co.manee.app','apns-push-type':'alert','apns-priority':'10','apns-expiration':'0',
+    ...(uuid.test(notification.eventId||'')?{'apns-collapse-id':notification.eventId}:{}),'content-type':'application/json'});
    let status=0,body='';
    request.on('response',headers=>status=Number(headers[':status']));
    request.setEncoding('utf8');request.on('data',chunk=>{body+=chunk;if(body.length>4096)end(Error('push_response_invalid'));});
@@ -59,4 +71,4 @@ async function sendNativePush(db,{storeId,userId=null,kind='notice'},env=process
  }
  return {ready:true,sent,failed};
 }
-module.exports={configured,providerToken,sendApns,sendNativePush};
+module.exports={configured,providerToken,apnsPayload,sendApns,sendNativePush};

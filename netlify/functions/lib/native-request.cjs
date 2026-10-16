@@ -31,10 +31,15 @@ async function ownerContext(user,storeId){
  if(error||!data?.appAccountToken)throw Error('owner_access_denied');
  return data;
 }
+async function pushContext(user,storeId){
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId||''))throw Error('invalid_request');
+ const {data,error}=await user.rpc('manee_ios_push_context',{p_store_id:storeId});
+ if(error||data!==true)throw Error('push_access_denied');
+}
 function failure(error,event){
- const known={authentication_required:401,owner_access_denied:403,invalid_request:400,purchase_mismatch:409,subscription_unavailable:503,
-  billing_not_ready:503,service_not_ready:503,push_not_ready:503,other_store_subscribed:409};
+ const known={authentication_required:401,owner_access_denied:403,push_access_denied:403,invalid_request:400,purchase_mismatch:409,subscription_unavailable:503,
+  billing_not_ready:503,service_not_ready:503,push_not_ready:503,other_store_subscribed:409,other_platform_subscribed:409};
  const code=Object.hasOwn(known,error?.message)?error.message:'native_service_failed';
  return response(known[code]||503,{error:code},event);
 }
-module.exports={response,preflight,authenticate,ownerContext,failure};
+module.exports={response,preflight,authenticate,ownerContext,pushContext,failure};

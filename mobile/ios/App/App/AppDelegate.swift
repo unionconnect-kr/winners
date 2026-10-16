@@ -55,6 +55,61 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 class ManeeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(ManeeStoreKitPlugin())
+        bridge?.registerPluginInstance(ManeeReportFilesPlugin())
+    }
+}
+
+@objc(ManeeReportFilesPlugin)
+public class ManeeReportFilesPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ManeeReportFilesPlugin"
+    public let jsName = "ManeeReportFiles"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "save", returnType: CAPPluginReturnPromise)
+    ]
+    private var presentingReport = false
+
+    @objc func save(_ call: CAPPluginCall) {
+        guard let encoded = call.getString("data"), encoded.utf8.count <= 44_739_244,
+              let data = Data(base64Encoded: encoded), !data.isEmpty, data.count <= 32 * 1024 * 1024,
+              let filename = call.getString("filename"), !filename.isEmpty, filename.utf8.count <= 240,
+              !filename.contains("/"), !filename.contains("\\"), !filename.contains(":"),
+              filename.rangeOfCharacter(from: .controlCharacters) == nil,
+              let mime = call.getString("mimeType"),
+              (mime == "application/pdf" && filename.lowercased().hasSuffix(".pdf")) ||
+              (mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" && filename.lowercased().hasSuffix(".xlsx")) else {
+            call.reject("저장할 보고서 파일을 확인해 주세요."); return
+        }
+        DispatchQueue.main.async { [self] in
+            guard !presentingReport, let controller = bridge?.viewController,
+                  controller.viewIfLoaded?.window != nil, controller.presentedViewController == nil else {
+                call.reject("열려 있는 창을 닫고 다시 저장해 주세요."); return
+            }
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("manee-report-" + UUID().uuidString, isDirectory: true)
+            let file = directory.appendingPathComponent(filename, isDirectory: false)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
+                    attributes: [.protectionKey: FileProtectionType.complete])
+                try data.write(to: file, options: [.atomic, .completeFileProtection])
+            } catch {
+                try? FileManager.default.removeItem(at: directory)
+                call.reject("보고서 파일을 준비하지 못했어요. 저장 공간을 확인해 주세요."); return
+            }
+            presentingReport = true
+            let activity = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+            activity.completionWithItemsHandler = { [self] _, completed, _, error in
+                try? FileManager.default.removeItem(at: directory)
+                presentingReport = false
+                if error != nil { call.reject("파일 저장·공유를 완료하지 못했어요.") }
+                else { call.resolve(["status": completed ? "shared" : "cancelled"]) }
+            }
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = controller.view
+                popover.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.midY, width: 1, height: 1)
+                popover.permittedArrowDirections = []
+            }
+            controller.present(activity, animated: true)
+        }
     }
 }
 
@@ -69,14 +124,14 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "pending", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "finish", returnType: CAPPluginReturnPromise)
     ]
-    private let productId = "manee.store1.monthly"
+    private let productIds = Set((1...10).map { "manee.store\($0).monthly" })
     private var updates: Task<Void, Never>?
 
     public override func load() {
         updates = Task { [weak self] in
             for await result in Transaction.updates {
                 guard let self = self else { return }
-                if case .verified(let transaction) = result, transaction.productID == self.productId {
+                if case .verified(let transaction) = result, self.productIds.contains(transaction.productID) {
                     self.notifyListeners("transactionUpdated", data: ["transactionId": String(transaction.id)], retainUntilConsumed: true)
                 }
             }
@@ -84,17 +139,34 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     deinit { updates?.cancel() }
 
+    private func approvedProduct(_ product: Product) -> Bool {
+        guard let subscription = product.subscription,
+              subscription.subscriptionPeriod.unit == .month, subscription.subscriptionPeriod.value == 1,
+              product.priceFormatStyle.currencyCode == "KRW", product.price == Decimal(9900),
+              !product.isFamilyShareable else { return false }
+        if product.id == "manee.store1.monthly" {
+            guard let offer = subscription.introductoryOffer else { return false }
+            return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 1
+        }
+        return subscription.introductoryOffer == nil
+    }
+
     @objc func products(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId"), productIds.contains(productId) else {
+            call.reject("매장 구독 상품을 확인해 주세요."); return
+        }
         Task {
             do {
                 guard let product = try await Product.products(for: [productId]).first else {
                     call.reject("상품을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return
                 }
-                var item: JSObject = ["id": product.id, "name": product.displayName, "price": product.displayPrice]
+                var item: JSObject = ["id": product.id, "name": product.displayName, "price": product.displayPrice,
+                    "monthly": product.subscription?.subscriptionPeriod.unit == .month && product.subscription?.subscriptionPeriod.value == 1,
+                    "priceApproved": approvedProduct(product)]
                 if let subscription = product.subscription {
                     let eligible = await subscription.isEligibleForIntroOffer
                     let offer = subscription.introductoryOffer
-                    item["oneMonthFree"] = eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 1
+                    item["oneMonthFree"] = product.id == "manee.store1.monthly" && eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 1
                 }
                 call.resolve(item)
             } catch { call.reject("상품 정보를 확인하지 못했어요.") }
@@ -102,6 +174,9 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func purchase(_ call: CAPPluginCall) {
+        guard let productId = call.getString("productId"), productIds.contains(productId) else {
+            call.reject("매장 구독 상품을 확인해 주세요."); return
+        }
         guard let value = call.getString("appAccountToken"), let account = UUID(uuidString: value) else {
             call.reject("매장 연결을 다시 확인해 주세요."); return
         }
@@ -110,13 +185,16 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 guard let product = try await Product.products(for: [productId]).first else {
                     call.reject("상품을 불러오지 못했어요."); return
                 }
+                guard approvedProduct(product) else {
+                    call.reject("월 구독 상품과 요금을 확인해 주세요."); return
+                }
                 switch try await product.purchase(options: [.appAccountToken(account)]) {
                 case .success(let result):
                     guard case .verified(let transaction) = result else {
                         call.reject("구매 검증에 실패했어요."); return
                     }
                     // Finish only after the server confirms the entitlement was saved.
-                    call.resolve(["status": "purchased", "signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)])
+                    call.resolve(["status": "purchased", "signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""])
                 case .userCancelled: call.resolve(["status": "cancelled"])
                 case .pending: call.resolve(["status": "pending"])
                 @unknown default: call.reject("구매 상태를 확인하지 못했어요.")
@@ -128,13 +206,13 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     private func currentTransactions() async -> [JSObject] {
         var items: [String: JSObject] = [:]
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result, transaction.productID == productId {
-                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)]
+            if case .verified(let transaction) = result, productIds.contains(transaction.productID) {
+                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""]
             }
         }
         for await result in Transaction.unfinished {
-            if case .verified(let transaction) = result, transaction.productID == productId {
-                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id)]
+            if case .verified(let transaction) = result, productIds.contains(transaction.productID) {
+                items[String(transaction.id)] = ["signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""]
             }
         }
         return Array(items.values)
@@ -157,7 +235,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         Task {
             for await result in Transaction.unfinished {
-                if case .verified(let transaction) = result, transaction.id == id, transaction.productID == productId {
+                if case .verified(let transaction) = result, transaction.id == id, productIds.contains(transaction.productID) {
                     await transaction.finish()
                     call.resolve(); return
                 }

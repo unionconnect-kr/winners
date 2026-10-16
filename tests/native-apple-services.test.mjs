@@ -54,3 +54,18 @@ test('official Apple verifier rejects unsigned or malformed JWS without acceptin
  const verifier=new SignedDataVerifier([require('../netlify/functions/lib/apple-root.cjs')],true,Environment.PRODUCTION,'kr.co.manee.app',6820833544);
  await assert.rejects(()=>verifier.verifyAndDecodeTransaction('eyJhbGciOiJub25lIn0.e30.'));
 });
+
+test('APNs business payload contains only fixed copy and validated routing identifiers',()=>{
+ const data=push.apnsPayload({storeId:token,kind:'monthly_costs',eventId:token,monthKey:'2026-10',eventDate:'2026-10-16',customerName:'private',amount:123});
+ assert.equal(data.kind,'monthly_costs');assert.equal(data.monthKey,'2026-10');
+ assert.doesNotMatch(JSON.stringify(data),/private|123|customerName/);
+ assert.throws(()=>push.apnsPayload({storeId:token,kind:'attacker'}),/invalid_notification/);
+ assert.throws(()=>push.apnsPayload({storeId:'bad',kind:'test'}),/invalid_notification/);
+});
+
+test('additional products require exact allocated product and transaction bindings',async()=>{
+ const t={...transaction,productId:'manee.store2.monthly'};
+ assert.throws(()=>billing.validateTransaction(t,'Production',token),/purchase_mismatch/);
+ assert.equal(billing.validateTransaction(t,'Production',token,t.productId).productId,t.productId);
+ assert.throws(()=>billing.validateTransaction({...t,productId:'manee.store11.monthly'},'Production',token,'manee.store11.monthly'));
+});

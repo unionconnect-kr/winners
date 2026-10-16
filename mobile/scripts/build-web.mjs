@@ -44,20 +44,45 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
   '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),openNativeNotification);\n  // END MANEE_ENVIRONMENT');
-replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button>${platform === 'android' ? '<button id="native-subscription-btn">매장 이용권<span>›</span></button>' : ''}<button data-owner-setup-resume>`);
+replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button><button id="native-subscription-btn">매장 이용권<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
-if (platform === 'android') {
+{
   replaceOnce('    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());',
     '    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());\n    document.getElementById("native-subscription-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSubscriptionStatus());');
+}
+// Both native clients use the same server write gate and must explain refusal.
   replaceOnce('    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)',
     '    if(error?.code==="P4402") window.MANEE_NATIVE.subscriptionDenied();\n    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)');
   replaceOnce("    if(error && error.code==='42501'){clearStaffAuthView();render();}",
     "    if(error?.code==='P4402'){showToast('매장 이용권을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
+if (platform === 'ios') {
+  replaceOnce("    if(state.role!=='storeOwner')return 'rejected';", `    if(state.role==='staff'){
+      if(data.kind!=='test'||currentStoreId()!==data.storeId)return 'rejected';
+      const permission=await db.rpc('manee_ios_push_context',{p_store_id:data.storeId});
+      if(!isCurrent()||state.role!=='staff'||currentStoreId()!==data.storeId)return 'rejected';
+      if(permission.error||permission.data!==true)return 'rejected';
+      state.staffView=state.crew.find(c=>c.id===state.myCrewId)?.isManager?'more':'me';
+      state.teamPage='notifications';render();window.scrollTo(0,0);return 'handled';
+    }
+    if(state.role!=='storeOwner')return 'rejected';`);
+  replaceOnce('  function bindStaffEvents(){', `  function bindStaffEvents(){
+    document.getElementById('native-staff-push-test')?.addEventListener('click',()=>nativeAndroidPushAction('test'));`);
+  replaceOnce('      state.loading=false; render();\n    }catch(e){ if(!alive()) return; clearStaffAuthView(); render(); throw e; }',
+    '      state.loading=false; render(); refreshPushSubStatus();\n    }catch(e){ if(!alive()) return; clearStaffAuthView(); render(); throw e; }');
+  // Keep these controls in the packaged iOS app, without changing public web or Android.
+  const staffPushLine=html.split('\n').find(line=>line.includes('return \'<section')&&line.includes('id="push-toggle-btn"'));
+  if(!staffPushLine)throw Error('Review staff push settings anchor');
+  replaceOnce(staffPushLine,staffPushLine.replace("+'</button></section>';", "+'</button>'+(state.pushSubscribed?'<button type=\"button\" class=\"owner-primary\" id=\"native-staff-push-test\">테스트 알림 보내기</button>':'')+'</section>';"));
+  replaceOnce("db.rpc('manee_android_push_context'","db.rpc('manee_ios_push_context'");
+  replaceOnce("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
+    "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
+  replaceOnce("else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'",
+    "else if(result?.status==='shared')feedback(label+' 파일 저장·공유를 완료했어요.','success');\n      else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'");
 }
 replaceOnce("        const { error } = await db.auth.signOut({ scope: 'local' });",
   "        await window.MANEE_NATIVE.prepareLogout();\n        const { error } = await db.auth.signOut({ scope: 'local' });");
 html = html.replaceAll('navigator.geolocation', 'window.MANEE_GEOLOCATION');
-if (platform === 'android') {
+{
   const pushAdapter = `  async function nativeAndroidPushAction(action){
     if(state.pushBusy)return;
     const alive=maneeLoadGuard("pushSubscription");
@@ -70,7 +95,7 @@ if (platform === 'android') {
       if(action!=="refresh"&&result.message)showToast(result.message);
     }catch(e){
       if(alive()){
-        if(action!=="disable")state.pushSubscribed=false;
+        if(action!=="disable"${platform==='ios'?'&&action!=="test"':''})state.pushSubscribed=false;
         state.pushRegistrationError=e?.message||"알림 연결을 확인하지 못했어요. 다시 시도해 주세요.";
         if(action!=="refresh")showToast(state.pushRegistrationError);
       }
@@ -81,6 +106,8 @@ if (platform === 'android') {
   replaceOnce('  async function subscribeToPush(){', '  async function subscribeToPush(){\n    return nativeAndroidPushAction("enable");');
   replaceOnce('  async function unsubscribeFromPush(){', '  async function unsubscribeFromPush(){\n    return nativeAndroidPushAction("disable");');
   replaceOnce('출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.', '출퇴근·예약·월말 보고서 알림을 이 기기로 받아요.');
+}
+if (platform === 'android') {
   // Let Capacitor inset the WebView below system bars and above the keyboard.
   replaceOnce('viewport-fit=cover', 'viewport-fit=contain');
   if (!androidProduction) {
