@@ -34,7 +34,7 @@
 
 ## Remaining release gates
 
-- Apple purchase checkout is disabled. All ten DB Apple catalog slots and both
+- Public Apple purchase checkout is disabled. All ten DB Apple catalog slots and both
   sandbox/production entitlement flags are disabled; zero Apple receipts exist.
   Do not claim physical StoreKit purchase/restore verification.
 - Apple metadata readback verifies three monthly products at KRW 9,900 in South
@@ -42,13 +42,12 @@
   have no Korean introductory offers. All three remain MISSING_METADATA;
   subscription review screenshots are absent. Do not confuse product presence
   with approved or device-verified billing.
-- Apple Business was checked after secure login: existing free/paid agreements,
-  banking and tax forms are active. An updated Paid Applications Schedule needs
-  acceptance. The operator explicitly approved acceptance on October 16. The
-  checkbox and Agree action were applied, but Apple opened additional two-factor
-  authentication. Two secure-auth handoffs ended with user takeover and the
-  rendered code-entry screen remained pending. Contract acceptance is NOT yet
-  verified. Never copy a verification code supplied in chat into the browser.
+- Apple Business was checked after the operator completed additional two-factor
+  authentication at approximately 22:27 KST. The new Paid Applications Schedule
+  now shows 활성화됨, with validity October 16, 2026 through October 7, 2027.
+  Existing banking, tax and Korea compliance records are active. Acceptance was
+  explicitly approved by the operator. No chat-provided verification code was
+  entered by the agent.
 - Existing privacy answers were published after explicit operator approval,
   with nine linked-to-user data types,
   used for App Functionality: name, phone, user ID, device ID, other financial
@@ -78,7 +77,8 @@
 - IOS_PRIVACY_URL and IOS_TERMS_URL were saved in Netlify for Production /
   Functions only, using the existing manee.co.kr privacy policy and Apple
   standard EULA. No secret scopes, keys or purchase gates were changed. The
-  next production deploy applies these links; device link QA remains pending.
+  production deploy e6ccd72 was published successfully with these links;
+  device link QA remains pending.
 - Public App Store launch and Google approval are not yet verified.
 
 ## Release corrections verified in production
@@ -103,10 +103,9 @@
 
 ## Continuation after operator confirmations
 
-1. Complete Apple’s additional two-factor authentication and read back the Paid
-   Applications Schedule status. The privacy/territory approvals and changes
-   are complete; do not ask for those confirmations again. Preserve 1.8.1 and
-   the existing synthetic review account and submission draft.
+1. The Paid Applications Schedule, privacy and territory changes are complete;
+   do not ask for those confirmations again. Preserve 1.8.1 and the existing
+   synthetic review account and submission draft.
 2. Complete subscription review screenshots and notes, check required display
    families, and enable only the intended sandbox/catalog checkout configuration.
 3. Perform physical TestFlight StoreKit purchase/restore and entitlement lifecycle
@@ -116,3 +115,18 @@
    review awaiting approval; do not cancel/resubmit it merely to refresh status.
 5. Verify public store listing and installation after approval before calling the
    launch complete. Demo access expires October 23; reassess if review extends.
+
+## Scoped TestFlight purchase pilot
+
+- Server-only IOS_QA_STORE_IDS and IOS_QA_EXPIRES_AT can permit a named owner
+  store to inspect and buy its TestFlight product while public checkout and all
+  production catalog/entitlement flags remain off. The allowlist rejects invalid
+  IDs and leases expired or longer than seven days. Legal links remain required.
+- Authorization still runs before store matching. A QA-only store verifies
+  Sandbox receipts only; a Production receipt is rejected without saving.
+  Expired pilot access cannot prepare or verify another purchase. Cross-platform
+  active subscriptions remain protected. Existing public rollout requires both
+  IOS_PURCHASES_ENABLED=true and its enabled catalog entry.
+- Native 1.8.1 already reads the server readiness and legal URLs, so this server
+  pilot does not require a replacement iPhone binary. Actual StoreKit sheet,
+  purchase/restore, legal links and review screenshots still require device QA.
