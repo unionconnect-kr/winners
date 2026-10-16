@@ -135,3 +135,18 @@ test('packaged iOS staff test action rechecks membership and never opens owner s
  assert.equal(await context.openNativeNotification({storeId,kind:'report_closed'}),'rejected');
  assert.equal(rpc,3);
 });
+
+
+test('failed iOS self-test preserves notification consent while failed enable stays off',async()=>{
+ execFileSync(process.execPath,['scripts/build-web.mjs','production'],{cwd:mobile});
+ const fn=read('www/index.html').match(/^  async function nativeAndroidPushAction\([^\n]*\n[\s\S]*?^  }/m)[0];
+ const state={pushSubscribed:true,pushBusy:false};let current=true,renders=0;const toasts=[];
+ const context={state,maneeLoadGuard:()=>()=>current,render(){renders++;},showToast:s=>toasts.push(s),window:{MANEE_NATIVE:{push:async()=>{throw Error('Delivery failed');}}}};
+ vm.createContext(context);vm.runInContext(fn,context);
+ await context.nativeAndroidPushAction('test');
+ assert.equal(state.pushSubscribed,true);assert.equal(state.pushBusy,false);assert.equal(state.pushRegistrationError,'Delivery failed');assert.equal(toasts.length,1);
+ state.pushSubscribed=false;await context.nativeAndroidPushAction('enable');assert.equal(state.pushSubscribed,false);
+ state.pushSubscribed=true;await context.nativeAndroidPushAction('disable');assert.equal(state.pushSubscribed,true);
+ current=false;state.pushRegistrationError=null;await context.nativeAndroidPushAction('test');assert.equal(state.pushRegistrationError,null);
+ assert.ok(renders>0);
+});

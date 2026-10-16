@@ -95,7 +95,7 @@ html = html.replaceAll('navigator.geolocation', 'window.MANEE_GEOLOCATION');
       if(action!=="refresh"&&result.message)showToast(result.message);
     }catch(e){
       if(alive()){
-        if(action!=="disable")state.pushSubscribed=false;
+        if(action!=="disable"${platform==='ios'?'&&action!=="test"':''})state.pushSubscribed=false;
         state.pushRegistrationError=e?.message||"알림 연결을 확인하지 못했어요. 다시 시도해 주세요.";
         if(action!=="refresh")showToast(state.pushRegistrationError);
       }
