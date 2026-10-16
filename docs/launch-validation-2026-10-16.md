@@ -27,7 +27,7 @@
   blocked checkpoint in ios-scheduled-workers-2026-10-16.md.
 - Reservation retention and completed deletion-case retention cron jobs are
   active. All production cron jobs had zero failures in the preceding 24 hours.
-- Current main baseline: 344 root tests passed, 489 security tests passed,
+- Current main baseline: 346 root tests passed, 489 security tests passed,
   zero failed; 10 environment-dependent security tests skipped. The hosted app,
   config, manifest, worker, CSS, report scripts and Korean font all passed live
   content/type/configuration checks.
@@ -37,12 +37,59 @@
 - Apple purchase checkout is disabled. All ten DB Apple catalog slots and both
   sandbox/production entitlement flags are disabled; zero Apple receipts exist.
   Do not claim physical StoreKit purchase/restore verification.
-- Current Apple product metadata, South Korea KRW 9,900 monthly pricing, first
-  product one-month FREE_TRIAL, screenshots/reviewer login and selected review
-  build must be read back from Apple before changes or release activation.
-- The account holder must review any outstanding Apple agreement. No agreement
-  is accepted by the audit workflow. The read-only audit excludes credentials,
-  reviewer contact values and arbitrary provider response bodies from its logs.
+- Apple metadata readback verifies three monthly products at KRW 9,900 in South
+  Korea. Only store1 has a one-period ONE_MONTH FREE_TRIAL. Store2 and store3
+  have no Korean introductory offers. All three remain MISSING_METADATA;
+  subscription review screenshots are absent. Do not confuse product presence
+  with approved or device-verified billing.
+- Apple Business was checked after secure login: existing free/paid agreements,
+  banking and tax forms are active. An updated Paid Applications Schedule needs
+  acceptance. Its final checkbox and Agree button remain untouched.
+- Existing privacy answers are a draft with nine linked-to-user data types,
+  used for App Functionality: name, phone, user ID, device ID, other financial
+  info, precise location, photos/videos, other user content and purchase history.
+  Publication explicitly binds the company to accuracy, legal compliance and
+  updates; the final Publish confirmation is pending operator approval.
+- App download pricing was missing and has been configured as free with KOR as
+  the base territory; subscription prices stay KRW 9,900. The availability wizard
+  is prepared for South Korea but has NOT been saved. Automatic approval review
+  rejected that save because the exact Apple territory restriction lacked
+  explicit user authorization. Do not retry via another route before approval.
+- Apple’s Add for Review preflight returned privacy-publication and app-price
+  requirements. No review was submitted. Screenshot count alone does not prove
+  display-family coverage or subscription-paywall screenshot completeness.
 - Public App Store launch and Google approval are not yet verified.
 
-Follow-up results are recorded in the reviewed release changes once verified.
+## Release corrections verified in production
+
+- PR #42 (9d5e680): Apple billing now shares the proven APNs PEM normalization.
+  ES256 tokens were verified using Apple’s official Node library for seven PEM
+  formats; malformed/non-P256 keys fail with bounded errors. Production health
+  confirms billingSigningReady=true and pushSigningReady=true. This confirms
+  local signing format only, not Apple API authorization or completed purchases.
+  Malformed notification JWS remains rejected with HTTP 409 purchase_mismatch.
+- PR #43 (35bf711), preparation run 38893346343 / job 116947880436: App Store
+  version 1.0 now selects VALID 1.8.1 (build ec48f8e9-9090-4297-a579-9e99048036cc).
+  Production and sandbox notification URLs point to the existing verified-JWS
+  handler using V2. Complete review credentials/contact were copied only from
+  this exact app’s existing Beta review record and read back successfully.
+  No credentials or contact values appear in code or workflow output.
+  Review notes now reflect verified attendance/notification behavior, explain
+  the demo expiry and separate demo access from unverified StoreKit purchases.
+- PR and main verification workflows passed security/concurrency, production and
+  staging build checks. Apple audit 38893012736 verified actual Korean trial
+  linkage after explicitly including territory in the offer query.
+
+## Continuation after operator confirmations
+
+1. Resolve the exact Paid Applications Schedule, privacy-publication and Apple
+   territory confirmations. Preserve the configured reviewer account and 1.8.1.
+2. Complete subscription review screenshots and notes, check required display
+   families, and enable only the intended sandbox/catalog checkout configuration.
+3. Perform physical TestFlight StoreKit purchase/restore and entitlement lifecycle
+   QA; confirm no cross-store/platform leakage, then prepare production gates.
+4. Re-run Apple submission preflight and proceed with app + subscription review
+   only once device billing and metadata gates pass. Google remains an existing
+   review awaiting approval; do not cancel/resubmit it merely to refresh status.
+5. Verify public store listing and installation after approval before calling the
+   launch complete. Demo access expires October 23; reassess if review extends.
