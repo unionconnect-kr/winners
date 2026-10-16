@@ -2,7 +2,7 @@ name: MANEE Apple release readiness audit
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/ios-release-audit.yml']
+    paths: ['.github/workflows/ios-release-audit.yml', '.github/scripts/ios-release-audit.mjs']
   workflow_dispatch:
 permissions:
   contents: read

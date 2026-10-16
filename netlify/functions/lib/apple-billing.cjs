@@ -1,15 +1,22 @@
 'use strict';
 const {SignedDataVerifier,AppStoreServerAPIClient,Environment}=require('@apple/app-store-server-library');
 const root=require('./apple-root.cjs');
+const {appleSigningKey}=require('./apple-signing-key.cjs');
 const PRODUCT='manee.store1.monthly',BUNDLE='kr.co.manee.app';
 const PRODUCTS=new Set(Array.from({length:10},(_,i)=>`manee.store${i+1}.monthly`));
 function configured(env=process.env){return ['APPLE_IAP_KEY_ID','APPLE_IAP_ISSUER_ID','APPLE_IAP_PRIVATE_KEY'].every(k=>!!env[k])&&['Production','Sandbox'].includes(env.APPLE_IAP_ENVIRONMENT);}
+function signingPem(env=process.env){
+ if(!configured(env))throw Error('billing_not_ready');
+ try{return appleSigningKey(env.APPLE_IAP_PRIVATE_KEY).export({format:'pem',type:'pkcs8'});}
+ catch{throw Error('billing_signing_key_invalid');}
+}
+function signingReady(env=process.env){try{signingPem(env);return true;}catch{return false;}}
 function apple(env=process.env,selectedEnvironment=env.APPLE_IAP_ENVIRONMENT){
  if(!configured(env))throw Error('billing_not_ready');
  if(!['Production','Sandbox'].includes(selectedEnvironment))throw Error('billing_not_ready');
  const environment=selectedEnvironment=== 'Production'?Environment.PRODUCTION:Environment.SANDBOX;
  return {environment,verifier:new SignedDataVerifier([root],true,environment,BUNDLE,6820833544),
-  client:new AppStoreServerAPIClient(env.APPLE_IAP_PRIVATE_KEY.replace(/\\n/g,'\n'),env.APPLE_IAP_KEY_ID,env.APPLE_IAP_ISSUER_ID,BUNDLE,environment)};
+  client:new AppStoreServerAPIClient(signingPem(env),env.APPLE_IAP_KEY_ID,env.APPLE_IAP_ISSUER_ID,BUNDLE,environment)};
 }
 function validateTransaction(t,environment,token,productId=PRODUCT){
  if(!PRODUCTS.has(productId)||t.bundleId!==BUNDLE||t.productId!==productId||t.environment!==environment||t.type!=='Auto-Renewable Subscription'
@@ -50,4 +57,4 @@ function entitlement(record,now=Date.now()){
   testActive:record.environment==='Sandbox'&&[1,4].includes(record.status)&&!record.revoked&&Date.parse(record.expiresAt)>now,
   environment:record.environment,expiresAt:record.expiresAt,status:record.status};
 }
-module.exports={PRODUCTS,configured,apple,validateTransaction,currentRecord,verifyPurchase,entitlement};
+module.exports={PRODUCTS,configured,signingReady,apple,validateTransaction,currentRecord,verifyPurchase,entitlement};
