@@ -3,7 +3,7 @@
 export function createIosPush({push, getContext, request, storage, timeoutMs=15000}) {
   let task=null;
   const key=c=>`manee-ios-push:${c.userId}:${c.storeId}`;
-  const check=c=>{const n=getContext();if(n?.userId!==c.userId||n?.storeId!==c.storeId)throw Error('계정 또는 매장이 바뀌었어요. 다시 시도해 주세요.');};
+  const check=c=>{const n=getContext();if(n?.userId!==c.userId||n?.storeId!==c.storeId||n?.role!==c.role)throw Error('계정 또는 매장이 바뀌었어요. 다시 시도해 주세요.');};
   const enabled=c=>{try{return storage.getItem(key(c))==='1';}catch{return false;}};
   async function rpc(c,token,on){
     check(c);
@@ -27,7 +27,7 @@ export function createIosPush({push, getContext, request, storage, timeoutMs=150
   }
   async function run(action){
     const c=getContext();
-    if(!c?.userId||!c.storeId||c.role!=='storeOwner')return {subscribed:false,message:'사장님 계정에서 알림을 연결해 주세요.'};
+    if(!c?.userId||!c.storeId||!['storeOwner','staff'].includes(c.role))return {subscribed:false,message:'로그인 후 연결된 매장에서 알림을 켜 주세요.'};
     if(action==='disable'){
       await rpc(c,null,false);storage.removeItem(key(c));
       await Promise.allSettled([push.unregister(),push.removeAllDeliveredNotifications()]);

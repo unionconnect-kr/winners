@@ -56,6 +56,23 @@ replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\
   replaceOnce("    if(error && error.code==='42501'){clearStaffAuthView();render();}",
     "    if(error?.code==='P4402'){showToast('매장 이용권을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
 if (platform === 'ios') {
+  replaceOnce("    if(state.role!=='storeOwner')return 'rejected';", `    if(state.role==='staff'){
+      if(data.kind!=='test'||currentStoreId()!==data.storeId)return 'rejected';
+      const permission=await db.rpc('manee_ios_push_context',{p_store_id:data.storeId});
+      if(!isCurrent()||state.role!=='staff'||currentStoreId()!==data.storeId)return 'rejected';
+      if(permission.error||permission.data!==true)return 'rejected';
+      state.staffView=state.crew.find(c=>c.id===state.myCrewId)?.isManager?'more':'me';
+      state.teamPage='notifications';render();window.scrollTo(0,0);return 'handled';
+    }
+    if(state.role!=='storeOwner')return 'rejected';`);
+  replaceOnce('  function bindStaffEvents(){', `  function bindStaffEvents(){
+    document.getElementById('native-staff-push-test')?.addEventListener('click',()=>nativeAndroidPushAction('test'));`);
+  replaceOnce('      state.loading=false; render();\n    }catch(e){ if(!alive()) return; clearStaffAuthView(); render(); throw e; }',
+    '      state.loading=false; render(); refreshPushSubStatus();\n    }catch(e){ if(!alive()) return; clearStaffAuthView(); render(); throw e; }');
+  // Keep these controls in the packaged iOS app, without changing public web or Android.
+  const staffPushLine=html.split('\n').find(line=>line.includes('return \'<section')&&line.includes('id="push-toggle-btn"'));
+  if(!staffPushLine)throw Error('Review staff push settings anchor');
+  replaceOnce(staffPushLine,staffPushLine.replace("+'</button></section>';", "+'</button>'+(state.pushSubscribed?'<button type=\"button\" class=\"owner-primary\" id=\"native-staff-push-test\">테스트 알림 보내기</button>':'')+'</section>';"));
   replaceOnce("db.rpc('manee_android_push_context'","db.rpc('manee_ios_push_context'");
   replaceOnce("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
     "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");

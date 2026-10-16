@@ -119,3 +119,19 @@ test('explicit Android release purposes isolate internal setup from paid pilot',
     execFileSync(process.execPath, ['scripts/build-web.mjs','staging','android'], {cwd:mobile});
   }
 });
+
+
+test('packaged iOS staff test action rechecks membership and never opens owner screens',async()=>{
+ execFileSync(process.execPath,['scripts/build-web.mjs','production'],{cwd:mobile});
+ const html=read('www/index.html');assert.match(html,/id="native-staff-push-test"/);
+ const fn=html.match(/^  async function openNativeNotification\([^\n]*\n[\s\S]*?^  }/m)[0];
+ const storeId='00000000-0000-4000-8000-000000000101';let allowed=true,current=true;
+ const state={loading:false,splashDone:true,authProfile:{user_id:'staff'},role:'staff',crew:[{id:'crew'}],myCrewId:'crew',staffView:'home'};
+ let rpc=0;const context={state,currentStoreId:()=>storeId,db:{rpc:async name=>{assert.equal(name,'manee_ios_push_context');rpc++;return {data:allowed};}},render(){},window:{scrollTo(){}}};
+ vm.createContext(context);vm.runInContext(fn,context);
+ assert.equal(await context.openNativeNotification({storeId,kind:'test'},()=>current),'handled');assert.equal(state.staffView,'me');assert.equal(state.teamPage,'notifications');
+ state.staffView='home';allowed=false;assert.equal(await context.openNativeNotification({storeId,kind:'test'}),'rejected');assert.equal(state.staffView,'home');
+ allowed=true;current=false;assert.equal(await context.openNativeNotification({storeId,kind:'test'},()=>current),'rejected');
+ assert.equal(await context.openNativeNotification({storeId,kind:'report_closed'}),'rejected');
+ assert.equal(rpc,3);
+});

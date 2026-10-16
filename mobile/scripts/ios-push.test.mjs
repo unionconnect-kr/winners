@@ -35,9 +35,22 @@ test('logout stays available offline and removes local consent',async()=>{
  const h=setup({rpcError:true});h.storage.set('manee-ios-push:owner:store','1');await h.client.prepareLogout();
  assert.equal(h.storage.size,0);assert.equal(h.counts().unregistered,1);
 });
-test('staff cannot register or send a self-selected owner notification',async()=>{
- const h=setup();h.setContext({...h.context,role:'staff'});const result=await h.client.action('enable');
- assert.equal(result.subscribed,false);assert.equal(h.calls.length,0);
+test('staff registers its signed-in store and can self-test, then disable',async()=>{
+ const h=setup();h.setContext({...h.context,role:'staff'});
+ assert.equal((await h.client.action('enable')).subscribed,true);
+ assert.equal((await h.client.action('test')).subscribed,true);
+ assert.equal(h.calls.find(c=>c.args?.p_enabled).args.p_store_id,'store');
+ assert.equal((await h.client.action('disable')).subscribed,false);
+});
+test('unlinked or unsupported roles cannot register',async()=>{
+ for(const c of [{...setup().context,role:'landing'},{...setup().context,storeId:null}]){
+  const h=setup();h.setContext(c);assert.equal((await h.client.action('enable')).subscribed,false);assert.equal(h.calls.length,0);
+ }
+});
+test('server registration refusal never stores staff consent',async()=>{
+ const h=setup({permission:'prompt'});h.setContext({...h.context,role:'staff'});
+ h.context.db.rpc=async()=>({error:{code:'42501'}});
+ await assert.rejects(()=>h.client.action('enable'));assert.equal(h.storage.size,0);
 });
 test('permission withdrawn in iOS removes the live device binding',async()=>{
  const h=setup({permission:'denied'});h.storage.set('manee-ios-push:owner:store','1');

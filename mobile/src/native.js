@@ -15,6 +15,7 @@ const reportFiles=registerPlugin('ManeeReportFiles');
 let getContext=()=>null,dialog=null,closing=false,refreshed=null;
 let openNotification=async()=>'pending';
 const messages={billing_not_ready:'구독 연결을 준비하고 있어요.',service_not_ready:'서비스 연결을 준비하고 있어요.',
+ push_access_denied:'연결된 매장을 확인하고 다시 로그인해 주세요.',
  owner_access_denied:'사장님 계정으로 로그인하고 매장을 선택해 주세요.',authentication_required:'다시 로그인해 주세요.',
  purchase_mismatch:'이 구매는 현재 매장과 연결되지 않았어요. 처음 구독한 계정과 매장을 확인해 주세요.',
  other_platform_subscribed:'이 매장에는 이미 이용권이 연결돼 있어요. 매장 이용권에서 확인해 주세요.',
@@ -33,7 +34,7 @@ async function request(context,name,body){
 const billing=createBillingClient({storeKit,request,getContext:()=>getContext()});
 function sameContext(c){const now=getContext();return !closing&&now?.userId===c.userId&&now?.storeId===c.storeId;}
 const notifications=createIosPush({push:PushNotifications,getContext:()=>getContext(),request,storage:localStorage});
-const navigation=createNotificationNavigation({push:PushNotifications,getContext:()=>getContext(),open:(data,isCurrent)=>openNotification(data,isCurrent)});
+const navigation=createNotificationNavigation({allowedRoles:['storeOwner','staff'],push:PushNotifications,getContext:()=>getContext(),open:(data,isCurrent)=>openNotification(data,isCurrent)});
 void navigation.start().catch(()=>{});
 function element(tag,text,parent){const el=document.createElement(tag);if(text)el.textContent=text;parent?.append(el);return el;}
 function showSheet(sheet){
