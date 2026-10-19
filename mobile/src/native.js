@@ -54,7 +54,7 @@ function openSubscriptionStatus(){
  const message=element('p',null,sheet);message.setAttribute('role','status');
  const sandbox=element('p',null,sheet);sandbox.hidden=true;
  const action=(label,fn)=>{const b=element('button',label,sheet);b.type='button';b.style.cssText='width:100%;padding:13px;margin:8px 0';b.onclick=fn;return b;};
- const restore=action('Apple 구독·구매 복원',()=>{sheet.close();void openSettings();});
+ const restore=action('구독 및 구매 복원 화면 열기',()=>{sheet.close();void openSettings();});
  const refresh=action('상태 새로고침',()=>void load());
  action('닫기',()=>sheet.close());sheet.addEventListener('close',()=>sheet.remove(),{once:true});showSheet(sheet);
  let sequence=0;
@@ -100,6 +100,7 @@ async function openSettings(){
  };
  const displayResult=result=>{status.textContent=resultText(result);if(result.subscriptions?.some(s=>s.active||s.testActive)){hasActivePurchase=true;buy.hidden=true;buy.style.display='none';}};
  const buy=button('월 구독 시작',async()=>displayResult(await billing.purchase()));buy.hidden=true;buy.style.display='none';
+ buy.style.background='#0F3D2E';buy.style.color='#ffffff';buy.style.fontWeight='700';
  button('구매 복원',async()=>displayResult(await billing.restore()));
  button('Apple 구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');});
  button('이 매장 알림 켜기',async()=>{status.textContent=(await notifications.action('enable')).message;});
@@ -124,7 +125,7 @@ async function openSettings(){
    const product=await billing.products(info.productId);if(!sameContext(c)||dialog!==sheet)return;
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요. 잠시 후 다시 시도해 주세요.');
    if(hasActivePurchase)return;
-   buy.textContent=(product.oneMonthFree?'1개월 무료 체험 후 ':'')+product.price+' / 월';buy.hidden=false;buy.style.display='block';
+   buy.textContent=product.oneMonthFree?'1개월 무료 체험 시작 (이후 '+product.price+' / 월)':'월 '+product.price+'으로 구독하기';buy.hidden=false;buy.style.display='block';
   }else if(info.otherStoreSubscribed)status.textContent=messages.other_store_subscribed;
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }
