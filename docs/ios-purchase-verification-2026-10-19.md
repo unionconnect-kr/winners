@@ -2,7 +2,7 @@
 
 ## Submitted release
 
-App Store Connect accepted one submission at 13:08 KST with seven items: iOS app 1.0 (build 1.8.1), three monthly subscription products, and their three subscription groups. Submission ID: ffc6b8e8-746d-42b1-8f27-c0701158bbb6. The app was still Waiting for Review when its notes were updated after 14:01 KST. Approval and public availability are not confirmed.
+App Store Connect accepted one submission at 13:08 KST with seven items: iOS app 1.0 (build 1.8.1), three monthly subscription products, and their three subscription groups. Submission ID: ffc6b8e8-746d-42b1-8f27-c0701158bbb6. The app was still Waiting for Review when its notes were updated after the 14:10 KST owner confirmation. Approval and public availability are not confirmed.
 
 Products: `manee.store1.monthly`, `manee.store2.monthly`, `manee.store3.monthly`. Each store costs KRW 9,900 monthly in South Korea. Only the eligible first-store product offers a one-month introductory trial; slots 2 and 3 have no introductory trial.
 
@@ -14,11 +14,11 @@ Server reads confirmed these three simultaneous subscriptions, each attached to 
 
 | Synthetic store | Product | Environment | Status | Revoked | Latest server check (KST) |
 | --- | --- | --- | --- | --- | --- |
-| 매니 심사 전용 가상매장 | manee.store1.monthly | Sandbox | active (1) | false | 14:01:07 |
-| 매니 결제검증 전용 가상매장 2 | manee.store2.monthly | Sandbox | active (1) | false | 14:01:14 |
-| 매니 결제검증 전용 가상매장 3 | manee.store3.monthly | Sandbox | active (1) | false | 14:01:07 |
+| 매니 심사 전용 가상매장 | manee.store1.monthly | Sandbox | active (1) | false | 14:07:07 |
+| 매니 결제검증 전용 가상매장 2 | manee.store2.monthly | Sandbox | active (1) | false | 14:07:07 |
+| 매니 결제검증 전용 가상매장 3 | manee.store3.monthly | Sandbox | active (1) | false | 14:09:21 |
 
-These checks prove saved mappings and fresh Apple server revalidation. They do not prove which device action triggered each refresh. First-store restart/restore UI evidence exists from earlier that day. Additional-store restart/restore UI screenshots are still pending. Cancellation, expiry, refund, and revocation lifecycles have not been physically exercised in this checkpoint.
+These checks prove saved mappings and fresh Apple server revalidation. They do not prove which device action triggered each refresh. First-store restart/restore UI evidence exists from earlier that day. At 14:10 KST, the owner confirmed that the test subscriptions were visible after the requested restart/restore checks for stores 2 and 3. This is owner-reported device confirmation; no new screenshots of those restored screens were supplied. Cancellation, expiry, refund, and revocation lifecycles have not been physically exercised in this checkpoint.
 
 The review account has access only to the three labelled synthetic stores; the primary review demo holds the sample business records. The two extra stores are empty purchase fixtures. No purchase receipts were simulated.
 
@@ -42,4 +42,4 @@ The physical test exposed that a button labelled only `₩9,900 / 월` looked li
 
 Validation: native JavaScript syntax check passed; the five existing billing-client tests passed. No full native build, simulator rendering, device installation, or binary upload has been performed for this copy-only follow-up. It is not included in the submitted build 1.8.1.
 
-The App Store review notes were updated with the three actual purchase results and the remaining restore-UI limitation, without withdrawing the submission. Existing app review contacts, credentials, automatic release setting, and temporary demo expiry were preserved.
+The App Store review notes were updated with the three actual purchase results and the owner-reported additional-store restart/restore confirmation, without withdrawing the submission. Existing app review contacts, credentials, automatic release setting, and temporary demo expiry were preserved.
