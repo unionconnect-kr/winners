@@ -30,6 +30,7 @@ if (environment === 'production') html = html.replace(staffAuthAnchor,'const MAN
 writeFileSync(resolve(output,'index.html'),html);
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
 cpSync(resolve(root,'owner-ui.css'),resolve(output,'owner-ui.css'));
+cpSync(resolve(root,'factory-client.js'),resolve(output,'factory-client.js'));
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(config)+');\n');
 const manifest = JSON.parse(readFileSync(resolve(root,'manifest.json'),'utf8'));

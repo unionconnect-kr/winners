@@ -369,6 +369,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 <script src="/app-config.js"></script>
+<script src="/factory-client.js"></script>
 </head>
 <body>
 <div id="environment-banner" class="environment-banner" hidden>테스트 환경 · 실제 매장 데이터와 분리되어 있어요</div>
@@ -6591,10 +6592,55 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function ownerDetailHeader(title,backId,backLabel){
     return '<div class="owner-subhead"><button type="button" class="owner-back" id="'+backId+'" aria-label="'+escapeHtml(backLabel)+'"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M14.5 5L7.5 12L14.5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>'+escapeHtml(title)+'</h2></div>';
   }
+  let maneeFactoryController=null;
+  function getManeeFactory(){
+    if(!maneeFactoryController && window.ManeeFactory) maneeFactoryController=window.ManeeFactory.createController({
+      rpc:(name,args)=>db.rpc(name,args),
+      context:()=>({epoch:maneeViewEpoch,userId:state.authProfile?.user_id,storeId:currentStoreId(),role:state.role}),
+      changed:()=>{if(state.role==='storeOwner' && state.section==='factory')render();}
+    });
+    return maneeFactoryController;
+  }
+  function renderManeeFactory(){
+    let html=ownerSubHeader('매니팩토리')+'<section class="mf-hero"><span class="mf-eyebrow">MANEE FACTORY</span><h3>식자재와 레시피를<br>한 번에 준비하세요</h3><p>물류 이용 매장은 레시피를<br><strong>추가 구독료 없이 무료로</strong> 볼 수 있어요.</p></section>';
+    html+='<section class="mf-benefits" aria-label="물류 이용 안내"><h3>발주부터 보관, 배송까지 편리하게</h3><dl><div><dt>앱으로 간편 발주</dt><dd>필요한 식자재를 편리하게 주문해요.</dd></div><div><dt>동원홈푸드 위탁물류</dt><dd>물류센터 내 냉장·냉동 보관부터 매장 배송까지 연결해요.</dd></div><div><dt>전체 공급 가능 품목 이용</dt><dd>거래 개설 후 공급 가능한 전체 발주코드를 이용해요.</dd></div></dl><p class="mf-note">배송 권역·최소 발주·주문 마감 등은 물류 계약에 따라 확인해요. 이 화면에서 발주가 처리되지는 않아요.</p></section>';
+    const client=getManeeFactory(),data=client?.snapshot();
+    if(!currentStoreId())return html+'<p class="mf-state" role="status">상단에서 이용할 매장을 선택해 주세요.</p>';
+    if(!client || data.phase==='error')return html+'<section class="mf-state" role="alert"><h3>이용 정보를 불러오지 못했어요</h3><p>무료 열람 여부를 확인한 뒤 레시피를 보여드릴게요.</p><button type="button" data-mf-refresh>다시 확인</button></section>';
+    if(data.phase!=='ready')return html+'<p class="mf-state" role="status">선택한 매장의 물류 이용 정보를 확인하고 있어요…</p>';
+    html+='<section class="mf-access"><div><strong>'+escapeHtml(state.store)+'</strong><p>'+(data.active?'물류 이용 중 · 레시피 무료 열람':'물류 이용 매장에 레시피를 무료로 제공해요.')+'</p></div><button type="button" data-mf-refresh aria-label="물류 이용 상태 새로고침">새로고침</button></section>';
+    if(data.recipeError)html+='<p class="mf-note" role="alert">레시피를 열지 못했어요. 물류 이용 상태와 연결을 확인한 뒤 다시 시도해 주세요.</p>';
+    if(data.recipe){
+      const recipe=data.recipe,video=window.ManeeFactory.safeVideoUrl(recipe.video_url);
+      html+='<section class="mf-recipe-detail"><button type="button" class="mf-back" data-mf-close>‹ 레시피 목록</button><span class="mf-free">물류 이용 혜택 · 무료</span><h3>'+escapeHtml(recipe.title)+'</h3><p class="mf-instructions">'+escapeHtml(recipe.instructions)+'</p>'+(video?'<a class="mf-video" href="'+escapeHtml(video)+'" target="_blank" rel="noopener noreferrer">조리 영상 보기 ↗</a>':'')+'</section>';
+      return html;
+    }
+    html+='<section class="mf-recipes"><div class="mf-list-heading"><h3>메뉴별 레시피</h3><span>'+data.recipes.length+'개</span></div>';
+    if(!data.recipes.length)html+='<div class="mf-state"><h4>등록된 레시피가 아직 없어요</h4><p>레시피가 등록되면 여기서 확인할 수 있어요.</p></div>';
+    data.recipes.forEach(recipe=>{html+='<article class="mf-recipe-card"><div><h4>'+escapeHtml(recipe.title)+'</h4><p>'+escapeHtml(recipe.summary||'')+'</p></div>'+(data.active?'<button type="button" data-mf-recipe="'+escapeHtml(recipe.id)+'"'+(data.recipeLoading?' disabled':'')+'>무료로 보기</button>':'<span class="mf-locked">물류 이용 시 무료</span>')+'</article>';});
+    if(data.recipeLoading)html+='<p class="mf-note" role="status">레시피를 확인하고 있어요…</p>';
+    return html+'</section>';
+  }
+  function bindManeeFactory(){
+    if(state.role!=='storeOwner'||state.section!=='factory'){
+      if(maneeFactoryController)maneeFactoryController.invalidate();return;
+    }
+    const client=getManeeFactory();if(!client)return;
+    if(client.snapshot().phase==='idle' && currentStoreId())setTimeout(()=>{if(state.role==='storeOwner'&&state.section==='factory'&&client.snapshot().phase==='idle')client.load();},0);
+    app.querySelectorAll('[data-mf-refresh]').forEach(button=>button.onclick=()=>{client.invalidate();client.load();});
+    app.querySelectorAll('[data-mf-recipe]').forEach(button=>button.onclick=()=>client.openRecipe(button.dataset.mfRecipe));
+    const close=app.querySelector('[data-mf-close]');if(close)close.onclick=()=>client.closeRecipe();
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && state.role==='storeOwner' && state.section==='factory'){
+      const client=getManeeFactory();if(client){client.invalidate();client.load();}
+    }
+  });
   function renderOwnerMore(){
+    if(state.section==='factory') return renderManeeFactory();
     if(state.section==='settings') return ownerSubHeader('매장 설정')+renderCrewManage('settings');
     if(state.section==='alerts') return ownerSubHeader('알림 모아보기')+renderHqNotices()+renderNotifDetails();
-    let html='<h2>더보기</h2>';
+    let html='<h2>더보기</h2><div class="owner-menu">'+ownerRouteButton(navIcon('store')+'매니팩토리 · 식자재와 레시피<span>›</span>','factory',null,false)+'</div>';
     return html+'<div class="owner-menu"><button data-owner-setup-resume>매장 준비 가이드<span>›</span></button>'+ownerRouteButton(navIcon('store')+'매장 설정<span>›</span>','settings',null,false)+ownerRouteButton(navIcon('bell')+'알림 모아보기<span>›</span>','alerts',null,false)+'<button id="open-ai-chat-btn">✨ AI 물어보기<span>›</span></button>'+(!MANEE_STAFF_AUTH_ENABLED?'<button id="add-store-request-btn">'+navIcon('store')+'매장 추가 신청<span>›</span></button>':'')+'<button id="switch-user-btn">다른 사용자로 전환<span>›</span></button></div>';
   }
   function renderOwnerShell(){
@@ -6665,6 +6711,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function bindOwnerUIEvents(){
     bindAccessibleActions();
+    bindManeeFactory();
     loadOwnerReportHomeNotices();
     app.querySelectorAll('[data-home-report-store]').forEach(button=>button.onclick=()=>openOwnerReportHomeNotice(button.dataset.homeReportStore,button.dataset.homeReportMonth));
     app.querySelectorAll('[data-owner-route]').forEach(button=>button.addEventListener('click',()=>{

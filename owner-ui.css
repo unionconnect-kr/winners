@@ -393,3 +393,27 @@ body:has(.expense-editor-overlay) .toast{z-index:110}
 .signup-age-check{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0 10px!important;line-height:1.5;font-size:14px;color:var(--ink);cursor:pointer}
 .signup-age-check input[type="checkbox"]{width:20px!important;min-width:20px!important;height:20px!important;min-height:20px!important;flex:0 0 20px;margin:1px 0 0!important;padding:0!important;accent-color:var(--brick)}
 .signup-age-check span{flex:1;min-width:0}
+/* MANEE Factory stays within the owner shell and the selected store context. */
+.owner-ui .mf-hero{margin:12px 0 20px;padding:26px 22px;background:#0F3D2E;color:#fff;border-radius:20px}
+.owner-ui .mf-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;color:#BCE3C9}
+.owner-ui .mf-hero h3{margin:14px 0;font-size:26px;line-height:1.4;color:#fff;letter-spacing:-.04em}
+.owner-ui .mf-hero p{font-size:15px;line-height:1.75;color:#E4F1E8;margin:0}
+.owner-ui .mf-benefits,.owner-ui .mf-recipes,.owner-ui .mf-recipe-detail{padding:20px;background:#fff;border:1px solid #E7E9EE;border-radius:18px;margin-bottom:16px}
+.owner-ui .mf-benefits h3,.owner-ui .mf-list-heading h3{font-size:17px;margin:0}
+.owner-ui .mf-benefits dl{margin:20px 0}.owner-ui .mf-benefits dl div{margin:0 0 18px}
+.owner-ui .mf-benefits dt{font-size:14px;font-weight:700;color:#0F3D2E;margin-bottom:5px}
+.owner-ui .mf-benefits dd{margin:0;font-size:13px;line-height:1.65;color:#626975}
+.owner-ui .mf-note{font-size:12px;line-height:1.65;color:#747B86;margin-bottom:0}
+.owner-ui .mf-access{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:18px 0}
+.owner-ui .mf-access strong{font-size:15px}.owner-ui .mf-access p{font-size:12px;line-height:1.5;color:#387A4D;margin:6px 0}
+.owner-ui .mf-access button,.owner-ui .mf-back{background:none;border:0;padding:8px;color:#52645A;font-size:12px;flex-shrink:0}
+.owner-ui .mf-list-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.owner-ui .mf-list-heading span{font-size:12px;color:#747B86}
+.owner-ui .mf-recipe-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 0;border-top:1px solid #EDF0F2}
+.owner-ui .mf-recipe-card h4{margin:0 0 6px;font-size:16px}.owner-ui .mf-recipe-card p{font-size:12px;line-height:1.6;color:#747B86;margin:0}
+.owner-ui .mf-recipe-card button,.owner-ui .mf-state button,.owner-ui .mf-video{background:#0F3D2E;color:#fff;border:0;border-radius:10px;padding:12px 14px;font-size:13px;flex-shrink:0;text-decoration:none;display:inline-block}
+.owner-ui .mf-recipe-card button:disabled{opacity:.5}.owner-ui .mf-locked{font-size:11px;color:#747B86;flex-shrink:0}
+.owner-ui .mf-state{padding:24px 12px;text-align:center;color:#626975;font-size:14px;line-height:1.7}.owner-ui .mf-state h3,.owner-ui .mf-state h4{color:#283C31;margin:0 0 8px}
+.owner-ui .mf-free{display:block;color:#267443;font-size:12px;margin:14px 0}.owner-ui .mf-recipe-detail h3{font-size:23px;line-height:1.4;margin:12px 0 20px}
+.owner-ui .mf-instructions{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.9}.owner-ui .mf-video{margin-top:14px}
+@media(max-width:360px){.owner-ui .mf-recipe-card{align-items:flex-start;flex-direction:column}.owner-ui .mf-hero h3{font-size:23px}}
