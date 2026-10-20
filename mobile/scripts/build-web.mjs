@@ -42,7 +42,7 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.b
 replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>',
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
-  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),openNativeNotification);\n  // END MANEE_ENVIRONMENT');
+  '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),typeof openNativeNotification === "function" ? openNativeNotification : undefined);\n  // END MANEE_ENVIRONMENT');
 replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button>${platform === 'android' ? '<button id="native-subscription-btn">매장 이용권<span>›</span></button>' : ''}<button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
 if (platform === 'android') {

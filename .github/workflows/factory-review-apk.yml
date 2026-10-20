@@ -36,6 +36,12 @@ jobs:
       - name: Bundle actual app with Factory
         run: npm run build:android:staging && npm run sync:android
         working-directory: mobile
+      - name: Install browser for startup verification
+        run: npx playwright install --with-deps chromium
+        working-directory: mobile
+      - name: Verify packaged app opens login
+        run: node scripts/verify-web-startup.mjs
+        working-directory: mobile
       - name: Verify recipe policy and packaged assets
         run: |
           node mobile/scripts/verify-android-build.mjs staging
@@ -54,12 +60,12 @@ jobs:
       - name: Verify and collect signed review APK
         run: |
           mkdir -p apk-output
-          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk apk-output/MANEE-Factory-Review-1.0.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose apk-output/MANEE-Factory-Review-1.0.apk
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging apk-output/MANEE-Factory-Review-1.0.apk | tee apk-output/package.txt
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk apk-output/MANEE-Factory-Review-1.1.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose apk-output/MANEE-Factory-Review-1.1.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging apk-output/MANEE-Factory-Review-1.1.apk | tee apk-output/package.txt
           grep -F "name='kr.co.manee.app.factoryreview'" apk-output/package.txt
           printf '%s\n' "$GITHUB_SHA" > apk-output/source-commit.txt
-          sha256sum apk-output/MANEE-Factory-Review-1.0.apk > apk-output/SHA256SUMS.txt
+          sha256sum apk-output/MANEE-Factory-Review-1.1.apk > apk-output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: MANEE-Factory-Review-APK
