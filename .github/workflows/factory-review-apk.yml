@@ -1,0 +1,75 @@
+name: Factory review APK
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'factory-client.js'
+      - 'index.html'
+      - 'owner-ui.css'
+      - 'config/android-firebase.json'
+      - '.github/workflows/factory-review-apk.yml'
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Use hosted Android SDK
+        run: |
+          test -d "$ANDROID_HOME"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: mobile
+      - run: npm test
+        working-directory: mobile
+      - name: Bundle actual app with Factory
+        run: npm run build:android:staging && npm run sync:android
+        working-directory: mobile
+      - name: Install browser for startup verification
+        run: npx playwright install --with-deps chromium
+        working-directory: mobile
+      - name: Verify packaged app opens login
+        run: node scripts/verify-web-startup.mjs
+        working-directory: mobile
+      - name: Verify recipe policy and packaged assets
+        run: |
+          node mobile/scripts/verify-android-build.mjs staging
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';import assert from 'node:assert/strict';
+          const dir='mobile/android/app/src/main/assets/public/';
+          const html=fs.readFileSync(dir+'index.html','utf8');
+          assert.match(html,/추가 구독료 없이 무료로/);
+          assert.match(html,/data-mf-recipe/);
+          assert.equal(fs.readFileSync(dir+'factory-client.js','utf8'),fs.readFileSync('factory-client.js','utf8'));
+          const cfg=fs.readFileSync(dir+'app-config.js','utf8');
+          assert.match(cfg,/obpkzecgswnfuyhwvncd/);assert.doesNotMatch(cfg,/bhwuuxcrzxespkjlmqxr/);
+          JS
+      - run: ./gradlew assembleDebug --no-daemon --console=plain
+        working-directory: mobile/android
+      - name: Verify and collect signed review APK
+        run: |
+          mkdir -p apk-output
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk apk-output/MANEE-Factory-Review-1.1.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose apk-output/MANEE-Factory-Review-1.1.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging apk-output/MANEE-Factory-Review-1.1.apk | tee apk-output/package.txt
+          grep -F "name='kr.co.manee.app.factoryreview'" apk-output/package.txt
+          printf '%s\n' "$GITHUB_SHA" > apk-output/source-commit.txt
+          sha256sum apk-output/MANEE-Factory-Review-1.1.apk > apk-output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MANEE-Factory-Review-APK
+          path: apk-output/
+          retention-days: 14
