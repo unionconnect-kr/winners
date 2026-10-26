@@ -26,7 +26,7 @@ const applePath=require.resolve('../netlify/functions/lib/apple-billing.cjs');
 const actualNative=require(nativePath),actualApple=require(applePath);
 let authenticated=true,owned=store,crossPlatform=false,attempted=[],saved=[];
 require.cache[nativePath].exports={...actualNative,preflight:()=>undefined,
- authenticate:async()=>{if(!authenticated)throw Error('authentication_required');return {user:{},service:{rpc:async(name,args)=>{saved.push(args.p_record);return {data:true};}}};},
+ authenticate:async()=>{if(!authenticated)throw Error('authentication_required');return {user:{rpc:async()=>({data:{status:'claimed'}})},service:{rpc:async(name,args)=>{saved.push(args.p_record);return {data:true};}}};},
  ownerContext:async(user,id)=>{if(id!==owned)throw Error('owner_access_denied');return {appAccountToken:store,productId:'manee.store1.monthly',catalogEnabled:false,subscriptions:[],otherPlatformActive:crossPlatform};}};
 require.cache[applePath].exports={...actualApple,configured:()=>true,apple:(env,environment)=>({environment}),
  verifyPurchase:async(api,signed)=>{attempted.push(api.environment);if(signed!==api.environment)throw Error('purchase_mismatch');return {environment:api.environment,status:1,revoked:false,expiresAt:new Date(Date.now()+86400000).toISOString()};}};
