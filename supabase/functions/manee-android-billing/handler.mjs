@@ -48,11 +48,12 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const sandboxEligible=!!api && !!service && await permitted('Sandbox');
       const paidEligible=!!api && !!service && await permitted('Production');
       const eligible=sandboxEligible||paidEligible;
-      let productId=PRODUCT;
+      let productId=PRODUCT, billingStoreId=body.storeId, accountContext={};
       if(eligible){
-        const allocation=await user.rpc('manee_android_billing_product',{p_store_id:body.storeId});
-        if(allocation.error)throw Error('billing_allocation_unavailable');
-        productId=allocation.data;
+        const allocation=await user.rpc('manee_android_account_context',{p_store_id:body.storeId});
+        if(allocation.error || !allocation.data || typeof allocation.data!=='object')throw Error('billing_allocation_unavailable');
+        accountContext=allocation.data;productId=accountContext.productId;billingStoreId=accountContext.billingStoreId;
+        if(productId && !UUID.test(billingStoreId||''))throw Error('billing_allocation_invalid');
         if(!productId){
           if(body.action!=='status')return reply(503,{error:'additional_store_not_ready'});
           return reply(200,{ready:false,catalogReady:false,reason:'additional_store_not_ready'});
@@ -60,14 +61,20 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
         if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))throw Error('billing_allocation_invalid');
       }
       if(body.action === 'verify' && eligible) {
-        const verify=createPurchaseVerifier({api,service,productId,
+        // Resolve the original allocation for legacy additional-store receipts.
+        // The Google verifier still checks both immutable obfuscated IDs.
+        let restoreProduct=body.productId;
+        if(!restoreProduct){const resource=await api.get(body.purchaseToken);restoreProduct=resource?.lineItems?.[0]?.productId;}
+        const original=await user.rpc('manee_android_account_context',{p_store_id:body.storeId,p_product_id:restoreProduct});
+        if(original.error || !UUID.test(original.data?.billingStoreId||'') || original.data?.productId!==restoreProduct)throw Error('purchase_mismatch');
+        const verify=createPurchaseVerifier({api,service,productId:original.data.productId,
           allowEnvironment:environment=>environment==='Sandbox'||environment==='Production',
           authorize:async environment=>{
           const current=await authorize();
           if(current.error || current.data!==true) throw Error('owner_access_denied');
           if(environment && !await permitted(environment)) throw Error('billing_not_ready');
         }});
-        return reply(200, await verify({userId:auth.data.user.id,storeId:body.storeId,purchaseToken:body.purchaseToken}));
+        return reply(200, await verify({userId:auth.data.user.id,storeId:original.data.billingStoreId,purchaseToken:body.purchaseToken}));
       }
       if(body.action !== 'status' && !(body.action==='prepare' && eligible)) return reply(503, {error:'billing_not_ready'});
       // Use the caller's JWT, never service-role access, for the store snapshot.
@@ -75,7 +82,7 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       const snapshot=await user.rpc('manee_android_billing_status',{p_store_id:body.storeId});
       if(snapshot.error || !Array.isArray(snapshot.data?.subscriptions)) throw Error('billing_status_unavailable');
       const subscriptions=snapshot.data.subscriptions;
-      const entitlement={active:subscriptions.some(s=>s.environment==='Production'&&s.active===true),
+      const entitlement={active:accountContext.otherPlatformActive===true||subscriptions.some(s=>s.environment==='Production'&&s.active===true),
         testActive:subscriptions.some(s=>s.environment==='Sandbox'&&s.testActive===true)};
       if(!api) return reply(200, {ready:false, catalogReady:false,...entitlement});
       const product = await api.product(productId);
@@ -104,7 +111,8 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
         checkout=claim.data.status==='active'?{active:true}:{checkoutId:body.checkoutId};
       }
       return reply(200, {ready, catalogReady:!!catalogReady, productId, basePlanId:BASE_PLAN,...entitlement,
-        ...checkout,...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,body.storeId):{})}:{})});
+        ...(eligible?{billingScope:'account',restoreProductIds:accountContext.restoreProductIds,otherPlatformActive:accountContext.otherPlatformActive===true}:{}),
+        ...checkout,...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,billingStoreId):{})}:{})});
     } catch { return reply(503, {error:'billing_unavailable'}); }
   };
 }
