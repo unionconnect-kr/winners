@@ -137,3 +137,13 @@ test('restore verifies only the selected store product while leaving other store
  }});
  assert.equal((await s.client.restore()).status,'restored');assert.deepEqual(seen,['second']);
 });
+
+test('account restore verifies all server-owned legacy products from any selected store',async()=>{
+ const verified=[];
+ const client=createAndroidBillingClient({allowPaid:true,getContext:()=>({userId:'owner',storeId:'third',role:'storeOwner'}),
+  playBilling:{purchases:async()=>({purchases:[{state:'purchased',productIds:['manee.store2.monthly'],purchaseToken:'legacy'},
+   {state:'purchased',productIds:['foreign.product'],purchaseToken:'foreign'}]})},
+  request:async(c,name,b)=>{if(b.action==='verify'){verified.push(b);return {verified:true,active:true};}
+   return {ready:true,testOnly:false,productId:'manee.store1.monthly',restoreProductIds:['manee.store1.monthly','manee.store2.monthly']};}});
+ assert.equal((await client.restore()).status,'restored');assert.equal(verified.length,1);assert.equal(verified[0].productId,'manee.store2.monthly');
+});
