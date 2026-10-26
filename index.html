@@ -5092,13 +5092,14 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         const salesTask=read('sales_reports','id,store_id,date,total_sales,discount,refund,delivery_baemin,delivery_coupang,delivery_yogiyo',inMonth);
         const crewTask=read('crew','*',q=>q);
         const attendanceTask=read('attendance','id,store_id,crew_id,date,check_in,check_out,confirmed',inMonth);
-        const expenseTask=read('expense_entries','id,store_id,amount',inMonth);
+        const expenseTask=read('expense_entries','id,store_id,amount,category',inMonth);
+        const fixedTask=read('fixed_expenses','id,store_id,amount',q=>q.eq('month_key',mKey));
         const adjustmentTask=read('crew_pay_adjustments','*',q=>q.eq('month_key',mKey));
         const payrollTask=read('monthly_net_payroll','id,store_id,crew_id,month_key,net_pay,paid_on,adjustment_snapshot,updated_at',q=>q.eq('month_key',mKey));
         const templateTask=read('checklist_templates','store_id,tab,data',q=>q,['store_id','tab']);
         const checksTask=read('checklist_checks','store_id,date,item_id',q=>q.eq('date',bizToday()),['store_id','date','item_id']);
         const limitsTask=read('stores','id,food_ratio_threshold,labor_ratio_threshold',q=>q,['id'],'id');
-        const prevSalesTask=prevMonthKey===mKey?salesTask:read('sales_reports','id,store_id,total_sales',inPrev);
+        const prevSalesTask=prevMonthKey===mKey?salesTask:read('sales_reports','id,store_id,date,total_sales',inPrev);
         const taxTask=(async()=>{
           if(!showTax) return {acked:new Set(),attendance:{}};
           const ack=await read('tax_reminder_ack','id,store_id',q=>q.eq('month_key',curMonthKey));
@@ -5121,7 +5122,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
           });
           render();
         }
-        const [crewByStore,attByStore,expenseByStore,adjustmentByStore,payrollByStore,templatesByStore,checksByStore,limitsByStore,prevSalesByStore,tax]=await Promise.all([crewTask,attendanceTask,expenseTask,adjustmentTask,payrollTask,templateTask,checksTask,limitsTask,prevSalesTask,taxTask]);
+        const [crewByStore,attByStore,expenseByStore,adjustmentByStore,payrollByStore,templatesByStore,checksByStore,limitsByStore,prevSalesByStore,tax,fixedByStore]=await Promise.all([crewTask,attendanceTask,expenseTask,adjustmentTask,payrollTask,templateTask,checksTask,limitsTask,prevSalesTask,taxTask,fixedTask]);
         if(!alive())return;
         const results=storesToLoad.map(store=>{
           const storeId=storeMap[store], failed=[];
@@ -5143,6 +5144,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
           // 지출비율 = 전체 지출(분류 무관) ÷ 매출.
           let expenseSum = 0;
           expenseArr.forEach(e=> expenseSum += Number(e.amount)||0);
+          const foodExpenseSum=expenseArr.filter(e=>['food','beverage'].includes(e.category)).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+          const unclassifiedExpenseSum=expenseArr.filter(e=>!e.category).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+          const fixedExpenseSum=rows(fixedByStore,'고정지출').reduce((sum,e)=>sum+(Number(e.amount)||0),0);
           const expenseRatio = (expenseReadable && salesSum>0) ? (expenseSum/salesSum*100) : null;
 
           let total=0, done=0;
@@ -5185,9 +5189,13 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
           }
           const previousSales=get(prevSalesByStore,storeId), prevMonthFailed=!!previousSales.error;
           const prevMonthSalesSum=previousSales.data.reduce((sum,r)=>sum+(Number(r.total_sales)||0),0);
+          const comparisonEnd=prevMonthKey+'-'+pad(Math.min(day,Number(prevRange.end.slice(-2))));
+          const comparisonRows=previousSales.data.filter(r=>r.date&&r.date<=comparisonEnd);
+          const prevComparableSalesSum=comparisonRows.reduce((sum,r)=>sum+(Number(r.total_sales)||0),0);
+          const comparisonSalesSum=salesArr.filter(r=>r.date<=curMonthKey+'-'+pad(day)).reduce((sum,r)=>sum+(Number(r.totalSales)||0),0);
           const dailySales={};
           salesArr.forEach(s=>{dailySales[s.date]=(dailySales[s.date]||0)+(Number(s.totalSales)||0);});
-          return { store, foodThreshold, laborThreshold, salesSum, salesReportCount: salesArr.length, deliverySum, laborPay, payrollEstimatedCount:payroll.estimatedCount, payrollConfirmedCount:payroll.confirmedCount, payrollUnknownCount:payroll.unknownCount, payrollIssues:[...new Set(payroll.people.filter(p=>p.unknown).flatMap(p=>p.reasons))], laborRatio, expenseSum, expenseRatio, checklistPct, crewCount: crewArr.length, hasYesterdayReport, expiringCerts, taxInfo, prevMonthSalesSum, prevMonthFailed, dailySales, loadFailures: failed };
+          return { store, foodThreshold, laborThreshold, salesSum, salesReportCount: salesArr.length, deliverySum, laborPay, payrollEstimatedCount:payroll.estimatedCount, payrollConfirmedCount:payroll.confirmedCount, payrollUnknownCount:payroll.unknownCount, payrollIssues:[...new Set(payroll.people.filter(p=>p.unknown).flatMap(p=>p.reasons))], laborRatio, expenseSum, expenseRatio, foodExpenseSum, unclassifiedExpenseSum, fixedExpenseSum, comparisonSalesSum, prevComparableSalesSum, comparisonAvailable:mKey===curMonthKey&&comparisonRows.length>0, checklistPct, crewCount: crewArr.length, hasYesterdayReport, expiringCerts, taxInfo, prevMonthSalesSum, prevMonthFailed, dailySales, loadFailures: failed };
         });
         results.sort((a,b)=>b.salesSum-a.salesSum);
         state.dashboardData=results;state.dashboardSalesPreview=null;
@@ -5764,15 +5772,15 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
 
   // Owner signup keeps its draft in memory only; passwords never enter browser storage.
-  // Launch offer copy only. Store-confirmed billing/entitlements are not connected yet.
-  // Do not turn this display into a client-side trial timer or a payment confirmation.
+  // Signup trial is separate from a store-confirmed subscription offer.
+  // Never start a client-side entitlement timer or imply payment consent here.
   function renderOwnerSignupOffer(hasFranchise=false,compact=false){
-    const offer='1개월 무료체험 후, 아이디당 월 9,900원(부가세 포함)';
-    if(compact) return '<p class="signup-offer-compact">출시 요금 안내<br>'+offer+'</p>';
-    let html='<aside class="signup-offer" aria-label="출시 요금 안내"><span class="signup-offer-label">출시 요금 안내 · 일반 매장</span><strong>'+offer+'</strong>';
-    html+='<p>한 아이디로 소유한 모든 매장을 이용할 수 있어요.<br>매장을 추가해도 월 구독료는 9,900원으로 같아요.</p>';
+    const offer='처음 가입하면 40일 무료체험';
+    if(compact) return '<p class="signup-offer-compact"><strong>'+offer+'</strong><br>매출·직원·비용 관리를 직접 경험해 보세요.</p>';
+    let html='<aside class="signup-offer" aria-label="40일 무료체험 안내"><span class="signup-offer-label">신규 사장님 가입 혜택</span><strong>처음 가입하면 <em>40일 무료체험</em></strong><p>매출·직원·비용 관리를 직접 경험해 보세요.</p>';
+    html+='<p>일반 요금은 아이디당 월 9,900원(부가세 포함)이에요.<br>한 아이디로 소유한 모든 매장을 이용할 수 있어요.</p>';
     html+='<p class="signup-offer-franchise">'+(hasFranchise?'입력한 프랜차이즈 코드가 확인되면 계약된 별도 요금이 적용돼요. 위 금액은 일반 매장 기준이에요.':'프랜차이즈 계약 매장은 별도 요금이 적용될 수 있어요.')+'</p>';
-    html+='<p class="signup-offer-notice">현재 회원가입만으로는 결제되지 않아요. 유료 서비스 시작 전 결제수단 등록과 유료 전환 동의를 별도로 안내해 드립니다.</p></aside>';
+    html+='<p class="signup-offer-notice">회원가입만으로는 결제되지 않아요. 구독을 신청할 때 결제 화면에서 시작일·무료 혜택·자동 갱신 조건을 확인하고 동의해 주세요.</p></aside>';
     return html;
   }
   function ownerSignupDraft(){
@@ -5788,7 +5796,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     html+='<section'+(d.step===2?'':' hidden')+'>'+input('username','owner-request-username-input','아이디','text','autocomplete="username" maxlength="30" autocapitalize="none"')+'<button type="button" class="crew-code-btn" id="check-owner-username-btn">아이디 중복확인</button><p id="owner-request-username-status" role="status">'+(state.ownerRequestUsernameCheck?.username===d.username.normalize('NFKC').trim().toLowerCase()?(state.ownerRequestUsernameCheck.available?'사용할 수 있는 아이디예요.':'이미 사용 중인 아이디예요.'):'')+'</p>'+input('password','owner-request-password-input','비밀번호 · 8자 이상','password','autocomplete="new-password"')+input('confirm','owner-request-password-confirm-input','비밀번호 확인','password','autocomplete="new-password"')+'</section>';
     html+='<section'+(d.step===3?'':' hidden')+'>'+input('store','owner-request-store-input','매장 이름','text','maxlength="100"')+input('franchise','owner-request-franchise-code-input','프랜차이즈 코드 · 선택','text','maxlength="40"')+'<p>코드가 있는 경우 프랜차이즈 요금제가 적용돼요.</p></section>';
     html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<label class="signup-age-check" for="owner-request-age-confirmed"><input id="owner-request-age-confirmed" data-signup-age type="checkbox"'+(d.ageConfirmed===true?' checked':'')+'><span>만 14세 이상입니다. (필수)</span></label><p>만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p><p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
-    html+='<div class="setup-actions"><button type="button" data-signup-back>이전</button>'+(d.step===4?'<button type="button" id="submit-owner-request-btn" class="setup-primary">가입하고 매장 준비하기</button>':'<button type="button" data-signup-next class="setup-primary">'+(d.step===0?'차근차근 시작하기':'다음')+'</button>')+'</div><button type="button" id="landing-back-btn" class="switch-link">로그인 화면으로</button></div>';
+    html+='<div class="setup-actions"><button type="button" data-signup-back>이전</button>'+(d.step===4?'<button type="button" id="submit-owner-request-btn" class="setup-primary">가입하고 40일 무료로 시작하기</button>':'<button type="button" data-signup-next class="setup-primary">'+(d.step===0?'40일 무료체험 시작하기':'다음')+'</button>')+'</div><button type="button" id="landing-back-btn" class="switch-link">로그인 화면으로</button></div>';
     return html;
   }
   function ownerSignupNext(){
@@ -6255,13 +6263,27 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     }
     if(raw.att.ok){
       const latest={};
-      raw.att.list.filter(a=>a.check_in).forEach(a=>{const t=ownerWorkCheckInAt(store,a.date,a.check_in);if(!t)return;const cur=latest[a.crew_id];if(!cur||t>cur.t)latest[a.crew_id]={t,a};});
+      raw.att.list.filter(a=>a.check_in&&!a.check_out).forEach(a=>{const t=ownerWorkCheckInAt(store,a.date,a.check_in);if(!t)return;const cur=latest[a.crew_id];if(!cur||t>cur.t)latest[a.crew_id]={t,a};});
       Object.keys(latest).forEach(id=>{
         const {t,a}=latest[id],ageH=(at.getTime()-t.getTime())/3600000,item={id,name:nameOf(id),position:(names[id]&&names[id].position)||"",checkIn:String(a.check_in).slice(0,5),date:a.date,t:t.getTime()};
         if(ageH>=-0.1 && ageH<=OW_STALE_HOURS) view.work.workers.push(item); else view.work.checks.push(item);
       });
       view.work.workers.sort((a,b)=>a.t-b.t||a.name.localeCompare(b.name));   // by real check-in instant (01:00 after midnight comes after 22:00)
       view.work.checks.sort((a,b)=>a.t-b.t||a.name.localeCompare(b.name));
+    }
+    view.attendance={ok:raw.shifts.ok&&raw.att.ok,arrived:[],pending:[],missing:[]};
+    if(raw.att.ok){
+      const arrived=new Map();
+      raw.att.list.filter(a=>a.date===raw.bizDate&&a.check_in).forEach(a=>{
+        arrived.set(a.crew_id,{id:a.crew_id,name:nameOf(a.crew_id),checkIn:String(a.check_in).slice(0,5),checkOut:a.check_out?String(a.check_out).slice(0,5):null});
+      });
+      view.attendance.arrived=Array.from(arrived.values());
+      if(raw.shifts.ok)view.sched.people.forEach(p=>{
+        if(arrived.has(p.id))return;
+        const starts=p.times.map(t=>ownerWorkCheckInAt(store,raw.bizDate,t.start)).filter(Boolean);
+        const start=starts.length?new Date(Math.min(...starts.map(d=>d.getTime()))):null;
+        (start&&start<=at?view.attendance.missing:view.attendance.pending).push(p);
+      });
     }
     return view;
   }
@@ -6282,7 +6304,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         if(!id) return [store,{bizDate,shifts:{ok:false,list:[]},att:{ok:false,list:[]},crew:{ok:false,list:[]},sales:{ok:false,list:[],from:salesFrom,to:salesTo}}];
         const [shifts,att,crew,sales]=await Promise.all([
           pick(db.from("shifts").select("id,crew_id,date,start_time,end_time").eq("store_id",id).eq("date",bizDate)),
-          pick(db.from("attendance").select("id,crew_id,date,check_in").eq("store_id",id).is("check_out",null).gte("date",ownerWorkYmd(from))),
+          pick(db.from("attendance").select("id,crew_id,date,check_in,check_out").eq("store_id",id).gte("date",ownerWorkYmd(from)).lte("date",bizDate)),
           pick(db.from("crew").select("id,name,position").eq("store_id",id)),
           pick(db.from("sales_reports").select("date,total_sales").eq("store_id",id).gte("date",salesFrom).lte("date",salesTo))
         ]);
@@ -6292,7 +6314,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       const next={};
       results.forEach(([store,raw])=>{next[store]=ownerWorkCompute(store,raw,at);});
       w.stores=next;w.loadedOnce=true;
-      const sig=JSON.stringify(ownerHomeTrend(ownerHomeScope()));   // the 7-day chart lives outside the work card: redraw the page only when it changed
+      const sig=JSON.stringify([ownerHomeTrend(ownerHomeScope()),ownerHomeToday(ownerHomeScope())]);   // the 7-day chart lives outside the work card: redraw the page only when it changed
       if(sig!==w.trendSig){ w.trendSig=sig; if(ownerRouteGroup()==="home") render(); }
     }catch(e){ /* every lookup is caught per piece above */ }
     finally{
@@ -6318,77 +6340,36 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   // "매장별 오늘 현황": today's schedule, who is working now and the month's sales of every store in scope, one card per store.
   function renderOwnerWork(){
-    const w=state.ownerWork,scope=ownerHomeScope();
-    let html='<section class="oh-status" id="owner-work-card" aria-label="매장별 오늘 현황">';
-    const head=(time)=>'<div class="oh-sec-head"><h3>매장별 오늘 현황</h3><span class="oh-time">'+time+'</span><button type="button" class="ow-refresh'+(w.refreshing?' spin':'')+'" id="owner-work-refresh" aria-label="현황 새로고침"'+(w.refreshing?' aria-busy="true"':'')+'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4.5V9h-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
-    if(!w.loadedOnce){ return html+head('')+'<p class="oh-muted">근무 현황을 불러오는 중이에요…</p></section>'; }
-    const list=scope.map(n=>w.stores[n]).filter(Boolean);
-    const okAts=list.filter(v=>v.sched.ok||v.work.ok).map(v=>v.okAt).filter(Boolean);
-    const dates=Array.from(new Set(list.map(v=>v.bizDate)));
-    const fmt=ymd=>{const [,m,d]=ymd.split("-").map(Number);return m+"월 "+d+"일";};
-    html+=head(okAts.length?ownerWorkClock(Math.max.apply(null,okAts))+' 기준':'');
-    let exp=0,expOk=0,wk=0,wkOk=0;
-    list.forEach(v=>{ if(v.sched.ok){expOk++;exp+=v.sched.count;} if(v.work.ok){wkOk++;wk+=v.work.workers.length;} });
-    const total=list.length;
-    html+='<p class="oh-totals"><span>등록된 예정 <b>'+(expOk?exp+'명':'—')+'</b></span><i aria-hidden="true">·</i><span class="oh-live">현재 근무 <b>'+(wkOk?wk+'명':'—')+'</b></span></p>';
-    if(expOk<total||wkOk<total) html+='<p class="owner-status-fail ow-partial">'+((expOk||wkOk)?'조회된 매장 기준 · 일부 매장 확인 불가':'근무 현황을 조회하지 못했어요')+'</p>';
-    else html+='<p class="oh-note">예정 인원은 등록된 스케줄만 합산한 값이에요.</p>';
-    html+='<div class="ow-list">';
-    list.forEach(v=>{
-      const open=!!w.expanded[v.store],esc=escapeHtml(v.store);
-      const d=(state.dashboardData||state.dashboardSalesPreview||[]).find(x=>x.store===v.store);
-      const bad=!v.sched.ok||!v.work.ok;
-      const sched=!v.sched.ok?'오늘 예정 확인 불가':(v.sched.count===0?'스케줄 미등록':'오늘 예정 <b>'+v.sched.count+'명</b>');
-      const live=!v.work.ok?'<span class="oh-live warn">근무 확인 불가</span>':'<span class="oh-live'+(v.work.workers.length?'':' none')+'">'+(v.work.workers.length?'<i class="oh-dot" aria-hidden="true"></i>':'')+'현재 근무 <b>'+v.work.workers.length+'명</b></span>';
-      html+='<article class="oh-store"><div class="ow-row" role="button" tabindex="0" data-ow-toggle="'+esc+'" aria-expanded="'+open+'">';
-      html+='<div class="ow-name"><span class="oh-ico" aria-hidden="true">'+navIcon('store')+'</span><span class="oh-nm">'+esc+(dates.length>1?' <em>'+fmt(v.bizDate)+' 영업일</em>':'')+'</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" style="transform:rotate('+(open?270:0)+'deg)"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
-      html+='<p class="ow-line">'+live+'<span>'+sched+'</span></p>';
-      if(v.work.ok){
-        if(v.work.workers.length){
-          const nm=v.work.workers.map(x=>escapeHtml(x.name));
-          html+='<p class="ow-names">'+(v.namesOk?(nm.length>3?nm.slice(0,3).join(" · ")+' 외 '+(nm.length-3)+'명':nm.join(" · ")):'이름을 불러오지 못했어요')+'</p>';
-        }else html+='<p class="ow-names none">현재 근무 중인 직원이 없어요</p>';
-        if(v.work.checks.length) html+='<p class="owner-status-fail ow-check">퇴근 기록 확인 필요 '+v.work.checks.length+'건</p>';
-      }
-      if(bad) html+='<p class="ow-names none">조회하지 못한 항목이 있어요. <button type="button" class="owner-retry" data-ow-retry>다시 시도</button></p>';
-      // month sales + one short reason for this store
-      if(!state.dashboardData&&!state.dashboardSalesPreview){ html+='<div class="oh-sales"><span>'+state.monthNum+'월 누적 매출</span><strong class="oh-muted">불러오는 중</strong></div>'; }
-      else if(!d){ html+='<div class="oh-sales"><span>'+state.monthNum+'월 누적 매출</span><strong class="oh-muted">조회 실패</strong></div>'; }
-      else{
-        const st=state.dashboardData?ownerStoreStatus(d):null, unreadable=ownerSalesUnreadable(d);
-        const amount=unreadable?'<strong class="oh-muted">조회 실패</strong>':((d.salesReportCount||0)===0?'<strong class="oh-muted">집계 전</strong>':'<strong>'+Math.round(d.salesSum/10000).toLocaleString()+'<small>만원</small></strong>');
-        html+='<div class="oh-sales"><span>'+state.monthNum+'월 누적 매출</span>'+amount+'</div>';
-        if(!st) html+='<p class="oh-reason">비용·근무 자료 확인 중</p>';
-        else if(st.kind==="attention") html+='<p class="oh-reason bad"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.8v5M12 16.2v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>관리 필요 · '+st.reasons.join(" · ")+'</p>'+(st.failures.length?'<p class="oh-reason warn">판정 불가 · 읽지 못한 항목: '+st.failures.join("·")+'</p>':'');
-        else if(st.failures.length) html+='<p class="oh-reason warn">판정 불가 · 읽지 못한 항목: '+st.failures.join("·")+'</p>';
-        else if(st.kind==="pending"||st.kind==="norevenue") html+='<p class="oh-reason">'+(st.kind==="pending"?'매출 집계 전이라 비율은 판정하지 않아요':'매출이 없어 비율은 판정하지 않아요')+'</p>';
-        else html+='<p class="oh-reason ok"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M8.3 12.4l2.5 2.5 4.9-5.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>기준 이내 · 인건비 '+(ownerLaborLimit(d)===null?'기준 확인 불가':formatLimit(ownerLaborLimit(d))+'%')+' · 지출 '+(d.foodThreshold==null?'기준 확인 불가':formatLimit(d.foodThreshold)+'%')+' 이내</p>';
-      }
-      html+='</div>';
-      if(open){
+    const w=state.ownerWork,scope=ownerHomeScope(),views=scope.map(store=>w.stores[store]);
+    let html='<section class="oh-card oh-attendance" id="owner-work-card" aria-label="매장별 직원 출근"><div class="oh-sec-head"><h3>매장별 직원 출근</h3><button type="button" class="ow-refresh" id="owner-work-refresh" aria-label="현황 새로고침">↻</button></div>';
+    if(!w.loadedOnce)return html+'<p class="oh-muted">근무 현황을 불러오는 중이에요…</p></section>';
+    const complete=views.every(v=>v?.attendance?.ok),total=key=>views.reduce((s,v)=>s+(v?.attendance?.[key]?.length||0),0);
+    html+='<p class="oh-note">등록된 스케줄 기준 · '+(views[0]?.okAt?ownerWorkClock(views[0].okAt)+' 기준':'')+'</p><div class="oh-att-totals">';
+    for(const [key,label] of [['arrived','출근'],['pending','예정'],['missing','확인 필요']])html+='<div class="oh-att-'+key+'"><span>'+label+'</span><strong>'+(complete?total(key)+'명':'—')+'</strong></div>';
+    html+='</div>';
+    scope.forEach((store,i)=>{
+      const v=views[i],a=v?.attendance,open=!!w.expanded[store],esc=escapeHtml(store);
+      html+='<article class="oh-att-store"><button type="button" class="oh-att-row" data-ow-toggle="'+esc+'" aria-expanded="'+open+'"><strong>'+esc+'</strong>';
+      for(const [key,label] of [['arrived','출근'],['pending','예정'],['missing','확인 필요']])html+='<span class="oh-att-'+key+'"><small>'+label+'</small><b>'+(a?.ok?a[key].length+'명':'—')+'</b></span>';
+      html+='<span aria-hidden="true">'+(open?'⌃':'›')+'</span></button>';
+      if(!a?.ok)html+='<p class="owner-status-fail">조회 실패 · <button type="button" class="owner-retry" data-ow-retry>다시 시도</button></p>';
+      else if(!v.sched.count)html+='<p class="oh-note">스케줄 미등록</p>';
+      if(v?.work?.checks?.length)html+='<p class="owner-status-fail">퇴근 기록 확인 필요 '+v.work.checks.length+'명</p>';
+      if(open&&v){
         html+='<div class="ow-detail">';
-        html+='<p class="ow-h">현재 근무</p>';
-        if(!v.work.ok) html+='<p class="ow-none">조회 실패</p>';
-        else if(!v.work.workers.length) html+='<p class="ow-none">현재 근무 중인 직원이 없어요</p>';
-        else v.work.workers.forEach(x=>{html+='<p class="ow-item">'+escapeHtml(x.name)+(x.position?' · '+escapeHtml(x.position):'')+' · '+escapeHtml(x.checkIn)+' 출근</p>';});
-        if(v.work.ok&&v.work.checks.length){
-          html+='<p class="ow-h">퇴근 기록 확인 필요</p>';
-          v.work.checks.forEach(x=>{html+='<p class="ow-item">'+escapeHtml(x.name)+' · '+escapeHtml(x.date)+' '+escapeHtml(x.checkIn)+' 출근 기록</p>';});
+        for(const [key,label] of [['arrived','출근 기록'],['pending','출근 예정'],['missing','출근 기록 확인 필요']]){
+          html+='<p class="ow-h">'+label+'</p>';
+          if(!a?.ok)html+='<p class="ow-none">조회 실패</p>';
+          else if(!a[key].length)html+='<p class="ow-none">해당 직원 없음</p>';
+          else a[key].forEach(p=>{html+='<p class="ow-item">'+escapeHtml(p.name)+' · '+(key==='arrived'?escapeHtml(p.checkIn)+' 출근'+(p.checkOut?' · '+escapeHtml(p.checkOut)+' 퇴근':''):p.times.map(t=>escapeHtml(t.start+'–'+t.end)).join(', '))+'</p>';});
         }
-        html+='<p class="ow-h">오늘 예정</p>';
-        if(!v.sched.ok) html+='<p class="ow-none">조회 실패</p>';
-        else if(!v.sched.count) html+='<p class="ow-none">스케줄 미등록</p>';
-        else v.sched.people.forEach(x=>{html+='<p class="ow-item">'+escapeHtml(x.name)+' · '+x.times.map(t=>escapeHtml(t.start+"–"+t.end)).join(", ")+'</p>';});
-        if(d&&!ownerSalesUnreadable(d)){
-          const lb=d.laborRatio, fb=d.expenseRatio;
-          html+='<p class="ow-h">이번 달 비율</p><p class="ow-item">인건비율 '+(lb===null?'—':lb.toFixed(1)+'%')+' (기준 '+(ownerLaborLimit(d)===null?'확인 불가':formatLimit(ownerLaborLimit(d))+'%')+') · 지출비율 '+(fb===null?'—':fb.toFixed(1)+'%')+' (기준 '+(d.foodThreshold==null?'확인 불가':formatLimit(d.foodThreshold)+'%')+') · 배달매출 '+Math.round((d.deliverySum||0)/10000).toLocaleString()+'만원(별도 집계)</p>';
-        }
-        html+='<div class="team-actions"><button type="button" class="crew-code-btn ow-go" data-ow-att="'+esc+'">근태 보기</button><button type="button" class="crew-code-btn ow-go" data-ow-sales="'+esc+'">매출 보기</button></div></div>';
+        (v.work?.checks||[]).forEach(p=>{html+='<p class="owner-status-fail">'+escapeHtml(p.name)+' · '+escapeHtml(p.date)+' '+escapeHtml(p.checkIn)+' 퇴근 기록 확인</p>';});
+        html+='<div class="team-actions"><button type="button" class="crew-code-btn" data-ow-att="'+esc+'">근태 보기</button></div></div>';
       }
       html+='</article>';
     });
-    html+='</div></section>';
-    return html;
+    html+='<p class="oh-att-note">출근은 오늘 출근 기록이 있는 직원(퇴근 포함), 예정은 시작 전 직원이에요. 시작 시간이 지났지만 기록이 없으면 확인 필요로 표시해요.</p>';
+    return html+'</section>';
   }
   // Repaint only this card (no full render): expanded rows, other cards and the scroll position stay as they are.
   function ownerWorkPaint(){
@@ -6488,9 +6469,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     t.days.forEach(d=>{
       const [y,m,dd]=d.key.split("-").map(Number),isRef=d.key===t.ref,isActive=d.key===active,empty=d.entered===0;
       const h=empty?6:Math.max(6,Math.round((d.sum/max)*80));
-      const top=empty?(d.failed>0?"실패":(d.unfetched>0?"조회 전":"미입력")):Math.round(d.sum/10000).toLocaleString()+"만";
+      const top=empty?(d.failed>0?"실패":(d.unfetched>0?"조회 전":"미입력")):Math.round(d.sum/10000).toLocaleString();
       html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;cursor:pointer;" data-trenddate="'+d.key+'" role="button" aria-label="'+m+'월 '+dd+'일 '+escapeHtml(ownerTrendLabel(d))+'">';
-      if(isActive) html+='<span style="font-size:10.5px;font-weight:800;color:var(--brick);position:absolute;top:-18px;white-space:nowrap;">'+top+'</span>';
+      html+='<span style="font-size:10.5px;font-weight:800;color:var(--brick);position:absolute;top:-18px;white-space:nowrap;">'+top+'</span>';
       html+='<div style="width:100%;background:'+(empty?'transparent':(isActive?'var(--brick)':'var(--brick-dim)'))+';'+(empty?'border:1px dashed var(--brick-dim);':'')+'border-radius:4px 4px 0 0;height:'+h+'px;"></div>';
       html+='<span style="font-size:10.5px;color:'+(isActive?'var(--brick)':'var(--ink-soft)')+';font-weight:'+(isActive?'800':'400')+';">'+(isRef?'오늘':dow[new Date(y,m-1,dd).getDay()])+'</span></div>';
     });
@@ -6503,49 +6484,67 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   // month sales + ratios for the stores in view. Sales, labor and food are judged on their OWN inputs: a failed expense lookup
   // removes a store from the food ratio only, and every ratio says how many stores it is based on.
-  function renderOwnerOverview(){
-    const scope=ownerHomeScope();
-    const source=state.dashboardData||state.dashboardSalesPreview, costsPending=!state.dashboardData;
-    if(!source) return '<section class="category oh-overview" aria-label="월 매출 요약"><p class="oh-muted">'+scope.length+'개 매장의 매출을 불러오는 중이에요…</p></section>';
-    const data=source.filter(d=>scope.includes(d.store));
-    const has=(d,k)=>(d.loadFailures||[]).indexOf(k)>=0;
-    let total=0,readable=0,foodUnknown=false,laborUnknown=false;
-    const lab={sales:0,pay:0,n:0,over:false}, food={sales:0,exp:0,n:0,over:false}, failedItems={};
-    data.forEach(d=>{
-      if(!ownerSalesUnreadable(d)){ total+=d.salesSum; readable++; }
-      const laborOk=!costsPending&&["직원","근태","매출","급여조정","급여확정","급여미확정"].every(k=>!has(d,k)), foodOk=!costsPending&&!has(d,"지출")&&!has(d,"매출");
-      if(laborOk){
-        lab.sales+=d.salesSum; lab.pay+=d.laborPay; lab.n++;
-        const ll=ownerLaborLimit(d);
-        if(ll===null) laborUnknown=true;                                   // limit not readable: not judged, never the default
-        else if(d.laborRatio!==null&&d.laborRatio>ll) lab.over=true;   // each store against its OWN limit
-      }
-      if(foodOk){
-        // food.exp is the total expense amount (all categories, classification never affects this ratio).
-        food.sales+=d.salesSum; food.exp+=(d.expenseSum||0); food.n++;
-        if(d.foodThreshold===null) foodUnknown=true;
-        else if(d.expenseRatio!==null&&d.foodThreshold!==undefined&&d.expenseRatio>d.foodThreshold) food.over=true;
-      }
-      (d.loadFailures||[]).forEach(k=>{ (failedItems[k]=failedItems[k]||[]).push(d.store); });
+  function ownerHomeMoney(value){ return Math.round(value).toLocaleString('ko-KR')+'원'; }
+  function ownerHomeToday(scope){
+    const rows=scope.map(store=>{
+      const v=state.ownerWork?.stores?.[store];
+      const ok=!!v?.sales?.ok,entered=ok&&Object.prototype.hasOwnProperty.call(v.sales.days,v.bizDate);
+      return {store,date:v?.bizDate,ok,entered,amount:entered?v.sales.days[v.bizDate]:0};
     });
-    const unknown=data.length>0&&readable===0, partial=readable>0&&readable<data.length;
-    const entered=data.some(d=>!ownerSalesUnreadable(d)&&(d.salesReportCount||0)>0);   // at least one sales report exists (0 won is a real number, "집계 전" is not)
-    const labor=lab.sales>0?lab.pay/lab.sales*100:null, foodR=food.sales>0?food.exp/food.sales*100:null;
-    const laborFull=lab.n===data.length&&!laborUnknown, foodFull=food.n===data.length&&!foodUnknown;
-    const laborCls=labor===null?'':(lab.over?'bad':(laborFull?'ok':''));
-    const foodCls=foodR===null?'':(food.over?'bad':(foodFull?'ok':''));
-    let html='<section class="category oh-overview" aria-label="월 매출 요약"><div class="oh-ov-head"><span class="oh-label">'+state.monthNum+'월 누적 매출 · '+(scope.length===(state.myStores||[]).length?'전체 '+scope.length+'곳':escapeHtml(scope[0]||''))+'</span>'+ownerRouteButton('상세 ›','sales','report',false)+'</div>';
-    if(state.dashboardLoading) html+='<p class="oh-note" role="status">'+(costsPending?'비용·근무 자료를 불러오는 중이에요…':'최신 자료로 업데이트 중이에요…')+'</p>';
-    if(unknown) html+='<p class="oh-big oh-muted">— <small>조회 실패</small></p><p class="oh-note">매출을 조회하지 못했어요. <button type="button" class="owner-retry" data-retry-dashboard>다시 시도</button></p>';
-    else if(!entered) html+='<p class="oh-big oh-muted">집계 전</p><p class="oh-note">아직 입력된 매출보고가 없어요.</p>';
-    else html+='<p class="oh-big">'+total.toLocaleString()+'<small>원</small></p>'+(partial?'<p class="owner-amount-partial oh-note">조회 성공 '+readable+'/'+data.length+'곳 합계 (조회 실패 매장 제외)</p>':'');
-    const scopeNote=(n)=>(n<data.length?'<small class="oh-of">'+n+'/'+data.length+'곳</small>':'');
-    if(costsPending) html+='<p class="oh-ratios oh-muted">인건비율 · 지출비율 확인 중</p>';
-    else html+='<p class="oh-ratios"><span>인건비율 <b class="'+laborCls+'">'+(labor===null?'—':labor.toFixed(1)+'%')+'</b>'+(labor===null?'':scopeNote(lab.n))+'</span><span>지출비율 <b class="'+foodCls+'">'+(foodR===null?'—':foodR.toFixed(1)+'%')+'</b>'+(foodR===null?'':scopeNote(food.n))+'</span>'+(laborUnknown?'<span class="oh-note">인건비 기준 확인 불가</span>':'')+(foodUnknown?'<span class="oh-note">지출 기준 확인 불가</span>':'')+'</p>';
-    const failKeys=Object.keys(failedItems);
-    if(failKeys.length&&!unknown) html+='<p class="owner-status-fail oh-partial">일부 항목을 읽지 못했어요 · '+failKeys.map(k=>escapeHtml(k)+' 조회 실패('+failedItems[k].map(escapeHtml).join(", ")+')').join(" · ")+'. 위 비율은 읽은 매장만으로 계산했고, 기준을 읽지 못한 항목은 판정하지 않아요. <button type="button" class="owner-retry" data-retry-dashboard>다시 시도</button></p>';
+    return {rows,ready:!!state.ownerWork?.loadedOnce,sum:rows.reduce((s,r)=>s+r.amount,0),entered:rows.filter(r=>r.entered).length,failed:rows.filter(r=>!r.ok).length};
+  }
+  function renderOwnerOverview(){
+    const scope=ownerHomeScope(),source=state.dashboardData||state.dashboardSalesPreview;
+    const data=(source||[]).filter(d=>scope.includes(d.store)),today=ownerHomeToday(scope);
+    const readable=data.filter(d=>!ownerSalesUnreadable(d)),entered=readable.some(d=>d.salesReportCount>0);
+    const amount=readable.reduce((s,d)=>s+d.salesSum,0),full=readable.length===scope.length&&scope.length>0;
+    const failures=Array.from(new Set(data.flatMap(d=>d.loadFailures||[])));
+    const prior=readable.reduce((s,d)=>s+(d.prevComparableSalesSum||0),0),current=readable.reduce((s,d)=>s+(d.comparisonSalesSum||0),0);
+    const comparable=full&&entered&&readable.every(d=>d.comparisonAvailable&&!d.prevMonthFailed)&&prior>0;
+    const growth=comparable?(current-prior)/prior*100:null;
+    const todayText=!today.ready?'불러오는 중':today.entered?ownerHomeMoney(today.sum):today.failed?'조회 실패':'미입력';
+    let html='<section class="category oh-overview oh-card" aria-label="매출 현황"><div class="oh-ov-head"><h3>'+(scope.length>1?'전체 매출 현황':'매출 현황')+'</h3>'+ownerRouteButton('상세 ›','sales','report',false)+'</div>';
+    html+='<p class="oh-label">오늘 등록 매출</p><p class="oh-big">'+todayText+'</p><p class="oh-note">'+scope.length+'개 매장 · 영업일 기준'+(today.ready?' · 입력 '+today.entered+'/'+scope.length+'곳':'')+'</p>';
+    if(today.ready&&today.failed)html+='<p class="owner-status-fail">일부 매장 매출 조회 실패 · 조회된 금액만 표시해요. <button type="button" class="owner-retry" data-trend-retry>다시 시도</button></p>';
+    html+='<div class="oh-month-grid"><div><span>'+state.monthNum+'월 누적 매출</span><strong>'+(!source?'불러오는 중':!readable.length?'조회 실패':!entered?'집계 전':ownerHomeMoney(amount))+'</strong></div><div><span>지난달 같은 기간 대비</span><strong class="'+(growth!==null&&growth>=0?'oh-positive':'')+'">'+(growth===null?'—':(growth>0?'+':'')+growth.toFixed(1)+'%')+'</strong></div></div>';
+    if(source&&!full&&readable.length)html+='<p class="owner-amount-partial oh-note">조회 성공 '+readable.length+'/'+scope.length+'곳 합계</p>';
+    if(growth===null)html+='<p class="oh-note">같은 기간 매출이 없거나 조회되지 않으면 증감률을 표시하지 않아요.</p>';
+    if(state.dashboardLoading)html+='<p class="oh-note" role="status">'+(!state.dashboardData?'비용·비율 확인 중':'최신 자료로 업데이트 중')+'</p>';
+    if(failures.length)html+='<p class="owner-status-fail">'+failures.map(k=>escapeHtml(k)+' 조회 실패').join(' · ')+' <button type="button" class="owner-retry" data-retry-dashboard>다시 시도</button></p>';
     html+=renderOwnerTrend(scope)+'</section>';
-    return html;
+    html+='<section class="oh-card oh-store-sales"><div class="oh-ov-head"><h3>매장별 오늘 매출</h3></div>';
+    today.rows.forEach(r=>{html+='<button type="button" class="oh-sale-row" data-home-store="'+escapeHtml(r.store)+'"><span>'+escapeHtml(r.store)+'</span><strong>'+(!today.ready?'불러오는 중':!r.ok?'조회 실패':!r.entered?'미입력':ownerHomeMoney(r.amount))+'</strong><span aria-hidden="true">›</span></button>';});
+    return html+'<p class="oh-note">매장을 누르면 해당 매장 홈으로 이동해요.</p></section>';
+  }
+  function ownerHomeCosts(data,scope){
+    const rows=scope.map(store=>data?.find(d=>d.store===store));
+    const ready=rows.length>0&&rows.every(Boolean),ok=keys=>ready&&rows.every(d=>keys.every(k=>!(d.loadFailures||[]).includes(k)));
+    const sum=key=>rows.reduce((s,d)=>s+(Number(d?.[key])||0),0);
+    const salesOk=ok(['매출']),expenseOk=ok(['지출'])&&rows.every(d=>Number.isFinite(d.foodExpenseSum)),fixedOk=ok(['고정지출'])&&rows.every(d=>Number.isFinite(d.fixedExpenseSum));
+    const laborOk=ok(['직원','근태','급여조정','급여확정','급여미확정']);
+    const sales=salesOk?sum('salesSum'):null,food=expenseOk?sum('foodExpenseSum'):null,labor=laborOk?sum('laborPay'):null;
+    const other=expenseOk&&fixedOk?sum('expenseSum')-food+sum('fixedExpenseSum'):null;
+    const total=food!==null&&labor!==null&&other!==null?food+labor+other:null;
+    return {sales,food,labor,other,total,unclassified:expenseOk?sum('unclassifiedExpenseSum'):null,estimated:sum('payrollEstimatedCount'),ratio:value=>value!==null&&sales>0?value/sales*100:null};
+  }
+  function renderOwnerCosts(){
+    const scope=ownerHomeScope(),cost=ownerHomeCosts(state.dashboardData,scope);
+    const amount=n=>n===null?'—':ownerHomeMoney(n),ratio=n=>n===null?'—':n.toFixed(1)+'%';
+    let html='<section class="oh-card oh-costs"><div class="oh-ov-head"><h3>'+state.monthNum+'월 비용 · '+(scope.length>1?'전체':'매장')+'</h3>'+ownerRouteButton('상세 ›','sales','report',false)+'</div><p class="oh-note">'+scope.length+'개 매장 합계 · 매출 대비 비율</p>';
+    html+='<div class="oh-cost-total"><div><span>총비용</span><strong>'+amount(cost.total)+'</strong></div><b>'+ratio(cost.ratio(cost.total))+'</b></div>';
+    for(const [label,value] of [['식자재비',cost.food],['인건비',cost.labor],['기타 비용',cost.other]]){
+      const rate=cost.ratio(value);
+      html+='<div class="oh-cost-line"><span>'+label+'</span><strong>'+amount(value)+'</strong><span>'+ratio(rate)+'</span></div><div class="oh-cost-track" aria-hidden="true"><i style="width:'+(rate===null?0:Math.max(0,Math.min(100,rate)))+'%"></i></div>';
+    }
+    html+='<p class="oh-note">식자재비는 주류·음료 포함 · 기타 비용은 고정비·미분류 지출 포함</p>';
+    if(cost.unclassified)html+='<p class="oh-note">미분류 지출 '+amount(cost.unclassified)+'이 기타 비용에 포함되어 있어요.</p>';
+    if(cost.estimated)html+='<p class="oh-note">인건비에 미마감 예상 급여가 포함되어 있어요.</p>';
+    if(!state.dashboardData)html+='<p class="oh-note">비용·비율 확인 중</p>';
+    else if(cost.total===null)html+='<p class="owner-status-fail">일부 비용을 확인하지 못해 총비용을 표시하지 않았어요. <button type="button" class="owner-retry" data-retry-dashboard>다시 시도</button></p>';
+    if(!(cost.sales>0))html+='<p class="oh-note">매출이 0원이거나 미집계·조회 실패이면 비율을 표시하지 않아요.</p>';
+    html+='</section><section class="oh-card"><h3>매장별 비용 비율</h3><div class="oh-table-wrap"><table class="oh-cost-table"><thead><tr><th>매장</th><th>식자재</th><th>인건비</th><th>총비용</th></tr></thead><tbody>';
+    scope.forEach(store=>{const c=ownerHomeCosts(state.dashboardData,[store]);html+='<tr><th><button type="button" data-home-store="'+escapeHtml(store)+'">'+escapeHtml(store)+'</button></th><td>'+ratio(c.ratio(c.food))+'</td><td>'+ratio(c.ratio(c.labor))+'</td><td>'+ratio(c.ratio(c.total))+'</td></tr>';});
+    return html+'</tbody></table></div><p class="oh-note">입력된 비용 기준 · 총비용에 기타 비용 포함</p></section>';
   }
   function renderOwnerHome(){
     let html='<div class="owner-greeting oh-greeting">'+renderRoleAvatar('owner',48)+'<div><h2>사장님, 반가워요</h2><p>'+todayLabel()+'</p></div>'+renderOwnerFortuneMini().replace(/<p class="oh-fortune-text"[\s\S]*$/,'')+'</div>';
@@ -6555,7 +6554,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     html+=renderOwnerSetupResume();
     html+=renderOwnerOverview();
     html+=renderOwnerWork();
-    html+='<div class="owner-quick oh-quick">'+ownerRouteButton(navIcon('calendar')+'오늘 근무','schedule','attendance',false)+ownerRouteButton(navIcon('chart')+'매출보고','sales','sales',false)+ownerRouteButton(navIcon('check')+'운영 확인','checklist',null,false)+'</div>';
+    html+=renderOwnerCosts();
     return html;
   }
   function renderOwnerPeople(){
@@ -6630,7 +6629,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function ownerNavigateFromOverview(section,go){
     const needsStore=!['dashboard','more','alerts'].includes(section);
-    if(needsStore&&state.homeStore==='__all__'){
+    if(needsStore&&state.homeStore==='__all__'&&state.myStores.length>1){
       state.ownerStoreChoice={section,go};render();
       return;
     }
@@ -6700,6 +6699,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     });
     const alerts=document.getElementById('owner-alert-shortcut');if(alerts)alerts.addEventListener('click',()=>{const go=()=>{state.section='alerts';state.showOwnerSalesForm=false;state.showAddStoreForm=false;state.salesEditingId=null;state.salesEditDate=null;render();};if(state.showOwnerSalesForm)askConfirm('작성 중인 매출보고를 닫을까요? 저장하지 않은 입력은 반영되지 않아요.',go);else go();});
     app.querySelectorAll('[data-retry-dashboard]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();retryDashboard();}));
+    app.querySelectorAll('[data-home-store]').forEach(btn=>btn.addEventListener('click',()=>{const store=btn.dataset.homeStore;if(!state.myStores.includes(store))return;state.homeStore=store;switchOwnerStore(store).catch(()=>showToast('매장을 불러오지 못했어요. 다시 시도해 주세요.'));render();}));
     app.querySelectorAll('[data-trend-retry]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();loadOwnerWork({manual:true});}));
     const fortune=document.getElementById('owner-fortune-btn');if(fortune)fortune.addEventListener('click',()=>{state.ownerFortuneDay=state.ownerFortuneDay===ownerFortune().day?null:ownerFortune().day;render();});
     ownerWorkBindAfterRender();

@@ -156,8 +156,8 @@ test('every screen that judges labor reads the store\'s own limit: owner home ca
   assert.ok(fnText('renderTeamSummaryCard').includes('laborRatioVerdict(state.store'));
   assert.ok(fnText('renderMonthlyReport').includes('laborRatioVerdict(state.store'));
   assert.ok(fnText('renderDashboard').includes('rowLaborLimit')&&fnText('renderDashboard').includes('ownerLaborLimit'));
-  assert.ok(fnText('renderOwnerOverview').includes('ownerLaborLimit(d)'));
-  assert.ok(fnText('renderOwnerWork').includes('ownerLaborLimit(d)'));
+  assert.ok(!fnText('renderOwnerOverview').includes('laborRatio>')); // Home now displays amounts, not threshold verdicts.
+  assert.ok(!fnText('renderOwnerWork').includes('laborRatio>')); // Attendance is separate from financial verdicts.
   assert.ok(fnText('loadAllForStore').includes('loadRatioLimits(store)')&&fnText('loadAuthStaffHome').includes('loadRatioLimits(store)'));
   // the dashboard reads each store's limit with its own lookup and its own failure entry
   assert.ok(fnText('loadDashboardData').includes("read('stores','id,food_ratio_threshold,labor_ratio_threshold'")&&fnText('loadDashboardData').includes("failed.push('식자재 기준','인건비 기준')"));
