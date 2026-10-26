@@ -361,6 +361,49 @@ body:has(.expense-editor-overlay) .toast{z-index:110}
 .owner-setup .signup-offer .signup-offer-notice{padding-top:12px;border-top:1px solid #cde8d7;font-size:12px;color:#465c4d}
 .landing .signup-offer-compact{margin:12px 0 0;font-size:12px;line-height:1.8;color:#53655a;word-break:keep-all}
 .landing .login-v2 .signup-offer-compact{color:var(--ml-muted);text-align:center}
+
+/* Owner home: sales, attendance and costs share the selected store scope. */
+.owner-ui .oh-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px 16px;margin:0 0 12px;min-width:0}
+.owner-ui .oh-card h3{font-size:17px!important;font-weight:800;margin:0 0 8px;letter-spacing:-.04em}
+.owner-ui .oh-card .oh-ov-head h3{margin:0}
+.owner-ui .oh-card .oh-ov-head button{border:0;background:none;color:var(--brick);font-weight:700;padding:8px 0 8px 8px;min-height:40px}
+.owner-ui .oh-card .oh-big{font-size:32px;line-height:1.2;font-weight:800;margin:5px 0;letter-spacing:-.045em;overflow-wrap:anywhere}
+.owner-ui .oh-label{font-size:13px;color:var(--ink-soft);margin:7px 0 0}
+.owner-ui .oh-note{font-size:11px;line-height:1.6;margin:6px 0;color:var(--ink-soft);word-break:keep-all}
+.owner-ui .oh-month-grid{display:grid;grid-template-columns:1.1fr 1fr;border-top:1px solid var(--line);padding:13px 0 0;margin-top:12px;gap:12px}
+.owner-ui .oh-month-grid>div+div{border-left:1px solid var(--line);padding-left:12px}
+.owner-ui .oh-month-grid span{display:block;font-size:11px;margin-bottom:6px}
+.owner-ui .oh-month-grid strong{font-size:21px;letter-spacing:-.04em;overflow-wrap:anywhere}
+.owner-ui .oh-positive{color:var(--brick)}
+.owner-ui .oh-sale-row{display:flex;align-items:center;gap:10px;width:100%;min-height:47px;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;color:var(--ink);text-align:left;padding:10px 0;font-size:14px}
+.owner-ui .oh-sale-row>span:first-child{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:650}
+.owner-ui .oh-sale-row strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.owner-ui .oh-att-totals{display:flex;justify-content:space-around;background:var(--brick-dim);padding:12px 4px;border-radius:10px;margin:10px 0}
+.owner-ui .oh-att-totals div{text-align:center;flex:1;border-right:1px solid var(--line)}
+.owner-ui .oh-att-totals div:last-child{border:0}
+.owner-ui .oh-att-totals span,.owner-ui .oh-att-totals strong{display:block}
+.owner-ui .oh-att-totals span{font-size:12px}.owner-ui .oh-att-totals strong{font-size:23px;margin-top:3px}
+.owner-ui .oh-att-arrived{color:var(--brick)}.owner-ui .oh-att-pending{color:var(--ink-soft)}.owner-ui .oh-att-missing{color:#a95d00}
+.owner-ui .oh-att-store{border-bottom:1px solid var(--line)}
+.owner-ui .oh-att-row{display:grid;grid-template-columns:minmax(68px,1.35fr) repeat(3,minmax(40px,.8fr)) 12px;gap:4px;align-items:center;width:100%;min-height:64px;border:0;background:transparent;padding:10px 0;text-align:left;color:var(--ink);border-radius:0}
+.owner-ui .oh-att-row>strong{font-size:14px;overflow-wrap:anywhere}.owner-ui .oh-att-row>span{text-align:center}
+.owner-ui .oh-att-row small{display:block;font-size:10px;white-space:nowrap}.owner-ui .oh-att-row b{display:block;font-size:16px;margin-top:4px}
+.owner-ui .oh-att-note{font-size:11px;line-height:1.65;color:var(--ink-soft);margin:10px 0 0}
+.owner-ui .oh-cost-total{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:12px 0 16px}
+.owner-ui .oh-cost-total span,.owner-ui .oh-cost-total strong{display:block}.owner-ui .oh-cost-total span{font-size:12px;margin-bottom:5px}
+.owner-ui .oh-cost-total strong{font-size:27px;letter-spacing:-.045em;overflow-wrap:anywhere}
+.owner-ui .oh-cost-total>b{font-size:23px;color:var(--brick);background:var(--brick-dim);border-radius:8px;padding:6px 9px;white-space:nowrap}
+.owner-ui .oh-cost-line{display:flex;gap:8px;align-items:center;font-size:13px;margin:13px 0 5px}
+.owner-ui .oh-cost-line>span:first-child{font-weight:700;flex:1}.owner-ui .oh-cost-line>span:last-child{color:var(--ink-soft);min-width:45px;text-align:right}
+.owner-ui .oh-cost-line strong{font-variant-numeric:tabular-nums}
+.owner-ui .oh-cost-track{height:7px;background:var(--brick-dim);border-radius:8px;overflow:hidden}.owner-ui .oh-cost-track i{display:block;height:100%;background:var(--brick);border-radius:8px}
+.owner-ui .oh-table-wrap{overflow-x:auto}.owner-ui .oh-cost-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.owner-ui .oh-cost-table th,.owner-ui .oh-cost-table td{padding:9px 3px;text-align:center;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.owner-ui .oh-cost-table thead{background:var(--cream);font-size:11px}.owner-ui .oh-cost-table th:first-child{width:31%;text-align:left}
+.owner-ui .oh-cost-table button{background:transparent;border:0;padding:5px 0;min-height:36px;margin:0;text-align:left;color:var(--ink);font-weight:700;font-size:12px;overflow-wrap:anywhere;max-width:100%}
+.signup-offer strong em{font-style:normal;color:#087747}.signup-offer-compact strong{color:#126c47;font-weight:800;font-size:15px}
+@media(max-width:360px){.owner-ui .oh-card{padding:14px 12px}.owner-ui .oh-month-grid strong{font-size:18px}.owner-ui .oh-cost-total strong{font-size:23px}.owner-ui .oh-cost-total>b{font-size:20px}.owner-ui .oh-att-row{grid-template-columns:minmax(55px,1fr) repeat(3,minmax(38px,.8fr)) 10px}}
+@media(prefers-color-scheme:dark){.owner-ui .oh-card{background:var(--card)}.owner-ui .oh-att-missing{color:#f1c36c}}
 .owner-setup *{box-sizing:border-box}.owner-setup h2{font-size:25px;line-height:1.4;margin:20px 0 14px;word-break:keep-all}.owner-setup h3{font-size:16px;margin:16px 0 8px}.owner-setup p{font-size:14px;line-height:1.7;color:var(--ink-soft)}.owner-setup .setup-eyebrow{font-size:13px;margin:0 0 10px}.owner-setup progress{width:100%;height:6px;accent-color:var(--brick)}.owner-setup section[hidden]{display:none!important}.owner-setup .setup-fields{border:0;padding:0;margin:0;min-width:0}.owner-setup .setup-field{display:block;font-size:14px;font-weight:700;margin:18px 0}.owner-setup input:not([type=checkbox]),.owner-setup select{display:block;width:100%;min-width:0;min-height:50px;margin:8px 0 0;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:16px;color:var(--ink);background:#fff;text-align:left;letter-spacing:normal}.owner-setup button{min-height:46px;border:1px solid var(--line);border-radius:12px;padding:11px 16px;font:inherit;font-size:14px;color:var(--ink);background:#fff}.owner-setup button:disabled{opacity:.6}.owner-setup .setup-primary{background:var(--brick);border-color:var(--brick);color:#fff;font-weight:800}.owner-setup .setup-actions{display:flex;gap:10px;margin-top:24px}.owner-setup .setup-actions .setup-primary{flex:1}.owner-setup .switch-link{display:block;width:100%;border:0;background:transparent;margin:8px 0 0;color:var(--ink-soft)}.owner-setup .setup-note{background:#eaf3ed;border-radius:14px;padding:16px;font-size:14px;line-height:1.7;margin:20px 0}.owner-setup .setup-row{display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere;font-size:14px}.owner-setup small{font-size:12px;color:var(--ink-soft)}.owner-setup .setup-review{width:100%;display:flex;justify-content:space-between;gap:14px;text-align:left;margin:9px 0;overflow-wrap:anywhere}.owner-setup .setup-code{font-size:28px;font-weight:800;letter-spacing:3px;padding:20px 0}.owner-setup .setup-sequence{padding-left:22px;font-size:14px;line-height:2.2}.owner-setup .setup-check{display:flex;align-items:center;gap:10px;min-height:48px;font-size:14px;margin:12px 0}.owner-setup input[type=checkbox]{width:20px;height:20px;accent-color:var(--brick)}.owner-setup summary{padding:14px 0;min-height:44px}.owner-ui .setup-resume{border:1px solid var(--line);border-radius:18px;padding:18px;margin:0 0 18px;background:#eaf3ed}.owner-ui .setup-resume p{font-size:14px;color:var(--ink-soft)}.owner-ui .setup-resume button{min-height:44px;border:0;border-radius:10px;padding:10px 16px;background:var(--brick);color:#fff;font:inherit;font-weight:700}.signup-setup{padding:12px 0 24px}
 
 /* Monthly reports use the approved white/sage design. */

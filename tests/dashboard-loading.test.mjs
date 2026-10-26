@@ -9,7 +9,7 @@ function fn(name){
   const block=html.match(new RegExp('^  (?:async )?function '+name+'\\([^\\n]*\\n[\\s\\S]*?^  }','m'));
   assert.ok(one||block,'Missing '+name);return (one||block)[0];
 }
-const names=['maneeLoadGuard','monthKey','monthDateRange','readDashboardRows','dashboardQueryScope','clearStaleDashboard','loadDashboardData','rowToCrew','hoursBetween','calcCrewPayFrom','getTaxRate','getTaxLabel','computeNetPay','payrollAdjustmentSnapshot','settleNetPayroll','crewSettlementFrom','summarizeNetPayroll','adjustmentRow','payrollRow','summarizeSalesFigures','ownerSalesUnreadable','ownerLaborLimit','renderOwnerOverview','canShowOwnerHomeWhileLoading','retryDashboard','changeMonth'];
+const names=['maneeLoadGuard','monthKey','monthDateRange','readDashboardRows','dashboardQueryScope','clearStaleDashboard','loadDashboardData','rowToCrew','hoursBetween','calcCrewPayFrom','getTaxRate','getTaxLabel','computeNetPay','payrollAdjustmentSnapshot','settleNetPayroll','crewSettlementFrom','summarizeNetPayroll','adjustmentRow','payrollRow','summarizeSalesFigures','ownerSalesUnreadable','ownerLaborLimit','ownerHomeMoney','ownerHomeToday','renderOwnerOverview','canShowOwnerHomeWhileLoading','retryDashboard','changeMonth'];
 const clone=x=>JSON.parse(JSON.stringify(x));
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -53,9 +53,9 @@ function harness({rows=fixture(),respond,state:overrides={}}={}){
   return {state,calls,renders,ctx,rows};
 }
 
-test('three-store dashboard uses 12 bounded reads and preserves sales, unclassified expenses and confirmed payroll',async()=>{
+test('three-store dashboard uses 13 bounded reads and preserves sales, unclassified expenses and confirmed payroll',async()=>{
   const h=harness();await h.ctx.loadDashboardData();
-  assert.equal(h.calls.length,12);
+  assert.equal(h.calls.length,13);
   for(const call of h.calls){
     const scope=call.filters.find(([op,col])=>op==='in'&&(col==='store_id'||col==='id'));
     assert.ok(scope,'Every query is store scoped');assert.deepEqual(scope[2],['A','B','C']);
@@ -78,7 +78,7 @@ test('sales appears while a slow payroll query is pending; duplicate renders sha
   const preview=h.ctx.renderOwnerOverview();assert.match(preview,/3,500,000/);assert.match(preview,/비율 확인 중/);assert.doesNotMatch(preview,/0\.0%|class="ok"/);
   assert.equal(h.calls.filter(q=>q.table==='monthly_net_payroll').length,1);
   gate.resolve({data:[],error:null});await Promise.all([first,second]);
-  assert.equal(h.state.dashboardLoading,false);assert.equal(h.state.dashboardSalesPreview,null);assert.equal(h.calls.length,12);
+  assert.equal(h.state.dashboardLoading,false);assert.equal(h.state.dashboardSalesPreview,null);assert.equal(h.calls.length,13);
 });
 
 test('refresh keeps the previous amount visible but a failed refresh replaces it with unknown, never stale success or zero',async()=>{
@@ -157,5 +157,5 @@ test('unreadable per-store limits cannot default to a green verdict',async()=>{
   const h=harness({respond:q=>q.table==='stores'?{data:null,error:{code:'42501'}}:undefined});
   await h.ctx.loadDashboardData();
   for(const row of h.state.dashboardData){assert.equal(row.foodThreshold,null);assert.equal(row.laborThreshold,null);assert.ok(row.loadFailures.includes('인건비 기준'));}
-  const view=h.ctx.renderOwnerOverview();assert.match(view,/인건비 기준 확인 불가/);assert.doesNotMatch(view,/class="ok"/);
+  const view=h.ctx.renderOwnerOverview();assert.match(view,/인건비 기준 조회 실패/);assert.doesNotMatch(view,/class="ok"/);
 });
