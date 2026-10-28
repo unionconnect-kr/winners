@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">매니팩토리 검토</string>
+    <string name="title_activity_main">매니팩토리 검토</string>
+    <string name="package_name">kr.co.manee.app</string>
+    <string name="custom_url_scheme">kr.co.manee.app.factoryreview</string>
+</resources>

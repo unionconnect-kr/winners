@@ -1,0 +1,26 @@
+{
+  "appId": "kr.co.manee.app",
+  "appName": "매니",
+  "webDir": "www",
+  "android": {
+    "includePlugins": [
+      "@capacitor/geolocation",
+      "@capacitor/push-notifications"
+    ],
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "sound",
+        "alert"
+      ]
+    }
+  }
+}

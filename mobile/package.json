@@ -1,0 +1,35 @@
+{
+  "name": "manee-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:staging": "node scripts/build-web.mjs staging",
+    "build:production": "node scripts/build-web.mjs production",
+    "sync:ios": "cap sync ios && node scripts/prepare-ios.mjs",
+    "open:ios": "cap open ios",
+    "test": "node --test scripts/*.test.mjs",
+    "build:android:staging": "node scripts/build-web.mjs staging android",
+    "sync:android": "cap sync android",
+    "apk:staging": "npm run build:android:staging && npm run sync:android && cd android && ./gradlew assembleDebug",
+    "build:android:internal": "node scripts/build-android-internal.mjs",
+    "aab:internal": "npm run build:android:internal && npm run sync:android && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/geolocation": "8.2.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/push-notifications": "8.1.2",
+    "@supabase/supabase-js": "2.116.0",
+    "xlsx-js-style": "1.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "esbuild": "0.28.2",
+    "playwright": "1.56.1"
+  }
+}
