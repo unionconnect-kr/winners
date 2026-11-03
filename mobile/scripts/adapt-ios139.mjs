@@ -6,6 +6,11 @@ export function adaptIos139(source) {
   }
   // Automatic WKWebView insets already keep content below the status bar.
   once('매니 1.39 테스트 · 테스트 데이터만 입력해 주세요','매니 1.39 iPhone 테스트 · 테스트 데이터만 입력해 주세요');
+  once('카카오·네이버·Apple로 가입했다면', '카카오·네이버로 가입했다면');
+  once("const providerName={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const providerName={kakao:'카카오',naver:'네이버'}");
+  once("const label={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const label={kakao:'카카오',naver:'네이버'}");
+  once("return '<span aria-hidden=\"true\"></span>';", "return '';");
+  once("if(!linking&&!available[provider]||linking&&provider==='apple'&&!available.apple&&!linked)continue;", "if(!linking&&!available[provider])continue;");
   once("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
     "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
   once("else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'",
@@ -27,4 +32,20 @@ export function adaptIos139(source) {
   once(push,push.replace("+'</button></section>';", "+'</button>'+(state.pushSubscribed?'<button type=\"button\" class=\"owner-primary\" id=\"native-staff-push-test\">테스트 알림 보내기</button>':'')+'</section>';"));
   once('if(action!=="disable")state.pushSubscribed=false;', 'if(action!=="disable"&&action!=="test")state.pushSubscribed=false;');
   return html;
+}
+
+// Keep the archived Android baseline intact; only the iPhone bundle omits Apple.
+export function adaptIos139Social(source) {
+  let script=source;
+  const changes=[
+    ["const PROVIDERS = ['kakao', 'naver', 'apple'];", "const PROVIDERS = ['kakao', 'naver'];"],
+    ["const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver', apple: 'apple' };", "const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver' };"],
+    ["ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true,\n        apple: settings.external?.apple === true };", "ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true };"],
+    ["      // Ship the same privacy-preserving choices on iPhone before exposing Kakao.\n      if (options.platform === 'ios' && !ready.apple) ready.kakao = ready.naver = false;\n", ""]
+  ];
+  for(const [before,after] of changes){
+    if(script.split(before).length!==2)throw Error('iOS social auth anchor mismatch: '+before.slice(0,90));
+    script=script.replace(before,after);
+  }
+  return script;
 }

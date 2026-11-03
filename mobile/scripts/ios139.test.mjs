@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {adaptIos139} from './adapt-ios139.mjs';
+import {adaptIos139,adaptIos139Social} from './adapt-ios139.mjs';
 import {createSocialNative} from '../src/ios-social.js';
 const source=readFileSync(new URL('../release139/assets/index.html',import.meta.url),'utf8');
 const html=adaptIos139(source);
@@ -59,4 +59,57 @@ test('OAuth handles both cold launch and an existing app; unrelated links are ig
   await native.listen(async url=>state.handled.push(url));
   await state.receive({url:'https://evil.test/auth/callback'});await state.receive({url:'kr.co.manee.app.staging://evil/callback'});
   await state.receive({url:first.replace('code=a','code=b')});assert.equal(state.closed,2);assert.equal(state.handled.length,2);
+});
+
+function socialController({apple=true,kakao=true,naver=true}={}){
+  const context={window:{},URL,AbortSignal};
+  const script=adaptIos139Social(readFileSync(new URL('../release139/assets/social-auth.js',import.meta.url),'utf8'));
+  vm.runInNewContext(script,context);
+  const api=context.window.MANEE_SOCIAL_AUTH,calls=[],opened=[],saved=new Map();
+  const user={id:'existing-user',identities:[{provider:'apple'},{provider:'kakao'}]};
+  const db={auth:{getSession:async()=>({data:{session:{user}}}),getUser:async()=>({data:{user}})}};
+  const controller=api.createController({
+    supabase:{createClient:()=>({auth:{signInWithOAuth:async input=>{calls.push(input);return{data:{url:'https://example.supabase.co/auth/v1/authorize?provider='+input.provider}};}}})},
+    db,config:{projectRef:'test',supabaseUrl:'https://example.supabase.co',publishableKey:'public-test',socialProviders:{naver}},
+    platform:'ios',nativeScheme:'kr.co.manee.app.staging',getLocation:()=> 'capacitor://localhost',
+    storage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v),removeItem:k=>saved.delete(k)},
+    random:()=> 'test-flow',open:async url=>opened.push(url),
+    fetch:async()=>({ok:true,json:async()=>({external:{apple,kakao}})})
+  });
+  return {api,controller,calls,opened};
+}
+test('iPhone exposes Kakao and Naver independently of the Apple server setting',async()=>{
+  for(const apple of [true,false]){
+    const {api,controller}=socialController({apple});
+    assert.deepEqual(Array.from(api.PROVIDERS),['kakao','naver']);
+    assert.equal(JSON.stringify(await controller.providers()),JSON.stringify({kakao:true,naver:true}));
+  }
+  assert.equal(JSON.stringify(await socialController({kakao:false}).controller.providers()),JSON.stringify({kakao:false,naver:true}));
+  assert.equal(JSON.stringify(await socialController({naver:false}).controller.providers()),JSON.stringify({kakao:true,naver:false}));
+});
+test('Kakao and Naver retain the native callback, provider mapping and selected role',async()=>{
+  for(const provider of ['kakao','naver'])for(const role of ['owner','staff']){
+    const {controller,calls,opened}=socialController({apple:false});
+    const pending=await controller.begin(provider,{role});
+    assert.equal(calls[0].provider,provider==='naver'?'custom:naver':'kakao');
+    assert.equal(pending.role,role);
+    assert.equal(pending.redirectTo,'kr.co.manee.app.staging://auth/callback?manee_auth=callback&flow=test-flow');
+    assert.equal(calls[0].options.skipBrowserRedirect,true);
+    if(provider==='kakao')assert.equal(calls[0].options.queryParams.scope,'profile_nickname');
+    assert.equal(opened.length,1);
+  }
+});
+test('Apple cannot start sign-in or account linking and is absent from linked account choices',async()=>{
+  const {api,controller,calls,opened}=socialController();
+  for(const intent of ['signin','link'])await assert.rejects(controller.begin('apple',{intent}),{code:'invalid_request'});
+  assert.equal(calls.length,0);assert.equal(opened.length,0);
+  const account=await controller.account('existing-user');
+  assert.equal(JSON.stringify(account.linked),JSON.stringify({kakao:true,naver:false}));
+  assert.equal(api.providerOf({identities:[{provider:'apple'}]},'apple'),false);
+});
+test('iPhone recovery help omits Apple login without changing the Android baseline',()=>{
+  assert.ok(source.includes('카카오·네이버·Apple로 가입했다면'));
+  assert.ok(html.includes('카카오·네이버로 가입했다면'));
+  assert.ok(!html.includes('Apple로 가입했다면'));
+  assert.ok(!html.includes("apple:'Apple'"));
 });
