@@ -2,11 +2,26 @@ import {makeToken} from './ios-qa-connection.mjs';
 import {pathToFileURL} from 'node:url';
 const app='6820833544',group='b5982888-0280-4513-8f78-74ca63dcd342';
 export const buildNumber='1.10.1',marketingVersion='1.39';
-export function appleClient(env,{request=fetch,token=()=>makeToken(env)}={}){
+export function appleClient(env,{request=fetch,token=()=>makeToken(env),readAttempts=3,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  return async(path,body)=>{
-  const r=await request('https://api.appstoreconnect.apple.com'+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+token(),Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-  if(!r.ok)throw Error('IOS139_HTTP_'+r.status);
-  return r.status===204?null:await r.json();
+  // Retry only reads. A failed write can have succeeded remotely, so the caller
+  // must re-read the relationship before deciding whether to submit it again.
+  const attempts=body?1:readAttempts;
+  for(let attempt=0;attempt<attempts;attempt++){
+   const authorization='Bearer '+token();
+   let r;
+   try{r=await request('https://api.appstoreconnect.apple.com'+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:authorization,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
+   catch{
+    if(attempt+1===attempts)throw Error('IOS139_NETWORK_ERROR');
+    await wait(1000*(attempt+1));continue;
+   }
+   if(!r.ok){
+    if(!body&&[429,502,503,504].includes(r.status)&&attempt+1<attempts){await wait(1000*(attempt+1));continue;}
+    throw Error('IOS139_HTTP_'+r.status);
+   }
+   if(r.status===204)return null;
+   try{return await r.json();}catch{throw Error('IOS139_INVALID_RESPONSE');}
+  }
  };
 }
 export async function exactBuild(api){
