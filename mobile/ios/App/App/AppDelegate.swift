@@ -54,6 +54,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 class ManeeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
+        webView?.scrollView.alwaysBounceHorizontal = false
+        webView?.scrollView.isDirectionalLockEnabled = true
         bridge?.registerPluginInstance(ManeeStoreKitPlugin())
         bridge?.registerPluginInstance(ManeeReportFilesPlugin())
     }

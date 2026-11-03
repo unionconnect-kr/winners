@@ -1,3 +1,5 @@
+import {adaptIosDeviceFeedback} from './adapt-ios-device-feedback.mjs';
+import {iosOAuthUrl} from '../src/ios-oauth-url.js';
 export function adaptIos139(source) {
   let html=source;
   function once(before,after){
@@ -45,7 +47,7 @@ export function adaptIos139(source) {
   if(!push)throw Error('Missing staff push panel');
   once(push,push.replace("+'</button></section>';", "+'</button>'+(state.pushSubscribed?'<button type=\"button\" class=\"owner-primary\" id=\"native-staff-push-test\">테스트 알림 보내기</button>':'')+'</section>';"));
   once('if(action!=="disable")state.pushSubscribed=false;', 'if(action!=="disable"&&action!=="test")state.pushSubscribed=false;');
-  return html;
+  return adaptIosDeviceFeedback(html);
 }
 
 // Keep the archived Android baseline intact; only the iPhone bundle omits Apple.
@@ -61,5 +63,9 @@ export function adaptIos139Social(source) {
     if(script.split(before).length!==2)throw Error('iOS social auth anchor mismatch: '+before.slice(0,90));
     script=script.replace(before,after);
   }
+  const before="        const authorize = new URL(data?.url || '');\n        // Open only this project's GoTrue endpoint, never a caller-supplied URL.\n        if (authorize.origin !== new URL(config.supabaseUrl).origin || !authorize.pathname.startsWith('/auth/v1/')) throw failure('invalid_redirect', '로그인 주소를 확인하지 못했어요.');\n        await open(authorize.href);";
+  if(script.split(before).length!==2)throw Error('Missing iPhone OAuth URL guard');
+  script=script.replace(before,"        const authorize = iosOAuthUrl(data?.url || '', new URL(config.supabaseUrl).origin, provider, intent);\n        await open(authorize.href, {provider,intent});");
+  script=script.replace("  const TERMS_VERSION",'  '+iosOAuthUrl.toString()+'\n  const TERMS_VERSION');
   return script;
 }

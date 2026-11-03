@@ -10,7 +10,8 @@
     "allowMixedContent": false
   },
   "ios": {
-    "contentInset": "never"
+    "contentInset": "never",
+    "zoomEnabled": false
   },
   "plugins": {
     "CapacitorHttp": {

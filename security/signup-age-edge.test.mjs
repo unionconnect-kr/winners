@@ -6,12 +6,13 @@ import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 
 const slugs=['manee-signup','manee-staff-signup','manee-franchise-signup'];
-const defaults={username:'synthetic_signup',password:'synthetic-password',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true};
+const defaults={username:'synthetic_signup',password:'synthetic-password1',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
 function harness(slug,options={}){
  const calls=[],logs=[];let handler;
  const ok=data=>({data,error:null});
  const admin={
   rpc:async(name,args)=>{calls.push({name,args});if(name==='consume_auth_rate_limit')return ok(true);
+   if(name==='manee_sms_service')return ok(args.p_action==='claim'?(options.smsDenied?{ok:false}:{ok:true,phone:'+821012345678',operation_id:'sms-operation'}):{ok:true});
    if(name==='is_manee_username_reserved')return options.lookupError?{error:{message:'private-provider-detail'}}:ok(false);
    if(name.startsWith('bootstrap_'))return options.bootstrapError?{error:{code:'23505',message:'private-provider-detail'}}:ok('new-business-id');
    throw Error('Unexpected RPC');},
@@ -25,7 +26,7 @@ function harness(slug,options={}){
   }},
  };
  const client={auth:{signInWithPassword:async()=>ok({session:null})}};
- const env={SUPABASE_URL:'https://offline.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
+ const env={SUPABASE_URL:'https://obpkzecgswnfuyhwvncd.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
  const context=createContext({Request,Response,TextEncoder,crypto:webcrypto,Date,console:{error:(...a)=>logs.push(a),log:(...a)=>logs.push(a)},
   createClient:(_,key)=>key===env.SUPABASE_SERVICE_ROLE_KEY?admin:client,
   Deno:{env:{get:name=>env[name]},serve:fn=>handler=fn}});
@@ -66,6 +67,13 @@ test('owner bootstrap uncertainty never deletes an identity whose profile may ha
  }
  const known=harness('manee-signup',{bootstrapError:true});assert.equal((await known.run()).status,409);assert.deepEqual(known.calls.filter(c=>c.name==='deleteUser').map(c=>c.id),['new-auth-id']);
  const failed=harness('manee-signup',{bootstrapError:true,cleanupError:true});assert.equal((await failed.run()).body.error,'signup_cleanup_failed');
+});
+test('Owner signup cannot create an identity with missing or rejected SMS proof',async()=>{
+ for(const [options,values] of [[{},{sms_proof:''}],[{smsDenied:true},{}]]){
+  const h=harness('manee-signup',options),r=await h.run({...defaults,...values});
+  assert.equal(r.status,400);assert.equal(r.body.error,'phone_verification_required');
+  assert.equal(h.calls.some(c=>c.name==='createUser'),false);
+ }
 });
 test('franchise failures expose no provider details or actor identity in responses/logs',async()=>{
  const h=harness('manee-franchise-signup',{lookupError:true});const r=await h.run();assert.equal(r.status,503);

@@ -60,7 +60,9 @@ Deno.serve(async (req) => {
     const admin = createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const userClient = createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-    const body = await req.json().catch(() => ({}))
+    if (url !== 'https://obpkzecgswnfuyhwvncd.supabase.co') return json({error:'staging_only'},503)
+    const raw=await req.text(); if(raw.length>8192)return json({error:'request_too_large'},413)
+    const body = JSON.parse(raw)
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_request', message: '가입 정보를 확인해주세요.' }, 400)
     if (body.age_14_plus_confirmed !== true) {
       return json({ error: 'age_confirmation_required', message: '만 14세 이상임을 확인해 주세요. 확인 항목이 없으면 앱 업데이트 또는 화면 새로고침 후 가입해 주세요.' }, 400)
@@ -69,11 +71,11 @@ Deno.serve(async (req) => {
     const password = String(body.password ?? '')
     const displayName = String(body.display_name ?? body.name ?? '').normalize('NFKC').trim().slice(0, 50)
 
-    if (!/^[a-z0-9가-힣._-]{4,30}$/.test(username)) {
-      return json({ error: 'invalid_username', message: '아이디는 4~30자의 한글, 영문 소문자, 숫자, ., _, - 만 사용할 수 있습니다.' }, 400)
+    if (!/^[a-z0-9가-힣._-]{6,30}$/.test(username)) {
+      return json({ error: 'invalid_username', message: '아이디는 6~30자의 한글, 영문 소문자, 숫자, ., _, - 만 사용할 수 있습니다.' }, 400)
     }
-    if (password.length < 8 || password.length > 72) {
-      return json({ error: 'invalid_password', message: '비밀번호는 8~72자로 입력해주세요.' }, 400)
+    if (password.length < 8 || new TextEncoder().encode(password).length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return json({ error: 'invalid_password', message: '비밀번호는 8자 이상, 영문과 숫자를 모두 포함해 주세요. (72바이트 이하)' }, 400)
     }
     if (!displayName || unsafeDisplayText(displayName)) {
       return json({ error: 'invalid_display_name', message: '이름을 확인해주세요.' }, 400)
@@ -116,6 +118,14 @@ Deno.serve(async (req) => {
     }
     if (usernameReserved) return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다. 기존 계정은 로그인해주세요.' }, 409)
 
+    if (!/^[0-9a-f-]{36}$/.test(String(body.sms_challenge_id||'')) || !/^[0-9a-f]{64}$/.test(String(body.sms_proof||''))) {
+      return json({error:'phone_verification_required',message:'최신 앱에서 휴대폰 문자 인증을 완료해 주세요.'},400)
+    }
+    const {data:smsClaim,error:smsClaimError}=await admin.rpc('manee_sms_service',{p_action:'claim',p_payload:{
+      id:body.sms_challenge_id,purpose:'signup_staff',username,proof_hash:await sha256(body.sms_proof)
+    }})
+    if(smsClaimError || !smsClaim?.ok)return json({error:'phone_verification_required',message:'휴대폰 인증이 만료됐거나 이미 사용됐어요. 다시 인증해 주세요.'},400)
+    personal={phone:'0'+smsClaim.phone.slice(3)}
     const internalEmail = `u-${crypto.randomUUID().replaceAll('-', '')}@auth.manee.local`
     const { data: created, error: createError } = await admin.auth.admin.createUser({ email: internalEmail, password, email_confirm: true,
       app_metadata: { manee_age_14_plus_confirmed: true, manee_age_confirmation_at: new Date().toISOString(),
@@ -143,6 +153,11 @@ Deno.serve(async (req) => {
       if (bootstrapError?.code === '23505') return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다.' }, 409)
       return json({ error: 'account_bootstrap_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500)
     }
+
+    const {data:smsBound,error:smsBindError}=await admin.rpc('manee_sms_service',{p_action:'complete',p_payload:{
+      id:body.sms_challenge_id,operation_id:smsClaim.operation_id,user_id:created.user.id
+    }})
+    if(smsBindError || !smsBound?.ok)return json({error:'phone_binding_uncertain',message:'계정은 생성됐어요. 로그인 후 복구용 휴대폰 인증 상태를 확인해 주세요.'},503)
 
     const { data: loginData } = await userClient.auth.signInWithPassword({ email: internalEmail, password })
 

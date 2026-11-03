@@ -11,6 +11,9 @@ function harness(options={}){
   const calls=[];let handler;
   const ok=data=>({data,error:null});
   const admin={
+    from:table=>({select(){return this;},eq(){return this;},async maybeSingle(){
+      return ok(table==='profiles'?(options.profileMissing?null:{user_id:'verified-user'}):table==='platform_admins'?(options.ordinary?null:{user_id:'verified-user'}):null);
+    }}),
     rpc:async(name,args)=>{calls.push({name,args});
       if(name==='consume_auth_rate_limit')return options.rateError?{error:{code:'offline'}}:ok(options.rateAllowed??true);
       assert.equal(name,'manee_support_recovery_service');
@@ -46,7 +49,7 @@ function harness(options={}){
 test('Support recovery is staging-only and rejects a wrong application key before service calls',async()=>{
   for(const options of [{production:true},{badKey:true}]){const h=harness(options);assert.ok((await h.run({action:'request'})).status>=400);assert.equal(h.calls.length,0);}
 });
-test('A recovery request has a uniform response and sends no password or Auth identity',async()=>{
+test('An HQ support recovery request sends no password or Auth identity',async()=>{
   const h=harness();const r=await h.run({action:'request',username:'  ＷＯＲＫＥＲ＿Ａ ',affiliation:'Synthetic A',user_id:'victim'});
   assert.equal(r.status,200);assert.equal(r.cache,'no-store');
   const call=h.calls.find(c=>c.args?.p_action==='request');
@@ -67,7 +70,7 @@ test('The reviewer receives one 6-digit code while the database receives only it
   assert.equal(JSON.stringify(stored).includes(r.body.reset_code),false);
 });
 test('Reset consumes the hashed code before updating only the resolved Auth identity',async()=>{
-  const h=harness();const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password',user_id:'victim'};
+  const h=harness();const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password1',user_id:'victim'};
   const r=await h.run(payload);assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true});
   const consume=h.calls.find(c=>c.args?.p_action==='consume');
   assert.equal(consume.args.p_payload.code_hash,createHash('sha256').update('123456').digest('hex'));
@@ -75,20 +78,36 @@ test('Reset consumes the hashed code before updating only the resolved Auth iden
   assert.ok(h.calls.indexOf(consume)<h.calls.indexOf(update));
 });
 test('Invalid proof and rate limits prevent password changes',async()=>{
-  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password'};
+  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password1'};
   for(const options of [{invalidCode:true},{rateAllowed:false},{rateError:true}]){const h=harness(options);assert.ok((await h.run(payload)).status>=400);assert.equal(h.calls.some(c=>c.name==='updateUserById'),false);}
   const malformed=harness();assert.equal((await malformed.run({...payload,reset_code:'123'})).status,400);assert.equal(malformed.calls.some(c=>c.args?.p_action==='consume'),false);
 });
 test('A signed-in user can change their own password only after reauthentication',async()=>{
-  const payload={action:'change_password',current_password:'old-password',new_password:'synthetic-new-password'};
+  const payload={action:'change_password',current_password:'old-password',new_password:'synthetic-new-password1'};
   const wrong=harness({wrongPassword:true});assert.equal((await wrong.run(payload,true)).status,400);assert.equal(wrong.calls.some(c=>c.name==='updateUserById'),false);
   const h=harness();const r=await h.run(payload,true);assert.equal(r.status,200);
   assert.equal(h.calls.find(c=>c.name==='updateUserById').id,'verified-user');assert.equal(h.calls.some(c=>c.name==='signOut'),true);
 });
 test('Ambiguous Auth update returns uncertainty without returning a session or code',async()=>{
-  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password'};
+  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password1'};
   for(const options of [{updateThrow:true},{updateError:true},{completeError:true},{rpcError:'complete'}]){
     const h=harness(options);const r=await h.run(payload);assert.equal(r.status,503);assert.equal(r.body.error,'recovery_uncertain');
     assert.equal(r.body.session,undefined);assert.equal(r.body.reset_code,undefined);
+  }
+});
+test('Ordinary and unknown accounts receive the same SMS guidance without issuing a support code',async()=>{
+  for(const options of [{ordinary:true},{profileMissing:true}]){
+    const h=harness(options),r=await h.run({action:'request',username:'worker_a'});
+    assert.equal(r.status,200);assert.equal(r.body.ok,true);assert.match(r.body.message,/휴대폰 문자 인증/);
+    assert.equal(h.calls.some(c=>c.args?.p_action==='request'),false);
+    const reset=await h.run({action:'reset',username:'worker_a',reset_code:'123456',new_password:'ValidNew12'});
+    assert.equal(reset.body.error,'sms_recovery_required');assert.equal(h.calls.some(c=>c.name==='updateUserById'),false);
+  }
+});
+test('An authenticated password change requires letters and digits before reauthentication or update',async()=>{
+  for(const new_password of ['abcdefgh','12345678']){
+    const h=harness(),r=await h.run({action:'change_password',current_password:'old-password',new_password},true);
+    assert.equal(r.status,400);assert.equal(r.body.error,'invalid_password');
+    assert.equal(h.calls.some(c=>c.name==='signInWithPassword'||c.name==='updateUserById'),false);
   }
 });

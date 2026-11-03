@@ -1,6 +1,7 @@
 // Full offline iPhone page inventory; network writes, SMS, payments and native plugins are excluded.
 import {pageCases,seedPage,showPage} from './ios-page-fixtures.mjs';
 import {checkInputs} from './ios-page-interactions.mjs';
+import {checkDeviceFeedback} from './ios-device-interactions.mjs';
 import {readFileSync,writeFileSync,mkdirSync,mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve,dirname} from 'node:path';
@@ -24,8 +25,10 @@ for(const width of [320,375,390,430]){
  await context.addInitScript(()=>{const NativeDate=Date,instant=NativeDate.parse('2026-11-03T10:00:00Z');window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[instant]));}static now(){return instant;}};});
  const page=await context.newPage();page.setDefaultTimeout(5000);
  page.on("pageerror",e=>console.error("Page script:",e.message));
- await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.hostname!=='manee.test')return route.abort();const path=url.pathname==='/'?'/index.html':url.pathname;try{await route.fulfill({body:path==='/index.html'?html:readFileSync(root+path),contentType:path.endsWith('.ttf')?'font/ttf':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html'});}catch{await route.abort();}});
- await page.goto('https://manee.test/');await page.waitForFunction(()=>window.qa);
+ // All requests are intercepted. Only loopback fixture assets are fulfilled;
+ // every other host is aborted before any network request can be sent.
+ await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.hostname!=='127.0.0.1')return route.abort();const path=url.pathname==='/'?'/index.html':url.pathname;try{await route.fulfill({body:path==='/index.html'?html:readFileSync(root+path),contentType:path.endsWith('.ttf')?'font/ttf':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html'});}catch{await route.abort();}});
+ await page.goto('http://127.0.0.1:8765/');await page.waitForFunction(()=>window.qa);
  await page.addStyleTag({content:`@font-face{font-family:QA;src:url('/report-assets/NanumGothic-Regular.ttf')}body,.app,.app *,dialog,dialog *{font-family:QA,sans-serif!important}.ios-test-banner{font-family:QA,sans-serif!important}:root{--ios-safe-top:47px;--ios-safe-bottom:34px}`});await page.evaluate(seedPage);await page.evaluate(()=>document.fonts.ready);
  const scenes=pageCases;
  for(const scene of scenes){
@@ -46,7 +49,7 @@ for(const width of [320,375,390,430]){
 
   }catch(e){results.push({width,scene:scene.name,error:e.message.slice(0,240)});}
  }
- if(width===390)interactions.push(...await checkInputs(page,showPage));
+ if(width===390)interactions.push(...await checkInputs(page,showPage),...await checkDeviceFeedback(page,showPage));
  await context.close();
 }
 writeFileSync(resolve(out,'interactions.json'),JSON.stringify(interactions,null,2));

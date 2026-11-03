@@ -2,9 +2,9 @@ name: iPhone page and input audit
 on:
   push:
     branches: [codex/ios-release-20261016]
-    paths: ['mobile/**', '.github/workflows/ios-ui-audit.yml']
+    paths: ['mobile/**', 'supabase/functions/**', 'supabase/migrations/**', 'tests/ios-staff-expense-delete.test.mjs', '.github/workflows/ios-ui-audit.yml']
   pull_request:
-    paths: ['mobile/**', '.github/workflows/ios-ui-audit.yml']
+    paths: ['mobile/**', 'supabase/functions/**', 'supabase/migrations/**', 'tests/ios-staff-expense-delete.test.mjs', '.github/workflows/ios-ui-audit.yml']
 permissions:
   contents: read
 jobs:
@@ -19,6 +19,10 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci --prefix mobile
+      - name: Check staff expense deletion authorization in PostgreSQL
+        run: |
+          npm ci --ignore-scripts
+          node --test tests/ios-staff-expense-delete.test.mjs
       - name: Install pinned WebKit audit runner
         run: |
           npm install --prefix "$RUNNER_TEMP/manee-playwright" --ignore-scripts --no-save playwright@1.62.1
