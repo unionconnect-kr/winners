@@ -1,4 +1,4 @@
-// Device feedback changes are confined to the packaged iPhone app.
+// Shared device feedback for packaged iPhone and Android QA apps.
 export function adaptIosDeviceFeedback(source) {
   let html = source;
   const once = (before, after) => {

@@ -19,7 +19,8 @@
     "aab:internal": "npm run build:android:internal && npm run sync:android && cd android && ./gradlew bundleRelease",
     "aab:paid-pilot": "node scripts/build-android-paid-pilot.mjs",
     "build:ios139": "node scripts/build-ios139.mjs staging",
-    "test:ios139": "node --test scripts/ios139.test.mjs scripts/billing.test.mjs scripts/ios-push.test.mjs scripts/android-geolocation.test.mjs scripts/android-notification-navigation.test.mjs scripts/report-file.test.mjs scripts/store-subscription.test.mjs"
+    "test:ios139": "node --test scripts/ios139.test.mjs scripts/billing.test.mjs scripts/ios-push.test.mjs scripts/android-geolocation.test.mjs scripts/android-notification-navigation.test.mjs scripts/report-file.test.mjs scripts/store-subscription.test.mjs",
+    "build:android140": "node scripts/build-android140.mjs staging"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
