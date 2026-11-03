@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 const migration=readFileSync(new URL('../supabase/migrations/20261103153548_staff_expense_delete.sql',import.meta.url),'utf8');
+const apiMigration=readFileSync(new URL('../supabase/migrations/20261103163628_staff_expense_api_conflicts.sql',import.meta.url),'utf8');
 const uid='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002',sid='00000000-0000-4000-8000-000000000003',elsewhere='00000000-0000-4000-8000-000000000004',id='00000000-0000-4000-8000-000000000005';
 async function fixture(){
   const db=new PGlite();await db.exec(`
@@ -20,7 +21,7 @@ async function fixture(){
     insert into private.manee_expense_receipts values('${id}','receipt.png','image/png','aGVsbG8=');
     select set_config('test.uid','${uid}',false);
     ${migration}
-    create function public.manee_staff_expenses(uuid,text,jsonb) returns jsonb language sql as $$select private.manee_staff_expenses($1,$2,$3)$$;
+    ${apiMigration}
   `);return db;
 }
 const remove=(db,store=sid,revision=1)=>db.query('select public.manee_staff_expenses($1,\'delete\',$2::jsonb) as result',[store,JSON.stringify({id,revision})]);
@@ -34,8 +35,8 @@ for(const [name,prepare,code,store,revision]of [
  ['missing user',`select set_config('test.uid','',false)`,'42501'],
  ['expired session',`select set_config('test.live','false',false)`,'42501'],
  ['wrong store','select 1','42501',elsewhere],
- ['stale revision','select 1','40001',sid,0],
- ['missing revision','select 1','40001',sid,null],
+ ['stale revision','select 1','PT409',sid,0],
+ ['missing revision','select 1','PT409',sid,null],
  ['expired subscription',`select set_config('test.entitled','false',false)`,'P4402'],
 ])test('delete rejects '+name+' and retains both business record and receipt',async()=>{
   const db=await fixture();try{await db.exec(prepare);await assert.rejects(remove(db,store||sid,revision===undefined?1:revision),e=>e.code===code);assert.equal((await db.query('select count(*) as count from public.expense_entries')).rows[0].count,1);assert.equal((await db.query('select count(*) as count from private.manee_expense_receipts')).rows[0].count,1);}finally{await db.close();}

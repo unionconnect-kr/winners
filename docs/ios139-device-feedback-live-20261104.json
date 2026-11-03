@@ -1,0 +1,66 @@
+{
+  "server_definition_applied": true,
+  "api_conflict_migration_applied": true,
+  "private_authorization_unchanged": true,
+  "public_security_definer": false,
+  "live_api_checks": [
+    {
+      "name": "creator can read the attached QA receipt",
+      "passed": true
+    },
+    {
+      "name": "stale revision is rejected",
+      "passed": true
+    },
+    {
+      "name": "missing revision is rejected",
+      "passed": true
+    },
+    {
+      "name": "different store is rejected",
+      "passed": true
+    },
+    {
+      "name": "another author is rejected",
+      "passed": true
+    },
+    {
+      "name": "owner-confirmed staff expense is rejected",
+      "passed": true
+    },
+    {
+      "name": "own unconfirmed expense can be deleted",
+      "passed": true
+    },
+    {
+      "name": "deleted expense and its receipt are no longer accessible",
+      "passed": true
+    },
+    {
+      "name": "anonymous deletion is rejected",
+      "passed": true
+    },
+    {
+      "name": "all newly created QA expenses and vendor were cleaned up",
+      "passed": true
+    },
+    {
+      "name": "owner verification session locally revoked",
+      "passed": true
+    },
+    {
+      "name": "staff verification session locally revoked",
+      "passed": true
+    }
+  ],
+  "production_project_changed": false,
+  "signed_build": {
+    "version": "1.39",
+    "build": "1.14.1",
+    "source": "2524a03d85fa5976736d8f36b8a30682785ab06c",
+    "run": 41673170950,
+    "artifact": 13249158163
+  },
+  "upload_run": 41676511619,
+  "review_submitted": false
+}
