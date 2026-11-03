@@ -1,7 +1,7 @@
 import {makeToken} from './ios-qa-connection.mjs';
 import {pathToFileURL} from 'node:url';
 const app='6820833544',group='b5982888-0280-4513-8f78-74ca63dcd342';
-export const buildNumber='1.12.1',marketingVersion='1.39';
+export const buildNumber='1.13.1',marketingVersion='1.39';
 export function appleClient(env,{request=fetch,token=()=>makeToken(env),readAttempts=3,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  return async(path,body)=>{
   // Retry only reads. A failed write can have succeeded remotely, so the caller
@@ -39,7 +39,7 @@ export async function exactBuild(api){
   internalBuildState:beta?.attributes?.internalBuildState,externalBuildState:beta?.attributes?.externalBuildState};
 }
 export async function connectBuild(env,{api=appleClient(env),wait=ms=>new Promise(r=>setTimeout(r,ms)),attempts=12}={}){
- if(env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||env.GITHUB_REF!=='refs/heads/main'||!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)||env.GITHUB_WORKFLOW!=='Upload reviewed iOS 1.39 QA 1.12.1'||env.MANEE_AUTHORIZED_QA_UPLOAD!=='ios-20261103-1.39-1.12.1')throw Error('IOS139_NOT_REQUESTED');
+ if(env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||env.GITHUB_REF!=='refs/heads/main'||!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)||env.GITHUB_WORKFLOW!=='Upload reviewed iOS 1.39 QA 1.13.1'||env.MANEE_AUTHORIZED_QA_UPLOAD!=='ios-20261103-1.39-1.13.1')throw Error('IOS139_NOT_REQUESTED');
  let build;
  for(let i=0;i<attempts;i++){
   build=await exactBuild(api);
