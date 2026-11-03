@@ -21,7 +21,7 @@ concurrency:
 jobs:
   archive:
     if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016')
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 60
     defaults:
       run:

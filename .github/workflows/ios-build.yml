@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   simulator:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 30
     defaults:
       run:
@@ -38,7 +38,13 @@ jobs:
           xcodebuild -version
       - run: npm ci
       - run: npm test
-      - run: npm run build:staging
+      - name: Prepare the app under review
+        run: |
+          if [ "$GITHUB_BASE_REF" = "codex/ios-release-20261016" ]; then
+            npm run build:ios139
+          else
+            npm run build:staging
+          fi
       - run: npm run sync:ios
       - name: Compile unsigned simulator app
         run: |
