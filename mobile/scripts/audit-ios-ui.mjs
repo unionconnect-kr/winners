@@ -28,7 +28,7 @@ for(const width of [320,375,390,430]){
    await page.evaluate(sc=>{const q=qa,s=q.state,app=document.getElementById('app');document.body.className='';app.className='app owner-ui';q.sector4().stack=[];q.r136().sheet=null;
     s.role='storeOwner';s.onboardingStep=null;s.authMemberships[0].role='owner';
     let markup='';if(sc.type==='owner'){s.section={Home:'dashboard',People:'schedule',Sales:'sales',Operations:'checklist',More:'more'}[sc.view];markup='<main>'+q['renderOwner'+sc.view]()+'</main>';}if(sc.type==='setup'){s.onboardingStep=sc.step;markup=q.renderOnboardingWizard();}
-    if(sc.type==='staff'){s.role='staff';s.crew[0].isManager=sc.role==='manager';s.staffView=sc.view;s.authMemberships[0].role=s.crew[0].isManager?'manager':'staff';markup=q.renderStaffApp();}
+    if(sc.type==='staff'){s.role='staff';s.crew[0].isManager=sc.role==='manager';s.staffView=sc.view;s.authMemberships[0].role=s.crew[0].isManager?'manager':'staff';if(sc.view==='reservations'){const u=q.sector4();u.resLoaded=u.reservationDate;u.resLoading=false;}markup=q.renderStaffApp();}
     if(sc.type==='sheet'){s.role=sc.role||'storeOwner';q.sector4().stack=[{type:sc.sheet,id:sc.sheet==='setting'?'cutoff':''}];markup=q.renderSector4Sheet();}
     if(sc.type==='expense'){s.role='staff';q.r136().sheet={type:'expense-new',draft:{date:'2026-11-03',category:'food',payment_method:'card',payment_status:'paid'}};markup=q.r136Overlay();}
     if(sc.type==='landing'){s.role='landing';s.landingMode=sc.mode;s.landingTab=sc.mode==='staff-signup'?'staff':'owner';markup=q.renderLanding();}
