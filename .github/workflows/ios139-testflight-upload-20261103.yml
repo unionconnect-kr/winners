@@ -1,4 +1,4 @@
-name: Upload reviewed iOS 1.39 QA 1.10.1
+name: Upload reviewed iOS 1.39 QA 1.11.1
 
 on:
   push:
@@ -10,20 +10,20 @@ on:
         description: 'Reviewed MANEE build only; no review submission or invitations'
         type: choice
         required: true
-        default: '1.10.1'
-        options: ['1.10.1']
+        default: '1.11.1'
+        options: ['1.11.1']
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: manee-testflight-6820833544-1-39-1-10-1
+  group: manee-testflight-6820833544-1-39-1-11-1
   cancel-in-progress: false
 
 jobs:
   upload:
-    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.build == '1.10.1')
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.build == '1.11.1')
     runs-on: macos-15-intel
     timeout-minutes: 50
     defaults:
@@ -47,9 +47,9 @@ jobs:
           python3 - <<'PY'
           import hashlib, io, json, os, pathlib, subprocess, zipfile, plistlib
           repo = 'unionconnect-kr/winners'
-          commit = 'dd6b9e07d7e9b93e53b0eb19318f2e10dd3a8cbc'
-          run_id, artifact_id = 41635571800, 13230401979
-          digest = '2c520d5f0014f05f0d98b60c8347d8f7a85645c7b9874d76b49bacb4f7911699'
+          commit = 'f88a34c5b7d5173b555ea198152cd6c12fcca32f'
+          run_id, artifact_id = 41645106001, 13234093741
+          digest = 'b58257f372a58076e31564219b0999864478b427d75cda71b7f09db115f48694'
           def api(path):
               return subprocess.check_output(['gh', 'api', 'repos/' + repo + path], timeout=120)
           def require(ok, message):
@@ -62,7 +62,7 @@ jobs:
                   and run['repository']['full_name'] == repo
                   and run['head_repository']['full_name'] == repo, 'Untrusted source build')
           artifact = json.loads(api('/actions/artifacts/' + str(artifact_id)))
-          require(artifact['id'] == artifact_id and artifact['name'] == 'manee-ios-signed-10-1'
+          require(artifact['id'] == artifact_id and artifact['name'] == 'manee-ios-signed-11-1'
                   and not artifact['expired'] and artifact['workflow_run']['id'] == run_id
                   and artifact['workflow_run']['head_sha'] == commit
                   and artifact['digest'] == 'sha256:' + digest
@@ -79,22 +79,26 @@ jobs:
                       and 0 < entry.file_size <= 250 * 1024 * 1024, 'Invalid IPA archive member')
               directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-reviewed-ipa'
               directory.mkdir(mode=0o700)
-              destination = directory / 'MANEE-1.39-1.10.1.ipa'
+              destination = directory / 'MANEE-1.39-1.11.1.ipa'
               destination.write_bytes(package.read(entry))
               destination.chmod(0o600)
           with zipfile.ZipFile(destination) as ipa:
               plist = plistlib.loads(ipa.read('Payload/App.app/Info.plist'))
               require(plist.get('CFBundleIdentifier') == 'kr.co.manee.app'
                       and plist.get('CFBundleShortVersionString') == '1.39'
-                      and plist.get('CFBundleVersion') == '1.10.1', 'IPA app/version mismatch')
+                      and plist.get('CFBundleVersion') == '1.11.1', 'IPA app/version mismatch')
               info = json.loads(ipa.read('Payload/App.app/public/build-info.json'))
               require(info.get('platform') == 'ios' and info.get('environment') == 'staging'
                       and info.get('projectRef') == 'obpkzecgswnfuyhwvncd'
                       and info.get('sourceAndroidVersion') == 40, 'Wrong packaged environment')
               require(hashlib.sha256(ipa.read('Payload/App.app/public/index.html')).hexdigest()
-                      == '8c3446c1f9b39117dd11c48fc1dc9dc12028a79c33ed62e3a4f14947b28668c8', 'Packaged screen mismatch')
+                      == '8afd518ac857ab019acdb4c186cfba7380e40da2ddb03d8624c07d1ef75a786e', 'Packaged screen mismatch')
               require(hashlib.sha256(ipa.read('Payload/App.app/public/social-auth.js')).hexdigest()
                       == '996b9907e4c1731efe52b1ec441fdf53ccaf78b8d3a1e7cad3322d906d94043e', 'Packaged social login mismatch')
+              require(hashlib.sha256(ipa.read('Payload/App.app/public/ios-ui.css')).hexdigest()
+                      == 'b2c0b56448e1c23b2a54239df5620713614e0226ba3fae7c5c4d66c3f2ca932d', 'Packaged iPhone form styles mismatch')
+              native_config = json.loads(ipa.read('Payload/App.app/capacitor.config.json'))
+              require(native_config.get('ios', {}).get('contentInset') == 'never', 'Unexpected native safe-area ownership')
           print('Reviewed source, successful signed build, fixed artifact and SHA-256 verified.')
           PY
       - name: Select Xcode and verify Apple upload tools
@@ -107,17 +111,17 @@ jobs:
       - name: Validate and upload the reviewed IPA to the fixed MANEE app
         env:
           MANEE_UPLOAD_TESTFLIGHT: 'true'
-          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.10.1'
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.11.1'
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          node .github/scripts/ios139-upload.mjs "$RUNNER_TEMP/manee-reviewed-ipa/MANEE-1.39-1.10.1.ipa"
+          node .github/scripts/ios139-upload.mjs "$RUNNER_TEMP/manee-reviewed-ipa/MANEE-1.39-1.11.1.ipa"
           echo 'Apple upload accepted; processing is pending. No review submission or tester invitation.' >> "$GITHUB_STEP_SUMMARY"
       - name: Verify Apple processing with bounded read retries and connect the existing internal QA group
         env:
-          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.10.1'
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.11.1'
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
