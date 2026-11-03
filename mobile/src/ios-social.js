@@ -1,5 +1,6 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import { iosOAuthUrl } from './ios-oauth-url.js';
 
 export function createSocialNative({app, browser, scheme, origin}) {
   let listener;
@@ -12,10 +13,8 @@ export function createSocialNative({app, browser, scheme, origin}) {
   }
   return {
     scheme,
-    async open(raw) {
-      const url = new URL(raw);
-      if (url.origin !== origin || !url.pathname.startsWith('/auth/v1/') || url.username || url.password)
-        throw Error('로그인 주소를 확인하지 못했어요.');
+    async open(raw, {provider, intent} = {}) {
+      const url = iosOAuthUrl(raw, origin, provider, intent);
       await browser.open({url:url.href});
     },
     async listen(handler) {

@@ -58,6 +58,19 @@ Deno.serve(async req => {
     const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     if (!await limit('support_recovery_ip', ip, 3600, 40)) return tooMany()
 
+    // Ordinary owner/staff accounts use phone-bound SMS proofs. Legacy support codes remain HQ-only.
+    if (action === 'request' || action === 'reset') {
+      const uname=String(body.username||'').normalize('NFKC').trim().toLowerCase()
+      const {data:profile,error:profileError}=await admin.from('profiles').select('user_id').eq('username',uname).maybeSingle()
+      if(profileError)throw new Error('lookup_unavailable')
+      let isHq=false
+      if(profile){const {data:pa,error:paError}=await admin.from('platform_admins').select('user_id').eq('user_id',profile.user_id).eq('status','active').maybeSingle();if(paError)throw new Error('lookup_unavailable');isHq=!!pa}
+      if(!isHq){
+        if(action==='request')return reply({ok:true,message:'일반 가입 계정은 최신 앱에서 휴대폰 문자 인증으로 비밀번호를 찾아 주세요.'})
+        return reply({error:'sms_recovery_required',message:'일반 가입 계정은 최신 앱에서 휴대폰 문자 인증으로 비밀번호를 찾아 주세요.'},400)
+      }
+    }
+
     if (action === 'request') {
       const username = String(body.username || '').normalize('NFKC').trim().toLowerCase()
       const affiliation = String(body.affiliation || '').normalize('NFKC').trim()
@@ -71,7 +84,7 @@ Deno.serve(async req => {
       const code = String(body.reset_code || '').replace(/\D/g, '')
       const password = String(body.new_password || '')
       if (!await limit('support_recovery_username', username, 900, 8)) return tooMany()
-      if (password.length < 8 || new TextEncoder().encode(password).length > 72) return reply({ error: 'invalid_password', message: '새 비밀번호는 8자 이상, 영문 72자·한글 24자 이내로 입력해 주세요.' }, 400)
+      if (password.length < 8 || new TextEncoder().encode(password).length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return reply({ error: 'invalid_password', message: '새 비밀번호는 8자 이상, 영문과 숫자를 모두 포함해 주세요. (72바이트 이하)' }, 400)
       if (!/^[a-z0-9가-힣._-]{4,30}$/.test(username) || !/^\d{6}$/.test(code)) return invalidReset()
       const consumed = await service('consume', { username, code_hash: await hash(code) })
       if (!consumed.ok || !consumed.user_id || !consumed.request_id || !consumed.operation_id) return invalidReset()
@@ -118,7 +131,7 @@ Deno.serve(async req => {
     if (!credentials.ok || !credentials.email) return reply({ error: 'invalid_session', message: '다시 로그인해 주세요.' }, 401)
     const currentPassword = String(body.current_password || '')
     const newPassword = String(body.new_password || '')
-    if (newPassword.length < 8 || new TextEncoder().encode(newPassword).length > 72) return reply({ error: 'invalid_password', message: '새 비밀번호는 8자 이상, 영문 72자·한글 24자 이내로 입력해 주세요.' }, 400)
+    if (newPassword.length < 8 || new TextEncoder().encode(newPassword).length > 72 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) return reply({ error: 'invalid_password', message: '새 비밀번호는 8자 이상, 영문과 숫자를 모두 포함해 주세요. (72바이트 이하)' }, 400)
     const { data: reauth, error: reauthError } = await client.auth.signInWithPassword({ email: credentials.email, password: currentPassword })
     if (reauthError || !reauth.session || reauth.user?.id !== uid) return reply({ error: 'invalid_password', message: '현재 비밀번호를 확인해 주세요.' }, 400)
     try {
@@ -132,3 +145,5 @@ Deno.serve(async req => {
     return reply({ error: 'recovery_unavailable', message: '비밀번호 서비스를 확인할 수 없어요. 잠시 후 다시 시도해 주세요.' }, 503)
   }
 })
+
+

@@ -35,6 +35,8 @@ for(const id of ['settings','subscription'])add('native',id);
 for(const id of ['insurance4','insurance2','tax33'])add('info',id);
 for(const id of ['confirm','lightbox','add-store','sales-form','ai','info','guide','phone-bind','sms-verified','sms-expired'])add('extra',id);
 
+for(const variant of ['confirmed','other-user'])add('expense','expense-detail',{role:'staff',variant});
+
 export function seedPage(){
  const q=window.qa,s=q.state,date=q.todayKey(),month=q.monthKey();
  const c={id:'c',name:'테스트 직원',phone:'01012345678',position:'홀',isManager:false,salesAccess:true,wageType:'hourly',wage:11000,hireDate:month+'-01',active:true,notes:'테스트 메모',weeklyHours:20,workCondition:'주5일'};
@@ -45,7 +47,7 @@ export function seedPage(){
  s.ownerWork={...s.ownerWork,loadedOnce:true,expanded:{},stores:{[s.store]:{bizDate:date,okAt:Date.now(),sched:{count:2},work:{checks:[]},sales:{ok:true,from:q.r138RecentDays()[0],to:date,days:{[date]:1000000}},attendance:{ok:true,arrived:[{id:'c',name:c.name,checkIn:'10:00'}],pending:[],missing:[]}}}};
  const recentDays=q.r138RecentDays();q.sector3().recent7={key:recentDays.join(','),loading:false,error:false,rows:s.salesReports};
  const u=q.sector4();u.reservations=[res];u.resLoaded=u.reservationDate;u.history=[{date,revision:1,done:1,total:1,reason:'마감 확인',items:s.items,checks:{task:true}}];
- const e=q.r136();e.vendors=s.vendors;e.entries=[{id:'e',date,category:'food',amount:20000,vendor_id:'v',vendor_name:'식자재 거래처',payment_method:'card',payment_status:'paid',created_by:'u',memo:'식자재 구매'}];e.loaded=true;
+ const e=q.r136();e.vendors=s.vendors;e.entries=[{id:'e',date,category:'food',amount:20000,vendor_id:'v',vendor_name:'식자재 거래처',payment_method:'card',payment_status:'paid',created_by_user_id:'u',created_by_name:'테스트 사용자',staff_revision:1,owner_confirmed_at:null,memo:'식자재 구매'}];e.loaded=true;
  q.sector3().staged=[{date,amount:10000,description:'식자재 거래처',vendorId:'v',category:'food',paymentMethod:'card',paymentStatus:'paid'}];
  window.qaBase=structuredClone(s);
 }
@@ -71,7 +73,7 @@ export async function showPage(sc){
  if(sc.kind==='s3'){const t={type:sc.id,id:sc.id==='vendor-edit'||sc.id==='vendor-delete'?'v':sc.id==='expense-edit'?'e':sc.id==='stage-edit'?'0':date};if(sc.id==='vendor-delete')t.inspection={vendor:s.vendors[0],count:1,total:20000};q.sector3().stack=[t];h=q.renderSector3Sheet();}
  if(sc.kind==='s4'||sc.kind==='setting'){const id=sc.kind==='setting'?sc.id:sc.id==='history-detail'?'0':sc.id.startsWith('item-')?JSON.stringify(['morning','cat','task']):sc.id.startsWith('notice-')?'n':'r';q.sector4().stack=[{type:sc.kind==='setting'?'setting':sc.id,id}];h=q.renderSector4Sheet();}
  if(sc.kind==='staff'||sc.kind==='team'){asStaff();s.staffView=sc.kind==='staff'?sc.id:sc.role==='manager'?'more':'me';s.teamPage=sc.kind==='team'?sc.id:null;if(sc.kind==='team'&&sc.id==='personal-edit'){s.teamEdit.step=sc.variant||'edit';if(sc.variant==='done')s.teamEdit.result={stores:[]};}h=q.renderStaffApp();}
- if(sc.kind==='expense'){asStaff();const draft={date,category:'food',amount:20000,vendor_id:'v',payment_method:'card',payment_status:'paid',memo:'식자재 구매'};q.r136().sheet={type:sc.id,id:'e',draft,receipt:{name:'테스트 영수증',type:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII='}};h=q.r136Overlay();}
+ if(sc.kind==='expense'){asStaff();const entry=q.r136().entries[0];if(sc.variant==='confirmed')entry.owner_confirmed_at=date+'T12:00:00Z';if(sc.variant==='other-user')entry.created_by_user_id='other';const draft={date,category:'food',amount:20000,vendor_id:'v',payment_method:'card',payment_status:'paid',memo:'식자재 구매'};if(sc.id==='expense-edit')Object.assign(draft,{id:'e',revision:1});q.r136().sheet={type:sc.id,id:'e',draft,receipt:{name:'테스트 영수증',type:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII='}};h=q.r136Overlay();}
  if(sc.kind==='r134'){if(sc.id==='manager'){asStaff();s.managerScope.enabled=true;}const u=q.r134();Object.assign(u,{page:sc.id,id:'c',loading:false,error:sc.variant==='error'?'조회하지 못했어요.':null,unavailable:sc.variant==='error',draft:sc.id.includes('permission')?{view:'sales',salesWrite:true,schedule:true,wage:true,payroll:true,reportView:true,reportEdit:true,export:true}:q.r134ContractDefaults('c'),data:{enabled:true,revision:1,version:1,created_at:date+'T10:00:00Z',document:{employee:'테스트 직원',employer:'매니 테스트점'}}});h=q.r134Overlay();}
  if(sc.kind==='manager'){asStaff();s.managerScope.enabled=true;Object.assign(q.r134(),{page:'manager',managerPage:sc.id,id:sc.id==='sale'?date:'c',draft:{}});h=q.r134Overlay();}
  if(sc.kind==='info'){s.infoModalType=sc.id;h=q.renderInfoModal();}

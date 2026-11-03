@@ -1,5 +1,11 @@
 /* iPhone presentation for every role; keep the archived Android source intact. */
 :root{--ios-safe-top:env(safe-area-inset-top,0px);--ios-safe-bottom:env(safe-area-inset-bottom,0px);--ios-banner-height:28px}
+html,body{width:100%;max-width:100%;overflow-x:clip;overscroll-behavior-x:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body :is(button,a,input,select,textarea,label,summary){touch-action:manipulation}
+body :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea){font-size:16px!important}
+.app{box-sizing:border-box;width:100%;min-width:0}
+.app .r136-delete{margin-top:12px;color:var(--danger);border-color:#F0D7D8;background:#fff}
+.confirm-overlay{z-index:2000!important}
 html{scroll-padding-top:calc(var(--ios-safe-top) + var(--ios-banner-height) + 16px)}
 body{padding-top:calc(var(--ios-safe-top) + var(--ios-banner-height));padding-bottom:var(--ios-safe-bottom)}
 .app{--ink:#18342C;--ink-soft:#66736E;--brick:#16774C;--brick-dim:#EAF5ED;--olive:#237B51;--danger:#C23B40;--line:#E1E8E3;--cream:#F5F7F4;color:var(--ink);min-height:calc(100dvh - var(--ios-safe-top) - var(--ios-safe-bottom) - var(--ios-banner-height))}
