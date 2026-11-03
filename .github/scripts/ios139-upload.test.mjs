@@ -7,11 +7,11 @@ import { uploadTestFlight } from './ios139-upload.mjs';
 
 const base = { GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main',
   GITHUB_REPOSITORY: 'unionconnect-kr/winners', MANEE_UPLOAD_TESTFLIGHT: 'true',
-  GITHUB_WORKFLOW:'Upload reviewed iOS 1.39 QA 1.11.1',MANEE_AUTHORIZED_QA_UPLOAD:'ios-20261103-1.39-1.11.1',
+  GITHUB_WORKFLOW:'Upload reviewed iOS 1.39 QA 1.12.1',MANEE_AUTHORIZED_QA_UPLOAD:'ios-20261103-1.39-1.12.1',
   ASC_KEY_ID: 'TESTKEY123', ASC_ISSUER_ID: 'test-issuer', ASC_PRIVATE_KEY: 'disposable-test-key' };
 
 test('an already accepted exact build is never uploaded twice', async () => {
-  const previous={id:'accepted',version:'1.11.1',marketingVersion:'1.39'};
+  const previous={id:'accepted',version:'1.12.1',marketingVersion:'1.39'};
   const result=await uploadTestFlight({...base,RUNNER_TEMP:'/unused'},'/tmp/app.ipa',{
     platform:'darwin',check:async()=>{},existing:async()=>previous,
     run:()=>assert.fail('An existing build must not trigger another upload'),
