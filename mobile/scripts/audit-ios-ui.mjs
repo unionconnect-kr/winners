@@ -37,16 +37,18 @@ for(const width of [320,375,390,430]){
    const checks=await page.evaluate(()=>{
     const controls=[...document.querySelectorAll('.app select,.app input[type=date],.app input[type=time],.app input[type=month]')].filter(e=>e.getBoundingClientRect().height>0);
     const bad=controls.filter(e=>e.getBoundingClientRect().height<47||parseFloat(getComputedStyle(e).fontSize)<16||getComputedStyle(e).appearance!=='none').map(e=>({id:e.id,name:e.name,type:e.type,height:e.getBoundingClientRect().height,font:getComputedStyle(e).fontSize}));
+    const wrappedActions=[...document.querySelectorAll('.s4-heading>.s4-btn,.s4-filters>.s4-btn')].filter(e=>{if(!e.getBoundingClientRect().height)return false;const r=document.createRange();r.selectNodeContents(e);return new Set([...r.getClientRects()].map(x=>Math.round(x.top))).size>1;}).map(e=>e.textContent);
     const overflow=[...document.querySelectorAll('.app input,.app select,.app textarea,.app [role=dialog]')].filter(e=>{const r=e.getBoundingClientRect();return r.height>0&&(r.right>innerWidth+1||r.left< -1)}).map(e=>e.id||e.className||e.tagName);
-    return {controls:controls.length,bad,overflow,bodyWidth:document.documentElement.scrollWidth};
+    return {controls:controls.length,bad,overflow,wrappedActions,bodyWidth:document.documentElement.scrollWidth};
    });
    results.push({width,scene:scene.name,...checks});
+   if(scene.name==='staff-reservations')await page.screenshot({path:resolve(out,'reservations-'+width+'.png'),fullPage:true});
    if(width===390&&['setup-cutoff','setup-vendors','staff-expense-new','staff-res-new','manager-home'].includes(scene.name))await page.screenshot({path:resolve(out,scene.name+'.png'),fullPage:true});
   }catch(e){results.push({width,scene:scene.name,error:e.message.slice(0,240)});}
  }
  await context.close();
 }
 writeFileSync(resolve(out,'results.json'),JSON.stringify(results,null,2));
-console.log(JSON.stringify({scenes:results.length,controls:results.reduce((n,r)=>n+(r.controls||0),0),failures:results.filter(r=>r.error||r.bad.length||r.overflow.length||r.bodyWidth>r.width+1)},null,2));
+console.log(JSON.stringify({scenes:results.length,controls:results.reduce((n,r)=>n+(r.controls||0),0),failures:results.filter(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.bodyWidth>r.width+1)},null,2));
 await browser.close();
-if(results.some(r=>r.error||r.bad.length||r.overflow.length||r.bodyWidth>r.width+1))process.exitCode=1;
+if(results.some(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.bodyWidth>r.width+1))process.exitCode=1;
