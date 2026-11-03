@@ -1,7 +1,7 @@
 import {makeToken} from './ios-qa-connection.mjs';
 import {pathToFileURL} from 'node:url';
 const app='6820833544',group='b5982888-0280-4513-8f78-74ca63dcd342';
-export const buildNumber='1.9.1',marketingVersion='1.39';
+export const buildNumber='1.10.1',marketingVersion='1.39';
 export function appleClient(env,{request=fetch,token=()=>makeToken(env)}={}){
  return async(path,body)=>{
   const r=await request('https://api.appstoreconnect.apple.com'+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+token(),Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
@@ -24,7 +24,7 @@ export async function exactBuild(api){
   internalBuildState:beta?.attributes?.internalBuildState,externalBuildState:beta?.attributes?.externalBuildState};
 }
 export async function connectBuild(env,{api=appleClient(env),wait=ms=>new Promise(r=>setTimeout(r,ms)),attempts=12}={}){
- if(env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||env.GITHUB_REF!=='refs/heads/main'||!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)||env.GITHUB_WORKFLOW!=='Upload reviewed iOS 1.39 QA 1.9.1'||env.MANEE_AUTHORIZED_QA_UPLOAD!=='ios-20261103-1.39-1.9.1')throw Error('IOS139_NOT_REQUESTED');
+ if(env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||env.GITHUB_REF!=='refs/heads/main'||!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)||env.GITHUB_WORKFLOW!=='Upload reviewed iOS 1.39 QA 1.10.1'||env.MANEE_AUTHORIZED_QA_UPLOAD!=='ios-20261103-1.39-1.10.1')throw Error('IOS139_NOT_REQUESTED');
  let build;
  for(let i=0;i<attempts;i++){
   build=await exactBuild(api);

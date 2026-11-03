@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectBuild,exactBuild} from './ios139-status.mjs';
-const env={GITHUB_REPOSITORY:'unionconnect-kr/winners',GITHUB_REF:'refs/heads/main',GITHUB_EVENT_NAME:'push',GITHUB_WORKFLOW:'Upload reviewed iOS 1.39 QA 1.9.1',MANEE_AUTHORIZED_QA_UPLOAD:'ios-20261103-1.39-1.9.1'};
+const env={GITHUB_REPOSITORY:'unionconnect-kr/winners',GITHUB_REF:'refs/heads/main',GITHUB_EVENT_NAME:'push',GITHUB_WORKFLOW:'Upload reviewed iOS 1.39 QA 1.10.1',MANEE_AUTHORIZED_QA_UPLOAD:'ios-20261103-1.39-1.10.1'};
 const id='00000000-0000-4000-8000-000000000139',group='b5982888-0280-4513-8f78-74ca63dcd342';
 function fake({foreign=false,external=false,processing=false,encrypted=false,duplicate=false,connected=false,verify=true,version='1.39'}={}){
  let added=connected;const calls=[];
@@ -11,7 +11,7 @@ function fake({foreign=false,external=false,processing=false,encrypted=false,dup
   if(path.includes('/betaTesters'))return{data:[{id:'do-not-publish-personal-data'}]};
   if(path.includes('/betaGroups'))return{data:[{id:group,attributes:{isInternalGroup:!external,name:'MANEE 내부 QA'}}]};
   if(path.includes('/v1/builds?')){
-   const row={id,type:'builds',attributes:{version:'1.9.1',processingState:processing?'PROCESSING':'VALID',usesNonExemptEncryption:encrypted},relationships:{preReleaseVersion:{data:{id:'v'}},buildBetaDetail:{data:{id:'b'}}}};
+   const row={id,type:'builds',attributes:{version:'1.10.1',processingState:processing?'PROCESSING':'VALID',usesNonExemptEncryption:encrypted},relationships:{preReleaseVersion:{data:{id:'v'}},buildBetaDetail:{data:{id:'b'}}}};
    return{data:duplicate?[row,row]:[row],included:[{type:'preReleaseVersions',id:'v',attributes:{version}},{type:'buildBetaDetails',id:'b',attributes:{internalBuildState:'IN_BETA_TESTING'}}]};
   }
   return{data:{id:'6820833544',attributes:{bundleId:foreign?'wrong':'kr.co.manee.app'}}};
