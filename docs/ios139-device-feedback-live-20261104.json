@@ -62,5 +62,14 @@
     "artifact": 13249158163
   },
   "upload_run": 41676511619,
-  "review_submitted": false
+  "review_submitted": false,
+  "testflight": {
+    "version": "1.39",
+    "build": "1.14.1",
+    "processingState": "VALID",
+    "internalBuildState": "IN_BETA_TESTING",
+    "internalGroupConnected": true,
+    "reviewSubmitted": false,
+    "verifiedAt": "2026-11-04T01:46:47+09:00"
+  }
 }

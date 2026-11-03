@@ -33,6 +33,6 @@ Full local regression: 1,017 registered tests, 1,006 passed, zero failed, 11 env
 
 Signed build: 1.39 / 1.14.1, successful run 41673170950, artifact 13249158163 (manee-ios-signed-14-1), archive SHA-256 d08b98f7a79862fdf61578a9aee91fa0fe6259fa11dc222ad8bb69a75953dcd0. Exact HTML, social controller, CSS and native safe-area/zoom config are checked before Apple credentials are exposed. Eleven uploader tests pass.
 
-Upload workflow 41676511619 started from main commit e554d3a20bf7184769c7824142949da1ed5f9dcc. Apple processing and internal-group availability are pending final confirmation; the previously distributed build is 1.39 / 1.13.1 until successful Apple status is recorded. No public review or new tester invitations are requested.
+Upload workflow 41676511619 succeeded from main commit e554d3a20bf7184769c7824142949da1ed5f9dcc. At 2026-11-04 01:46:47 KST, Apple confirmed 1.39 / 1.14.1 as VALID and IN_BETA_TESTING, with the existing internal QA group connected. No public review was submitted and no new tester invitations were sent. This is the current distributed QA build.
 
 Real-device keyboard/focus, picker and gesture behavior, and the final Kakao/Naver consent-and-return flow require a device retest after the update. Billing/push remain unconnected in the existing QA entry point. The splash mockup was not applied by this feedback change.
