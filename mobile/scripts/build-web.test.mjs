@@ -19,6 +19,18 @@ test('build isolates environments and leaves canonical web/backend sources untou
     vm.runInNewContext(read('www/app-config.js'), sandbox);
     assert.equal(sandbox.window.MANEE_CONFIG.environment, environment);
     const html = read('www/index.html');
+    assert.match(html, /signup-age-check/);
+    assert.match(html, /window\.MANEE_NATIVE\.saveFile/);
+    assert.match(html, /\['android','ios'\]\.includes/);
+    assert.match(html, /result\?\.status==='shared'/);
+    assert.match(html, /error\?\.code==="P4402"/);
+    assert.match(read('www/native.js'), /ManeeReportFiles/);
+    assert.doesNotMatch(read('www/native.js'), /ManeePlayBilling/);
+    assert.match(html, /native-subscription-btn/);
+    assert.match(html, /manee_ios_push_context/);
+    assert.match(read('www/native.js'), /pushNotificationActionPerformed/);
+    assert.match(read('www/native.js'), /manee_ios_push/);
+    assert.match(html, /return nativeAndroidPushAction\("enable"\)/);
     assert.match(html, /const MANEE_STAFF_AUTH_ENABLED = true/);
     assert.doesNotMatch(html, /navigator\.geolocation|location\.origin|'"serviceWorker" in navigator'/);
     assert.doesNotMatch(html, /fetch\("\/\.netlify\/functions\//);
@@ -106,4 +118,35 @@ test('explicit Android release purposes isolate internal setup from paid pilot',
     if (!existed) rmSync(path);
     execFileSync(process.execPath, ['scripts/build-web.mjs','staging','android'], {cwd:mobile});
   }
+});
+
+
+test('packaged iOS staff test action rechecks membership and never opens owner screens',async()=>{
+ execFileSync(process.execPath,['scripts/build-web.mjs','production'],{cwd:mobile});
+ const html=read('www/index.html');assert.match(html,/id="native-staff-push-test"/);
+ const fn=html.match(/^  async function openNativeNotification\([^\n]*\n[\s\S]*?^  }/m)[0];
+ const storeId='00000000-0000-4000-8000-000000000101';let allowed=true,current=true;
+ const state={loading:false,splashDone:true,authProfile:{user_id:'staff'},role:'staff',crew:[{id:'crew'}],myCrewId:'crew',staffView:'home'};
+ let rpc=0;const context={state,currentStoreId:()=>storeId,db:{rpc:async name=>{assert.equal(name,'manee_ios_push_context');rpc++;return {data:allowed};}},render(){},window:{scrollTo(){}}};
+ vm.createContext(context);vm.runInContext(fn,context);
+ assert.equal(await context.openNativeNotification({storeId,kind:'test'},()=>current),'handled');assert.equal(state.staffView,'me');assert.equal(state.teamPage,'notifications');
+ state.staffView='home';allowed=false;assert.equal(await context.openNativeNotification({storeId,kind:'test'}),'rejected');assert.equal(state.staffView,'home');
+ allowed=true;current=false;assert.equal(await context.openNativeNotification({storeId,kind:'test'},()=>current),'rejected');
+ assert.equal(await context.openNativeNotification({storeId,kind:'report_closed'}),'rejected');
+ assert.equal(rpc,3);
+});
+
+
+test('failed iOS self-test preserves notification consent while failed enable stays off',async()=>{
+ execFileSync(process.execPath,['scripts/build-web.mjs','production'],{cwd:mobile});
+ const fn=read('www/index.html').match(/^  async function nativeAndroidPushAction\([^\n]*\n[\s\S]*?^  }/m)[0];
+ const state={pushSubscribed:true,pushBusy:false};let current=true,renders=0;const toasts=[];
+ const context={state,maneeLoadGuard:()=>()=>current,render(){renders++;},showToast:s=>toasts.push(s),window:{MANEE_NATIVE:{push:async()=>{throw Error('Delivery failed');}}}};
+ vm.createContext(context);vm.runInContext(fn,context);
+ await context.nativeAndroidPushAction('test');
+ assert.equal(state.pushSubscribed,true);assert.equal(state.pushBusy,false);assert.equal(state.pushRegistrationError,'Delivery failed');assert.equal(toasts.length,1);
+ state.pushSubscribed=false;await context.nativeAndroidPushAction('enable');assert.equal(state.pushSubscribed,false);
+ state.pushSubscribed=true;await context.nativeAndroidPushAction('disable');assert.equal(state.pushSubscribed,true);
+ current=false;state.pushRegistrationError=null;await context.nativeAndroidPushAction('test');assert.equal(state.pushRegistrationError,null);
+ assert.ok(renders>0);
 });

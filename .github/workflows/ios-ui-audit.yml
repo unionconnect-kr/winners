@@ -1,0 +1,44 @@
+name: iPhone page and input audit
+on:
+  push:
+    branches: [codex/ios-release-20261016]
+    paths: ['mobile/**', 'supabase/functions/**', 'supabase/migrations/**', 'tests/ios-staff-expense-delete.test.mjs', '.github/workflows/ios-ui-audit.yml']
+  pull_request:
+    paths: ['mobile/**', 'supabase/functions/**', 'supabase/migrations/**', 'tests/ios-staff-expense-delete.test.mjs', '.github/workflows/ios-ui-audit.yml']
+permissions:
+  contents: read
+jobs:
+  webkit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile
+      - name: Check staff expense deletion authorization in PostgreSQL
+        run: |
+          npm ci --ignore-scripts
+          node --test tests/ios-staff-expense-delete.test.mjs
+      - name: Install pinned WebKit audit runner
+        run: |
+          npm install --prefix "$RUNNER_TEMP/manee-playwright" --ignore-scripts --no-save playwright@1.62.1
+          node "$RUNNER_TEMP/manee-playwright/node_modules/playwright/cli.js" install --with-deps webkit
+      - name: Check mobile behavior and rebuild the iPhone QA bundle
+        run: |
+          npm --prefix mobile test
+          npm --prefix mobile run build:ios139
+      - name: Open page inventory and exercise input failures
+        run: |
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
+          IOS_UI_AUDIT_OUT="$RUNNER_TEMP/manee-page-results" \
+          node mobile/scripts/audit-ios-pages.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iphone-page-audit
+          path: ${{ runner.temp }}/manee-page-results
+          retention-days: 7

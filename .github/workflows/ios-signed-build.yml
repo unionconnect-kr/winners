@@ -2,7 +2,7 @@ name: iOS signed archive
 
 on:
   push:
-    branches: [main, codex/ios-build-preparation]
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016]
     paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
     inputs:
@@ -20,8 +20,8 @@ concurrency:
 
 jobs:
   archive:
-    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation')
-    runs-on: macos-15
+    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016')
+    runs-on: macos-15-intel
     timeout-minutes: 60
     defaults:
       run:
@@ -144,17 +144,25 @@ jobs:
           PY
       - run: npm ci
       - run: npm test
-      - run: npm run build:production
+      - name: Prepare selected native environment
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
+            npm run build:ios139
+          else
+            npm run build:production
+          fi
       - run: npm run sync:ios
       - name: Archive signed iPhone app
         run: |
           set -euo pipefail
           build_number="1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          version_args=()
+          if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then version_args=(MARKETING_VERSION=1.39); fi
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/manee.xcarchive" \
             -derivedDataPath "$RUNNER_TEMP/manee-derived" \
-            CURRENT_PROJECT_VERSION="$build_number" \
+            CURRENT_PROJECT_VERSION="$build_number" "${version_args[@]}" \
             OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/manee-signing/signing.keychain-db" \
             archive > "$RUNNER_TEMP/manee-archive.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/manee-archive.log"; exit 1; }
       - name: Export signed IPA

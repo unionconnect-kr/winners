@@ -1,0 +1,1 @@
+window.MANEE_CONFIG = Object.freeze({"environment":"staging","projectRef":"obpkzecgswnfuyhwvncd","supabaseUrl":"https://obpkzecgswnfuyhwvncd.supabase.co","publishableKey":"sb_publishable_EYGVVagcD_MmLeUfj8bt7w_sq8gfeiK","socialProviders":{"naver":true}});

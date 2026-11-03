@@ -1,0 +1,9 @@
+{
+  "environment": "staging",
+  "platform": "android",
+  "projectRef": "obpkzecgswnfuyhwvncd",
+  "androidPushProjectId": null,
+  "versionName": "1.39-sector1-4-test",
+  "versionCode": 40,
+  "buildDate": "2026-11-02"
+}

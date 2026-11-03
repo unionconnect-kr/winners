@@ -1,10 +1,10 @@
 name: Native iOS service checks
 on:
   push:
-    branches: [main, codex/ios-build-preparation]
-    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016]
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'netlify/functions/lib/ios-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
   pull_request:
-    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
+    paths: ['netlify/functions/ios-*.js', 'netlify/functions/lib/apple-*.cjs', 'netlify/functions/lib/native-*.cjs', 'netlify/functions/lib/ios-*.cjs', 'tests/native-*.test.mjs', 'supabase/migrations/*native_ios*.sql', 'package*.json', '.github/workflows/native-ios-services.yml']
 permissions:
   contents: read
 jobs:
@@ -18,4 +18,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/native-apple-services.test.mjs tests/native-ios-database.test.mjs
+      - run: node --test tests/native-*.test.mjs

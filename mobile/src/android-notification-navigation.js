@@ -9,7 +9,7 @@ export function notificationDestination(data){
 }
 // Cold-start actions are retained by Capacitor until the listener is attached.
 // Only routing identifiers are held in memory; no notification body or credential is stored.
-export function createNotificationNavigation({push,getContext,open,now=Date.now}){
+export function createNotificationNavigation({push,getContext,open,now=Date.now,allowedRoles=['storeOwner']}){
  let pending=null,busy=false,listener=null,generation=0,lastHandled=null;
  const context=()=>{try{return getContext();}catch{return null;}};
  async function flush(){
@@ -18,7 +18,7 @@ export function createNotificationNavigation({push,getContext,open,now=Date.now}
   if(now()-pending.receivedAt>10*60*1000){pending=null;return;}
   if(!c?.ready||!c.userId)return;
   const item=pending,version=generation;
-  if((item.userId&&item.userId!==c.userId)||c.role!=='storeOwner'){pending=null;return;}
+  if((item.userId&&item.userId!==c.userId)||!allowedRoles.includes(c.role)||(c.role==='staff'&&item.destination.kind!=='test')){pending=null;return;}
   item.userId=c.userId;busy=true;
   const isCurrent=()=>version===generation&&context()?.userId===item.userId;
   try{
