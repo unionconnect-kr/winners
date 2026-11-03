@@ -71,4 +71,3 @@ Deno.serve(async(req)=>{
   return reply({ok:true,message:action==='reset'?'비밀번호를 변경했어요. 새 비밀번호로 로그인해 주세요.':'복구용 휴대폰 번호를 등록했어요.'});
  }catch{return reply({error:'request_failed',message:'처리 결과를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'},503);}
 });
-

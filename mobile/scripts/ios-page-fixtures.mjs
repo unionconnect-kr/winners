@@ -47,7 +47,7 @@ export function seedPage(){
  s.ownerWork={...s.ownerWork,loadedOnce:true,expanded:{},stores:{[s.store]:{bizDate:date,okAt:Date.now(),sched:{count:2},work:{checks:[]},sales:{ok:true,from:q.r138RecentDays()[0],to:date,days:{[date]:1000000}},attendance:{ok:true,arrived:[{id:'c',name:c.name,checkIn:'10:00'}],pending:[],missing:[]}}}};
  const recentDays=q.r138RecentDays();q.sector3().recent7={key:recentDays.join(','),loading:false,error:false,rows:s.salesReports};
  const u=q.sector4();u.reservations=[res];u.resLoaded=u.reservationDate;u.history=[{date,revision:1,done:1,total:1,reason:'마감 확인',items:s.items,checks:{task:true}}];
- const e=q.r136();e.vendors=s.vendors;e.entries=[{id:'e',date,category:'food',amount:20000,vendor_id:'v',vendor_name:'식자재 거래처',payment_method:'card',payment_status:'paid',created_by_user_id:'u',created_by_name:'테스트 사용자',staff_revision:1,owner_confirmed_at:null,memo:'식자재 구매'}];e.loaded=true;
+ const e=q.r136();e.vendors=s.vendors;e.entries=[{id:'e',date,category:'food',amount:20000,vendor_id:'v',vendor_name:'식자재 거래처',description:'식자재 거래처',payment_method:'card',payment_status:'paid',created_by_user_id:'u',created_by_name:'테스트 사용자',staff_revision:1,owner_confirmed_at:null,memo:'식자재 구매'}];e.loaded=true;
  q.sector3().staged=[{date,amount:10000,description:'식자재 거래처',vendorId:'v',category:'food',paymentMethod:'card',paymentStatus:'paid'}];
  window.qaBase=structuredClone(s);
 }

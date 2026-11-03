@@ -22,4 +22,3 @@ export async function sendSms(config:{key:string,secret:string,sender:string},to
  return response.ok&&Array.isArray(data?.failedMessageList)&&data.failedMessageList.length===0&&
   Array.isArray(data?.messageList)&&data.messageList.length===1&&String(data.messageList[0]?.statusCode)==='2000';
 }
-

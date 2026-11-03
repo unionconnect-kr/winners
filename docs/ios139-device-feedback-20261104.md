@@ -17,6 +17,7 @@
 - Live staging checks: 10/10. Owner/staff correct entry succeeds; both wrong-role combinations return 403 without a session; wrong passwords remain 401; short usernames and weak new passwords are rejected before account creation; actual Kakao/Naver linkIdentity URLs pass both allowlists. External provider consent/callback was not completed.
 - User confirmed on-device login persistence, password visibility, wrong-password detection, password recovery SMS, owner screens and the remaining staff screens.
 - Security advisory categories/counts were unchanged by the edge deployments.
+- Legacy server test fixtures were refreshed for the already deployed staging-only SMS signup/recovery flow and valid letter/digit passwords. Added negative tests retain the age/identity boundary and prove missing/rejected SMS proofs cannot create accounts, verified SMS controls the saved phone, and ordinary accounts cannot use the HQ support-code reset path.
 
 ## Deployment and remaining gate
 

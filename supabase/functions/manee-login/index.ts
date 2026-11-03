@@ -305,4 +305,3 @@ Deno.serve(async (req) => {
     return json({ error: 'unexpected_error', message: '잠시 후 다시 시도해주세요.' }, 500)
   }
 })
-
