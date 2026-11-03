@@ -10,6 +10,7 @@ const info=JSON.parse(readFileSync(resolve(assets,'build-info.json'),'utf8'));
 if(info.environment!=='staging'||info.projectRef!=='obpkzecgswnfuyhwvncd'||info.versionCode!==40)throw Error('Unexpected source baseline');
 rmSync(out,{recursive:true,force:true});mkdirSync(out,{recursive:true});
 cpSync(assets,out,{recursive:true});
+cpSync(resolve(mobile,'src/ios-ui.css'),resolve(out,'ios-ui.css'));
 mkdirSync(resolve(out,'vendor'),{recursive:true});
 cpSync(resolve(mobile,'node_modules/xlsx-js-style/dist/xlsx.bundle.js'),resolve(out,'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile,'node_modules/@supabase/supabase-js/dist/umd/supabase.js'),resolve(out,'vendor/supabase.js'));

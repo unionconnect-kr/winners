@@ -4,7 +4,10 @@ export function adaptIos139(source) {
     if(html.split(before).length!==2)throw Error('iOS 1.39 anchor mismatch: '+before.slice(0,90));
     html=html.replace(before,after);
   }
-  // Automatic WKWebView insets already keep content below the status bar.
+  // CSS owns safe-area spacing, including fixed banners and sheets.
+  once('viewport-fit=contain', 'viewport-fit=cover');
+  once('<link rel="stylesheet" href="/owner-ui.css">', '<link rel="stylesheet" href="/owner-ui.css">\n<link rel="stylesheet" href="/ios-ui.css">');
+  once('<div role="status" style="position:fixed;top:0;left:0;right:0;z-index:99999;text-align:center;background:#fef3c7;color:#713f12;font-size:12px;padding:3px;pointer-events:none">', '<div role="status" class="ios-test-banner">');
   once('매니 1.39 테스트 · 테스트 데이터만 입력해 주세요','매니 1.39 iPhone 테스트 · 테스트 데이터만 입력해 주세요');
   once('카카오·네이버·Apple로 가입했다면', '카카오·네이버로 가입했다면');
   once("const providerName={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const providerName={kakao:'카카오',naver:'네이버'}");
