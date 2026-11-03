@@ -28,7 +28,7 @@ for(const width of [320,375,390,430]){
    await page.evaluate(sc=>{const q=qa,s=q.state,app=document.getElementById('app');document.body.className='';app.className='app owner-ui';q.sector4().stack=[];q.r136().sheet=null;
     s.role='storeOwner';s.onboardingStep=null;s.authMemberships[0].role='owner';
     let markup='';if(sc.type==='owner'){s.section={Home:'dashboard',People:'schedule',Sales:'sales',Operations:'checklist',More:'more'}[sc.view];markup='<main>'+q['renderOwner'+sc.view]()+'</main>';}if(sc.type==='setup'){s.onboardingStep=sc.step;markup=q.renderOnboardingWizard();}
-    if(sc.type==='staff'){s.role='staff';s.crew[0].isManager=sc.role==='manager';s.staffView=sc.view;s.authMemberships[0].role=s.crew[0].isManager?'manager':'staff';markup=q.renderStaffApp();}
+    if(sc.type==='staff'){s.role='staff';s.crew[0].isManager=sc.role==='manager';s.staffView=sc.view;s.authMemberships[0].role=s.crew[0].isManager?'manager':'staff';if(sc.view==='reservations'){const u=q.sector4();u.resLoaded=u.reservationDate;u.resLoading=false;}markup=q.renderStaffApp();}
     if(sc.type==='sheet'){s.role=sc.role||'storeOwner';q.sector4().stack=[{type:sc.sheet,id:sc.sheet==='setting'?'cutoff':''}];markup=q.renderSector4Sheet();}
     if(sc.type==='expense'){s.role='staff';q.r136().sheet={type:'expense-new',draft:{date:'2026-11-03',category:'food',payment_method:'card',payment_status:'paid'}};markup=q.r136Overlay();}
     if(sc.type==='landing'){s.role='landing';s.landingMode=sc.mode;s.landingTab=sc.mode==='staff-signup'?'staff':'owner';markup=q.renderLanding();}
@@ -37,16 +37,18 @@ for(const width of [320,375,390,430]){
    const checks=await page.evaluate(()=>{
     const controls=[...document.querySelectorAll('.app select,.app input[type=date],.app input[type=time],.app input[type=month]')].filter(e=>e.getBoundingClientRect().height>0);
     const bad=controls.filter(e=>e.getBoundingClientRect().height<47||parseFloat(getComputedStyle(e).fontSize)<16||getComputedStyle(e).appearance!=='none').map(e=>({id:e.id,name:e.name,type:e.type,height:e.getBoundingClientRect().height,font:getComputedStyle(e).fontSize}));
+    const wrappedActions=[...document.querySelectorAll('.s4-heading>.s4-btn,.s4-filters>.s4-btn')].filter(e=>{if(!e.getBoundingClientRect().height)return false;const r=document.createRange();r.selectNodeContents(e);return new Set([...r.getClientRects()].map(x=>Math.round(x.top))).size>1;}).map(e=>e.textContent);
     const overflow=[...document.querySelectorAll('.app input,.app select,.app textarea,.app [role=dialog]')].filter(e=>{const r=e.getBoundingClientRect();return r.height>0&&(r.right>innerWidth+1||r.left< -1)}).map(e=>e.id||e.className||e.tagName);
-    return {controls:controls.length,bad,overflow,bodyWidth:document.documentElement.scrollWidth};
+    return {controls:controls.length,bad,overflow,wrappedActions,bodyWidth:document.documentElement.scrollWidth};
    });
    results.push({width,scene:scene.name,...checks});
+   if(scene.name==='staff-reservations')await page.screenshot({path:resolve(out,'reservations-'+width+'.png'),fullPage:true});
    if(width===390&&['setup-cutoff','setup-vendors','staff-expense-new','staff-res-new','manager-home'].includes(scene.name))await page.screenshot({path:resolve(out,scene.name+'.png'),fullPage:true});
   }catch(e){results.push({width,scene:scene.name,error:e.message.slice(0,240)});}
  }
  await context.close();
 }
 writeFileSync(resolve(out,'results.json'),JSON.stringify(results,null,2));
-console.log(JSON.stringify({scenes:results.length,controls:results.reduce((n,r)=>n+(r.controls||0),0),failures:results.filter(r=>r.error||r.bad.length||r.overflow.length||r.bodyWidth>r.width+1)},null,2));
+console.log(JSON.stringify({scenes:results.length,controls:results.reduce((n,r)=>n+(r.controls||0),0),failures:results.filter(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.bodyWidth>r.width+1)},null,2));
 await browser.close();
-if(results.some(r=>r.error||r.bad.length||r.overflow.length||r.bodyWidth>r.width+1))process.exitCode=1;
+if(results.some(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.bodyWidth>r.width+1))process.exitCode=1;
