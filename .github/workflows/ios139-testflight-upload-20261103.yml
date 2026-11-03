@@ -1,4 +1,4 @@
-name: Upload reviewed iOS 1.39 QA 1.13.1
+name: Upload reviewed iOS 1.39 QA 1.14.1
 
 on:
   push:
@@ -10,20 +10,20 @@ on:
         description: 'Reviewed MANEE build only; no review submission or invitations'
         type: choice
         required: true
-        default: '1.13.1'
-        options: ['1.13.1']
+        default: '1.14.1'
+        options: ['1.14.1']
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: manee-testflight-6820833544-1-39-1-13-1
+  group: manee-testflight-6820833544-1-39-1-14-1
   cancel-in-progress: false
 
 jobs:
   upload:
-    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.build == '1.13.1')
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.build == '1.14.1')
     runs-on: macos-15-intel
     timeout-minutes: 50
     defaults:
@@ -47,9 +47,9 @@ jobs:
           python3 - <<'PY'
           import hashlib, io, json, os, pathlib, subprocess, zipfile, plistlib
           repo = 'unionconnect-kr/winners'
-          commit = 'b7b8376c5bad9d6a65679d9d3d25279c057b7471'
-          run_id, artifact_id = 41656229468, 13240547230
-          digest = '17d30aeb44410e19acefcf99e0cc54010c392e608a5679b9918dbd354a95cee7'
+          commit = '2524a03d85fa5976736d8f36b8a30682785ab06c'
+          run_id, artifact_id = 41673170950, 13249158163
+          digest = 'd08b98f7a79862fdf61578a9aee91fa0fe6259fa11dc222ad8bb69a75953dcd0'
           def api(path):
               return subprocess.check_output(['gh', 'api', 'repos/' + repo + path], timeout=120)
           def require(ok, message):
@@ -62,7 +62,7 @@ jobs:
                   and run['repository']['full_name'] == repo
                   and run['head_repository']['full_name'] == repo, 'Untrusted source build')
           artifact = json.loads(api('/actions/artifacts/' + str(artifact_id)))
-          require(artifact['id'] == artifact_id and artifact['name'] == 'manee-ios-signed-13-1'
+          require(artifact['id'] == artifact_id and artifact['name'] == 'manee-ios-signed-14-1'
                   and not artifact['expired'] and artifact['workflow_run']['id'] == run_id
                   and artifact['workflow_run']['head_sha'] == commit
                   and artifact['digest'] == 'sha256:' + digest
@@ -79,26 +79,26 @@ jobs:
                       and 0 < entry.file_size <= 250 * 1024 * 1024, 'Invalid IPA archive member')
               directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-reviewed-ipa'
               directory.mkdir(mode=0o700)
-              destination = directory / 'MANEE-1.39-1.13.1.ipa'
+              destination = directory / 'MANEE-1.39-1.14.1.ipa'
               destination.write_bytes(package.read(entry))
               destination.chmod(0o600)
           with zipfile.ZipFile(destination) as ipa:
               plist = plistlib.loads(ipa.read('Payload/App.app/Info.plist'))
               require(plist.get('CFBundleIdentifier') == 'kr.co.manee.app'
                       and plist.get('CFBundleShortVersionString') == '1.39'
-                      and plist.get('CFBundleVersion') == '1.13.1', 'IPA app/version mismatch')
+                      and plist.get('CFBundleVersion') == '1.14.1', 'IPA app/version mismatch')
               info = json.loads(ipa.read('Payload/App.app/public/build-info.json'))
               require(info.get('platform') == 'ios' and info.get('environment') == 'staging'
                       and info.get('projectRef') == 'obpkzecgswnfuyhwvncd'
                       and info.get('sourceAndroidVersion') == 40, 'Wrong packaged environment')
               require(hashlib.sha256(ipa.read('Payload/App.app/public/index.html')).hexdigest()
-                      == 'de07f80abcc637e365c232d87125451b10571388a7e310b2218cdede936c68fc', 'Packaged screen mismatch')
+                      == '77dbef8e0a5dd04e9de431d4a9cc8cf03a87cd3c2e6ecf117adde6276152f529', 'Packaged screen mismatch')
               require(hashlib.sha256(ipa.read('Payload/App.app/public/social-auth.js')).hexdigest()
-                      == '996b9907e4c1731efe52b1ec441fdf53ccaf78b8d3a1e7cad3322d906d94043e', 'Packaged social login mismatch')
+                      == 'e242684988e6f2e15d26fd8e66514f67a7fb07860fcdcff34d93fa8cf0518864', 'Packaged social login mismatch')
               require(hashlib.sha256(ipa.read('Payload/App.app/public/ios-ui.css')).hexdigest()
-                      == 'cd21f86843149ba28562ce8e9faa12374c1ecfe74fe35512cc6ff25130d7ccaa', 'Packaged iPhone form styles mismatch')
+                      == 'cbc4d10a9dad473fd7c656de6eb16030dcad492047178c724e68380209c4362c', 'Packaged iPhone form styles mismatch')
               native_config = json.loads(ipa.read('Payload/App.app/capacitor.config.json'))
-              require(native_config.get('ios', {}).get('contentInset') == 'never', 'Unexpected native safe-area ownership')
+              require(native_config.get('ios', {}).get('contentInset') == 'never' and native_config.get('ios', {}).get('zoomEnabled') is False, 'Unexpected native safe-area or zoom ownership')
           print('Reviewed source, successful signed build, fixed artifact and SHA-256 verified.')
           PY
       - name: Select Xcode and verify Apple upload tools
@@ -111,17 +111,17 @@ jobs:
       - name: Validate and upload the reviewed IPA to the fixed MANEE app
         env:
           MANEE_UPLOAD_TESTFLIGHT: 'true'
-          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.13.1'
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261104-1.39-1.14.1'
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          node .github/scripts/ios139-upload.mjs "$RUNNER_TEMP/manee-reviewed-ipa/MANEE-1.39-1.13.1.ipa"
+          node .github/scripts/ios139-upload.mjs "$RUNNER_TEMP/manee-reviewed-ipa/MANEE-1.39-1.14.1.ipa"
           echo 'Apple upload accepted; processing is pending. No review submission or tester invitation.' >> "$GITHUB_STEP_SUMMARY"
       - name: Verify Apple processing with bounded read retries and connect the existing internal QA group
         env:
-          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261103-1.39-1.13.1'
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261104-1.39-1.14.1'
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}

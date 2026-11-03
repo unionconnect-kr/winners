@@ -13,8 +13,8 @@ export async function uploadTestFlight(env, ipa, {
   existing = env => exactBuild(appleClient(env)),
 } = {}) {
   if (!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME) || env.GITHUB_REF !== 'refs/heads/main' ||
-      env.GITHUB_WORKFLOW !== 'Upload reviewed iOS 1.39 QA 1.13.1' ||
-      env.MANEE_AUTHORIZED_QA_UPLOAD !== 'ios-20261103-1.39-1.13.1' ||
+      env.GITHUB_WORKFLOW !== 'Upload reviewed iOS 1.39 QA 1.14.1' ||
+      env.MANEE_AUTHORIZED_QA_UPLOAD !== 'ios-20261104-1.39-1.14.1' ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');
   }
