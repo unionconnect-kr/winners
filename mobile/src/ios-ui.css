@@ -1,0 +1,42 @@
+/* iPhone presentation for every role; keep the archived Android source intact. */
+:root{--ios-safe-top:env(safe-area-inset-top,0px);--ios-safe-bottom:env(safe-area-inset-bottom,0px);--ios-banner-height:28px}
+html{scroll-padding-top:calc(var(--ios-safe-top) + var(--ios-banner-height) + 16px)}
+body{padding-top:calc(var(--ios-safe-top) + var(--ios-banner-height));padding-bottom:var(--ios-safe-bottom)}
+.app{min-height:calc(100dvh - var(--ios-safe-top) - var(--ios-safe-bottom) - var(--ios-banner-height))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:var(--ios-safe-top);background:#fff;z-index:100001;pointer-events:none}
+.ios-test-banner{position:fixed;top:var(--ios-safe-top);left:0;right:0;height:var(--ios-banner-height);display:flex;align-items:center;justify-content:center;padding:0 8px;background:#fef3c7;color:#713f12;font:11px/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-align:center;z-index:100000;pointer-events:none}
+.environment-banner{display:none!important}
+.app input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]):not([type=range]):not([type=color]),
+.app select,.app textarea{
+  -webkit-appearance:none;appearance:none;box-sizing:border-box;min-width:0;max-width:100%;
+  min-height:48px!important;border:1px solid var(--line);border-radius:12px!important;
+  padding:12px 14px!important;font-family:inherit!important;font-size:16px!important;
+  font-weight:500!important;line-height:1.4!important;letter-spacing:normal;color:var(--ink);background-color:var(--card);text-align:left;
+}
+.app select:not([multiple]){
+  height:48px!important;padding-right:40px!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23556B60' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")!important;
+  background-repeat:no-repeat!important;background-position:right 12px center!important;background-size:20px!important;
+}
+.app select[multiple]{background-image:none!important}
+.app input:is([type=date],[type=time],[type=month],[type=datetime-local]){display:block;width:100%!important;height:48px!important;max-width:100%;text-align:left!important}
+.app input::-webkit-date-and-time-value{min-height:22px;text-align:left}
+.app input::-webkit-datetime-edit{padding:0}
+.app textarea{height:auto;min-height:112px!important;resize:vertical}
+.app input[type=hidden]{display:none!important}
+.app input[type=file]{display:block;width:100%;max-width:100%;min-height:48px;padding:10px;border:1px solid var(--line);border-radius:12px;font-family:inherit;font-size:14px;line-height:1.5}
+.app input:disabled,.app select:disabled,.app textarea:disabled{opacity:.65;-webkit-text-fill-color:currentColor}
+.app :is(input,select,textarea):focus-visible{outline:3px solid #80BDA0;outline-offset:2px}
+.owner-setup{padding:24px 20px 32px;line-height:1.6}
+.owner-setup .setup-field{margin:20px 0;font-weight:650}
+.owner-setup .setup-field :is(input,select){margin-top:8px}
+.owner-setup .setup-actions{margin-top:24px;gap:12px}
+.owner-setup .setup-actions button{min-height:48px}
+.owner-setup .switch-link{font-size:13px;line-height:1.5;padding:12px 8px;margin:4px 0 0}
+.app :is(.s3-fields,.s4-fields,.reservation-time-fields)>*{min-width:0}
+.app :is(.s3-overlay,.s4-overlay,.expense-editor-overlay,.confirm-overlay,.lightbox-overlay){padding-top:calc(var(--ios-safe-top) + var(--ios-banner-height) + 12px)!important;padding-bottom:max(12px,var(--ios-safe-bottom))!important}
+.app :is(.s3-sheet,.s4-sheet,.expense-editor){max-height:calc(100dvh - var(--ios-safe-top) - var(--ios-safe-bottom) - var(--ios-banner-height) - 24px)!important;overscroll-behavior:contain}
+.app :is(.s3-sheet,.s4-sheet)>header{min-height:64px;gap:12px}
+.app :is(.s3-x,.s4-x){flex:none;font-size:26px!important;line-height:1!important;width:44px;height:44px;padding:0!important}
+.toast{bottom:calc(88px + var(--ios-safe-bottom))}
+@media(max-width:360px){.owner-setup{padding-left:16px;padding-right:16px}.ios-test-banner{font-size:10px}.app :is(.s3-fields,.s4-fields){gap:10px!important}}
