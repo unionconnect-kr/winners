@@ -76,7 +76,10 @@ public class ManeeReportFilesPlugin: CAPPlugin, CAPBridgedPlugin {
               filename.rangeOfCharacter(from: .controlCharacters) == nil,
               let mime = call.getString("mimeType"),
               (mime == "application/pdf" && filename.lowercased().hasSuffix(".pdf")) ||
-              (mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" && filename.lowercased().hasSuffix(".xlsx")) else {
+              (mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" && filename.lowercased().hasSuffix(".xlsx")) ||
+              (mime == "text/csv" && filename.lowercased().hasSuffix(".csv")) ||
+              (mime == "image/png" && filename.lowercased().hasSuffix(".png")) ||
+              (mime == "image/jpeg" && (filename.lowercased().hasSuffix(".jpg") || filename.lowercased().hasSuffix(".jpeg"))) else {
             call.reject("저장할 보고서 파일을 확인해 주세요."); return
         }
         DispatchQueue.main.async { [self] in
@@ -244,3 +247,4 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 }
+

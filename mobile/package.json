@@ -17,10 +17,14 @@
     "apk:staging": "npm run build:android:staging && npm run sync:android && cd android && ./gradlew assembleDebug",
     "build:android:internal": "node scripts/build-android-internal.mjs",
     "aab:internal": "npm run build:android:internal && npm run sync:android && cd android && ./gradlew bundleRelease",
-    "aab:paid-pilot": "node scripts/build-android-paid-pilot.mjs"
+    "aab:paid-pilot": "node scripts/build-android-paid-pilot.mjs",
+    "build:ios139": "node scripts/build-ios139.mjs staging",
+    "test:ios139": "node --test scripts/ios139.test.mjs scripts/billing.test.mjs scripts/ios-push.test.mjs scripts/android-geolocation.test.mjs scripts/android-notification-navigation.test.mjs scripts/report-file.test.mjs scripts/store-subscription.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
     "@capacitor/core": "8.5.3",
     "@capacitor/geolocation": "8.2.3",
     "@capacitor/ios": "8.5.3",
