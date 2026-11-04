@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify uploaded build and connect existing internal QA group
+      - name: Read authorized build and group metadata
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -56,23 +56,7 @@ jobs:
           const matched=groups.filter(x=>x.attributes?.name===GROUP&&x.attributes?.isInternalGroup===true);
           if(matched.length!==1) throw new Error('Existing internal QA group is not uniquely identified');
           const group=matched[0];
-          let linked=(await api('/v1/builds/'+build.id+'/betaGroups?limit=200')).data;
-          let changed=false;
-          if(!linked.some(x=>x.id===group.id)&&group.attributes.hasAccessToAllBuilds!==true) {
-            await api('/v1/betaGroups/'+group.id+'/relationships/builds','POST',{data:[{type:'builds',id:build.id}]});
-            changed=true;
-          }
-          for(let attempt=0;attempt<3;attempt++) {
-            linked=(await api('/v1/builds/'+build.id+'/betaGroups?limit=200')).data;
-            detail=(await api('/v1/builds/'+build.id+'/buildBetaDetail')).data;
-            if((linked.some(x=>x.id===group.id)||group.attributes.hasAccessToAllBuilds===true)&&detail.attributes.internalBuildState==='IN_BETA_TESTING') break;
-            if(attempt<2) await new Promise(resolve=>setTimeout(resolve,5000));
-          }
-          const connected=linked.some(x=>x.id===group.id)||group.attributes.hasAccessToAllBuilds===true;
-          const testerData=await api('/v1/betaGroups/'+group.id+'/relationships/betaTesters?limit=200');
-          const result={appId:APP,version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,group:GROUP,groupConnected:connected,existingTesterCount:testerData.data.length,internalBuildState:detail.attributes.internalBuildState,groupAssignmentAdded:changed,newTestersAdded:false,reviewSubmitted:false,readyForExistingTesters:connected&&detail.attributes.internalBuildState==='IN_BETA_TESTING'};
-          console.log('MANEE_TESTFLIGHT_DELIVERY_RESULT '+JSON.stringify(result));
-          if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,'MANEE 1.44 delivery verification\n\n'+JSON.stringify(result,null,2)+'\n');
-          if(!result.readyForExistingTesters) throw new Error('Build delivery remains unconfirmed; see recorded status.');
-          
+          const result={appId:APP,version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,group:GROUP,hasAccessToAllBuilds:group.attributes.hasAccessToAllBuilds??null,internalBuildState:detail.attributes.internalBuildState,buildGroupMembershipVerified:false,groupAssignmentAdded:false,newTestersAdded:false,reviewSubmitted:false};
+          console.log('MANEE_TESTFLIGHT_METADATA_RESULT '+JSON.stringify(result));
+          if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Authorized MANEE 1.44 metadata\\n\\n'+JSON.stringify(result,null,2)+'\\n');
           MANEE_NODE
