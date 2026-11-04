@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {adaptIos139,adaptIos139Social} from './adapt-ios139.mjs';
+import {launch143Html} from './launch143-html.mjs';
+import {feedback144Html} from './feedback144-html.mjs';
+const source=readFileSync(new URL('../release139/assets/index.html',import.meta.url),'utf8');
+const social=readFileSync(new URL('../release139/assets/social-auth.js',import.meta.url),'utf8');
+for(const platform of ['ios','android'])test(`1.44 ${platform} removes Apple, preserves calendar units and complete executable UI`,()=>{
+ const prior=launch143Html(adaptIos139(source,platform),platform),html=feedback144Html(prior);
+ for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+ const calendar=s=>s.slice(s.indexOf('  function renderSector3Sales(){'),s.indexOf('  function renderSector3Expenses(){'));
+ assert.equal(calendar(html),calendar(prior),'User explicitly retained 10,000-won truncation');
+ assert.doesNotMatch(html,/apple:'Apple'|Apple로 가입했다면/);
+ const script=adaptIos139Social(social,platform);
+ assert.match(script,/const PROVIDERS = \['kakao', 'naver'\]/);
+ assert.doesNotMatch(script,/apple: settings.external/);
+ assert.match(html,/id="att-confirm-wrong">시간 수정/);
+ assert.match(html,/id="att-confirm-right">확인/);
+ const start=html.indexOf('  function renderSplash(){'),end=html.indexOf('  function renderLandingHero(){',start);
+ const context={};vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+ assert.match(context.renderSplash(),/src="\/launch-144.png"/);assert.doesNotMatch(context.renderSplash(),/MASCOT|splash-sub/);
+});
+test('notification panel retains control while connecting and safely displays connection errors',()=>{
+ const html=feedback144Html(launch143Html(adaptIos139(source),'ios'));
+ const start=html.indexOf('  function renderPushSettings144(){'),end=html.indexOf('  function s4SettingBody(',start);
+ const context={state:{pushBusy:true},escapeHtml:s=>s.replaceAll('<','&lt;')};vm.createContext(context);vm.runInContext(html.slice(start,end),context);
+ assert.match(context.renderPushSettings144(),/id="owner-push-toggle-btn"[^>]* disabled/);
+ context.state={pushSubscribed:true,pushRegistrationError:'<error>'};const view=context.renderPushSettings144();
+ assert.match(view,/aria-pressed="true"/);assert.match(view,/알림 끄기/);assert.match(view,/&lt;error>/);assert.match(view,/푸시가 발송되지 않아요/);
+});

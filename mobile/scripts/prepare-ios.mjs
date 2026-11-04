@@ -11,5 +11,14 @@ const source=resolve(mobile,'../icons/icon-512.png');
 execFileSync('/usr/bin/sips',['-z','1024','1024',source,'--out',resolve(assets,'AppIcon.appiconset/AppIcon-512@2x.png')],{stdio:'ignore'});
 const splash=resolve(assets,'Splash.imageset');
 const catalog=JSON.parse(readFileSync(resolve(splash,'Contents.json'),'utf8'));
-for(const image of catalog.images)copyFileSync(source,resolve(splash,image.filename));
+const buildInfo=JSON.parse(readFileSync(resolve(mobile,'www/build-info.json'),'utf8'));
+const launch=buildInfo.deviceFeedback?resolve(mobile,'assets/launch-144.png'):source;
+for(const image of catalog.images)copyFileSync(launch,resolve(splash,image.filename));
+if(buildInfo.deviceFeedback){
+ const storyboard=resolve(mobile,'ios/App/App/Base.lproj/LaunchScreen.storyboard');
+ let xml=readFileSync(storyboard,'utf8');
+ xml=xml.replace(/\s*<constraints>\s*<constraint firstAttribute="width" constant="200" id="logo-width"\/>\s*<constraint firstAttribute="height" constant="200" id="logo-height"\/>\s*<\/constraints>/,'');
+ if(!xml.includes('id="launch-width"'))xml=xml.replace('<constraint firstItem="manee-logo" firstAttribute="centerX"', '<constraint firstItem="manee-logo" firstAttribute="width" secondItem="snD-IY-ifK" secondAttribute="width" id="launch-width"/>\n                            <constraint firstItem="manee-logo" firstAttribute="height" secondItem="snD-IY-ifK" secondAttribute="height" id="launch-height"/>\n                            <constraint firstItem="manee-logo" firstAttribute="centerX"');
+ writeFileSync(storyboard,xml);
+}
 console.log('MANEE icon and launch artwork prepared.');
