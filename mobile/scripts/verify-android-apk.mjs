@@ -36,9 +36,9 @@ const plugins = JSON.parse(unpack('assets/capacitor.plugins.json'));
 assert.deepEqual(plugins.map(p => p.pkg), ['@capacitor/geolocation', '@capacitor/push-notifications', '@capacitor/app', '@capacitor/browser']);
 assert.match(manifest, /kr\.co\.manee\.app\.staging/);
 assert.match(manifest, /\/callback/);
-if (info.versionCode === 43) {
-  assert.match(badging, /versionCode='43'/);
-  assert.match(badging, /versionName='1\.42-sector1-4-test'/);
+if ([43,44].includes(info.versionCode)) {
+  assert.ok(badging.includes(`versionCode='${info.versionCode}'`));
+  assert.ok(badging.includes(`versionName='${info.versionCode===44?'1.43':'1.42-sector1-4-test'}'`));
   assert.equal(info.nativeAuthStorage, 'keystore-v1');
   assert.ok(unpack('assets/public/secure-auth.js').includes('ManeeSecureAuth'));
   assert.ok(unpack('assets/public/index.html').includes('MANEE_SECURE_STORAGE.wrap(maneeAuthStorage)'));

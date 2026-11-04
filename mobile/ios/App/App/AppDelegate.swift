@@ -153,7 +153,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
               !product.isFamilyShareable else { return false }
         if product.id == "manee.store1.monthly" {
             guard let offer = subscription.introductoryOffer else { return false }
-            return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 1
+            return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 2
         }
         return subscription.introductoryOffer == nil
     }
@@ -173,7 +173,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let subscription = product.subscription {
                     let eligible = await subscription.isEligibleForIntroOffer
                     let offer = subscription.introductoryOffer
-                    item["oneMonthFree"] = product.id == "manee.store1.monthly" && eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 1
+                    item["twoMonthsFree"] = product.id == "manee.store1.monthly" && eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 2
                 }
                 call.resolve(item)
             } catch { call.reject("상품 정보를 확인하지 못했어요.") }

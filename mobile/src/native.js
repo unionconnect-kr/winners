@@ -107,7 +107,7 @@ async function openSettings(){
  button('알림 테스트',async()=>{status.textContent=(await notifications.action('test')).message;});
  button('이 기기 알림 끄기',async()=>{status.textContent=(await notifications.action('disable')).message;});
  element('p','알림은 선택한 한 매장에 연결돼요. 다른 매장 알림을 받으려면 해당 매장에서 다시 켜 주세요.',sheet).style.fontSize='13px';
- element('p','구독은 매월 자동 갱신되며 Apple 계정으로 청구됩니다. 무료 체험이 적용되는 경우 체험 종료 후 표시된 월 요금으로 갱신됩니다. 취소는 Apple 구독 관리에서 할 수 있어요.',sheet).style.fontSize='13px';
+ element('p','구독은 매월 자동 갱신되며 Apple 계정으로 청구됩니다. 무료체험 대상인 경우 2개월 체험 종료 후 표시된 월 요금으로 전환됩니다. 국내 사용자는 Apple이 요청하는 유료 전환 동의를 완료해야 하며, 미동의 시 구독이 종료될 수 있습니다. 취소는 Apple 구독 관리에서 할 수 있어요.',sheet).style.fontSize='13px';
  const links=element('p',null,sheet);
 
  button('닫기',()=>sheet.close());
@@ -125,7 +125,7 @@ async function openSettings(){
    const product=await billing.products(info.productId);if(!sameContext(c)||dialog!==sheet)return;
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요. 잠시 후 다시 시도해 주세요.');
    if(hasActivePurchase)return;
-   buy.textContent=product.oneMonthFree?'1개월 무료 체험 시작 (이후 '+product.price+' / 월)':'월 '+product.price+'으로 구독하기';buy.hidden=false;buy.style.display='block';
+   buy.textContent=product.twoMonthsFree?'2개월 무료 체험 시작 (이후 '+product.price+' / 월)':'월 '+product.price+'으로 구독하기';buy.hidden=false;buy.style.display='block';
   }else if(info.otherStoreSubscribed)status.textContent=messages.other_store_subscribed;
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }

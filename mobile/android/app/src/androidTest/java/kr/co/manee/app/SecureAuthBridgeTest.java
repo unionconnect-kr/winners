@@ -24,10 +24,10 @@ public class SecureAuthBridgeTest {
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
    boolean initialized=false;
    for(int i=0;i<100;i++){
-    if("true".equals(evaluate(scenario,"Boolean(window.MANEE_SECURE_STORAGE && document.body.innerText.includes('매니 1.42'))"))){initialized=true;break;}
+    if("true".equals(evaluate(scenario,"Boolean(window.MANEE_SECURE_STORAGE && (document.body.innerText.includes('매니 1.42') || document.body.innerText.includes('매니 1.43')))"))){initialized=true;break;}
     Thread.sleep(100);
    }
-   assertTrue("1.42 page did not load",initialized);
+   assertTrue("Complete secure page did not load",initialized);
    assertEquals("true",evaluate(scenario,"['ManeeSecureAuth','ManeeReportFiles','ManeePlayBilling','App','Browser','Geolocation'].every(n=>Capacitor.isPluginAvailable(n))"));
    evaluate(scenario,"window.__vaultSmoke='pending';(async()=>{try{await MANEE_SECURE_STORAGE.ready;const p=Capacitor.Plugins.ManeeSecureAuth,k='localStorage:manee-abcdefghijklmnopqrst-auth';try{await p.set({key:k,value:'synthetic-device-check'});if((await p.get({key:k})).value!=='synthetic-device-check')throw Error('roundtrip');if(localStorage.getItem(k)!==null)throw Error('plaintext');}finally{await p.remove({key:k});}if((await p.get({key:k})).value!==null)throw Error('deletion');window.__vaultSmoke='passed';}catch(e){window.__vaultSmoke='failed';}})();");
    String result="";

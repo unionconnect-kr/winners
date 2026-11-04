@@ -1,15 +1,15 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {testOffers,openAndroidBilling} from '../src/android-billing-ui.mjs';
 const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M',recurrenceMode:1};
-const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-1month',offerToken:'trial',phases:[{...phase,amountMicros:0,cycles:1,recurrenceMode:2},phase]}]};
+const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-60days',offerToken:'trial',phases:[{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2},phase]}]};
 test('only eligible fixed monthly offers use the actual Play price and free phase',()=>{
- const offers=testOffers([product]);assert.equal(offers.length,1);assert.equal(offers[0].label,'무료 (1개월) → ₩9,900 (1개월)');assert.equal(offers[0].offerToken,'trial');
+ const offers=testOffers([product]);assert.equal(offers.length,1);assert.equal(offers[0].label,'무료 (60일) → ₩9,900 (1개월)');assert.equal(offers[0].offerToken,'trial');
  for(const change of [p=>p.productId='wrong',p=>p.offers.forEach(o=>o.basePlanId='annual'),p=>p.offers.forEach(o=>o.phases.at(-1).currency='USD'),p=>p.offers.forEach(o=>o.phases.at(-1).amountMicros=19900000000)]){const p=structuredClone(product);change(p);assert.deepEqual(testOffers([p]),[]);}
 });
-test('trial offer requires exactly one free calendar month before the monthly price',()=>{
- for(const change of [p=>p.offers[1].phases[0].period='P1W',
+test('trial offer requires exactly sixty free days before the monthly price',()=>{
+ for(const change of [p=>p.offers[1].phases[0].period='P1W',p=>p.offers[1].phases[0].period='P1M',p=>p.offers[1].phases[0].period='P2M',p=>p.offers[1].offerId='trial-1month',
   p=>p.offers[1].phases[0].cycles=2,p=>p.offers[1].phases[0].amountMicros=1000000,
-  p=>p.offers[1].phases.splice(1,0,{...phase,amountMicros:0,cycles:1,recurrenceMode:2})]){
+  p=>p.offers[1].phases.splice(1,0,{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2})]){
   const p=structuredClone(product);change(p);
   assert.deepEqual(testOffers([p]).map(o=>o.offerToken),['paid']);
  }
@@ -77,7 +77,7 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
  await settle();
  const copy=f.document.body.children[0].children.map(e=>e.textContent||'').join(' ');
  assert.match(copy,/매장 이용권 구독/);
- assert.match(copy,/1개월 무료 체험/);
+ assert.match(copy,/60일 무료체험/);
  assert.match(copy,/월 9,900원/);
  assert.match(copy,/Play 스토어 구독 관리/);
  assert.match(copy,/출퇴근을 포함한 업무 입력·수정이 제한/);
