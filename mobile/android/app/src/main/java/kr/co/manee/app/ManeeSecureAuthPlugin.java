@@ -10,6 +10,9 @@ import org.json.JSONObject;
 public class ManeeSecureAuthPlugin extends Plugin {
     private ManeeSecureAuthStore store;
     @Override public void load(){store=new ManeeSecureAuthStore(getContext(),"manee_secure_auth_v1");}
+    @Override protected void handleOnDestroy(){
+        if(store!=null && getActivity()!=null && getActivity().isFinishing())store.clearTransient();
+    }
     @PluginMethod public void get(PluginCall call){
         try{String value=store.get(call.getString("key"));JSObject result=new JSObject();result.put("value",value==null?JSONObject.NULL:value);call.resolve(result);}
         catch(Exception e){call.reject("Secure auth storage unavailable");}

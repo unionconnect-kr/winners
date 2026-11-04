@@ -33,6 +33,9 @@ public final class ManeeSecureAuthStore {
             .setKeySize(256).setRandomizedEncryptionRequired(true).build());
         return generator.generateKey();
     }
+    public void clearTransient() {
+        synchronized(volatileValues){volatileValues.keySet().removeIf(key->key.startsWith(alias+":"));}
+    }
     private void validate(String key) {
         if(key==null||!key.matches("(localStorage|sessionStorage):(sb-[a-z]{20}-auth-token(-code-verifier|-user)?|manee-[a-z]{20}-(auth(-code-verifier|-user)?|social-(code-verifier|pending)))"))throw new IllegalArgumentException("Invalid auth slot");
     }

@@ -1,3 +1,4 @@
+import {mockSecureAuthForAudit} from './secure-auth-audit-fixture.mjs';
 // Full offline iPhone page inventory; network writes, SMS, payments and native plugins are excluded.
 import {pageCases,seedPage,showPage} from './ios-page-fixtures.mjs';
 import {checkInputs} from './ios-page-interactions.mjs';
@@ -12,11 +13,11 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'../www');
 const out=process.env.IOS_UI_AUDIT_OUT||mkdtempSync(resolve(tmpdir(),'manee-ui-audit-'));mkdirSync(out,{recursive:true});
 const info=JSON.parse(readFileSync(root+'/build-info.json','utf8'));
 if(info.platform!=='ios'||info.environment!=='staging'||info.sourceAndroidVersion!==40)throw Error('Run npm --prefix mobile run build:ios139 after the mobile tests, before this audit.');
-let html=readFileSync(root+'/index.html','utf8');
+let html=mockSecureAuthForAudit(readFileSync(root+'/index.html','utf8'));
 // Native plugin calls are outside this offline presentation audit.
 const nativeNotice=readFileSync(resolve(root,'../src/native-ios139.js'),'utf8').replace(/^import .*;$/gm,'').replace('installIosSocial(window.MANEE_CONFIG);','');
 html=html.replace('<script src="/native.js"></script>','<script>window.MANEE_NATIVE={configure(){},refresh(){}};'+nativeNotice+'</script>');
-html=html.replace('(function(){','(function(){ const setTimeout=()=>0; const clearTimeout=()=>{}; const setInterval=()=>0;');
+html=html.replace(/\((?:async )?function\(\)\{/,start=>start+' const setTimeout=()=>0; const clearTimeout=()=>{}; const setInterval=()=>0;');
 html=html.replace('  initializeSocialLogin();',`window.qa={native:window.MANEE_NATIVE,state,render,renderLanding,renderOnboardingWizard,renderStaffApp,renderOwnerShell,r136,r136Overlay,sector4,renderSector4Sheet,renderOwnerHome,renderOwnerPeople,renderOwnerSales,renderOwnerOperations,renderOwnerMore,sector2,sector3,renderSector2View,renderSector3Sheet,r134,r134Overlay,r134ContractDefaults,renderConfirmOverlay,renderLightbox,renderAddStoreForm,renderSalesReportForm,r135AiSheet,renderInfoModal,r134GuideSelector,todayKey,bizToday,monthKey,r138RecentDays,db,renderOwnerStorePicker,bindLandingEvents,ownerSignupNext,ownerSignupDraft,handleStaffAuthClick,bindSector3,bindSector4,bindR136,bindOnboardingWizardEvents,decorateSocialEntry,renderVatDetail,renderFixedExpenseManage,renderMonthlyCostReview,renderOwnerProfileChanges,renderAttConfirmPrompt};`);
 const browser=await webkit.launch({headless:true,...(process.env.WEBKIT_EXECUTABLE?{executablePath:process.env.WEBKIT_EXECUTABLE}:{})});
 const results=[],interactions=[];

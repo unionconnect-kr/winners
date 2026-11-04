@@ -1,3 +1,4 @@
+import {adaptIos139} from './adapt-ios139.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {createSecureAuthStorage} from '../src/secure-auth-storage.mjs';import {secureAuthHtml} from './secure-auth-html.mjs';
 const ref='abcdefghijklmnopqrst',key=`manee-${ref}-auth`;
@@ -40,4 +41,9 @@ test('failed logout leaves a non-secret intent that prevents resurrection after 
  const reboot=fixture(Object.fromEntries(h.local.map),{vault:Object.fromEntries(h.data)});await reboot.secure.ready;
  assert.equal(reboot.secure.area('localStorage').getItem(key),null);assert.equal(reboot.data.has('localStorage:'+key),false);assert.equal(reboot.local.getItem(marker),null);
  const stillFailed=fixture({[marker]:'1'},{vault:{['localStorage:'+key]:'old-token'},removeFails:true});await assert.rejects(stillFailed.secure.ready);assert.throws(()=>stillFailed.secure.area('localStorage').getItem(key));
+});
+
+test('the adapted device-feedback OAuth context survives secure storage wrapping',()=>{
+ const html=secureAuthHtml(adaptIos139(readFileSync(new URL('../release139/assets/index.html',import.meta.url),'utf8')));
+ assert.match(html,/open:async\(url,context\)=>\{await window.MANEE_SECURE_STORAGE.flush\(\);return native\?native.open\(url,context\)/);
 });

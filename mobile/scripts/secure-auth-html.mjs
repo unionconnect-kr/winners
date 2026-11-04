@@ -9,7 +9,11 @@ export function secureAuthHtml(source){
  once('storage:maneeAuthStorage','storage:window.MANEE_SECURE_STORAGE.wrap(maneeAuthStorage)');
  if(html.includes('storage:native?localStorage:sessionStorage')){
   once('storage:native?localStorage:sessionStorage','storage:window.MANEE_SECURE_STORAGE.area(native?"localStorage":"sessionStorage")');
-  once('open:url=>native?native.open(url):location.assign(url)','open:async url=>{await window.MANEE_SECURE_STORAGE.flush();return native?native.open(url):location.assign(url);}');
+  if(html.includes('open:(url,context)=>native?native.open(url,context):location.assign(url)')){
+   once('open:(url,context)=>native?native.open(url,context):location.assign(url)','open:async(url,context)=>{await window.MANEE_SECURE_STORAGE.flush();return native?native.open(url,context):location.assign(url);}');
+  }else{
+   once('open:url=>native?native.open(url):location.assign(url)','open:async url=>{await window.MANEE_SECURE_STORAGE.flush();return native?native.open(url):location.assign(url);}');
+  }
  }
  return html;
 }

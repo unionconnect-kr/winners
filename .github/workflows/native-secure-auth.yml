@@ -45,7 +45,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: cd mobile/android && ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=kr.co.manee.app.SecureAuthStoreTest
+          script: cd mobile/android && ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=kr.co.manee.app.SecureAuthStoreTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

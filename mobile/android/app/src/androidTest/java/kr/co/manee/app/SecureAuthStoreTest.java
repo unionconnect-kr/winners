@@ -35,6 +35,10 @@ public class SecureAuthStoreTest {
   assertFalse(context.getSharedPreferences(ns,0).contains(session));assertEquals("synthetic-session-only",new ManeeSecureAuthStore(context,ns).get(session));
   store.remove(session);assertNull(store.get(session));
  }
+ @Test public void finishingTheActivityClearsOnlyTransientTokens()throws Exception{
+  String session=key.replace("localStorage:","sessionStorage:");store.set(session,"temporary");store.set(key,"remembered");
+  store.clearTransient();assertNull(new ManeeSecureAuthStore(context,ns).get(session));assertEquals("remembered",store.get(key));
+ }
  @Test public void unrelatedKeysAndOversizedValuesAreRejected()throws Exception{
   try{store.set("arbitrary","value");fail();}catch(IllegalArgumentException expected){}
   try{store.set(key,new String(new char[65537]));fail();}catch(IllegalArgumentException expected){}
