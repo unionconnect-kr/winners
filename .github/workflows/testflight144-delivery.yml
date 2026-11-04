@@ -1,0 +1,78 @@
+name: Verify MANEE 1.44 TestFlight delivery
+on:
+  push:
+    branches: [codex/testflight144-delivery-20261104]
+permissions:
+  contents: read
+concurrency:
+  group: testflight144-delivery
+  cancel-in-progress: false
+jobs:
+  verify-existing-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify uploaded build and connect existing internal QA group
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          node --input-type=module <<'MANEE_NODE'
+          import { sign } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          const APP='6820833544', BUNDLE='kr.co.manee.app', VERSION='1.44', BUILD='144.2.1', GROUP='MANEE 내부 QA';
+          const required=['ASC_KEY_ID','ASC_ISSUER_ID','ASC_PRIVATE_KEY'];
+          for (const key of required) if (!process.env[key]?.trim()) throw new Error('Missing configured credential: '+key);
+          const now=Math.floor(Date.now()/1000);
+          const enc=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+          const unsigned=enc({alg:'ES256',kid:process.env.ASC_KEY_ID.trim(),typ:'JWT'})+'.'+enc({iss:process.env.ASC_ISSUER_ID.trim(),iat:now,exp:now+600,aud:'appstoreconnect-v1'});
+          const key=process.env.ASC_PRIVATE_KEY.trim().replaceAll('\\n','\n');
+          const token=unsigned+'.'+sign('sha256',Buffer.from(unsigned),{key,dsaEncoding:'ieee-p1363'}).toString('base64url');
+          console.log('::add-mask::'+token);
+          async function api(path,method='GET',body) {
+            if (!path.startsWith('/v1/')) throw new Error('Unexpected API path');
+            const r=await fetch('https://api.appstoreconnect.apple.com'+path,{method,redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+            const raw=await r.text(); let data={}; try { data=raw?JSON.parse(raw):{}; } catch { throw new Error('Non-JSON Apple API response: '+r.status); }
+            if(!r.ok) throw new Error('Apple API HTTP '+r.status+' '+(data.errors||[]).map(x=>x.code).join(','));
+            return data;
+          }
+          const app=(await api('/v1/apps/'+APP)).data;
+          if(app?.attributes?.bundleId!==BUNDLE) throw new Error('App identity mismatch');
+          const query=new URLSearchParams({'filter[app]':APP,'filter[version]':BUILD,include:'preReleaseVersion,buildBetaDetail',limit:'10'});
+          const found=await api('/v1/builds?'+query);
+          if(found.data?.length!==1) throw new Error('Expected exact previously uploaded build '+BUILD);
+          const build=found.data[0];
+          const release=found.included?.find(x=>x.type==='preReleaseVersions'&&x.id===build.relationships?.preReleaseVersion?.data?.id);
+          if(release?.attributes?.version!==VERSION||release?.attributes?.platform!=='IOS') throw new Error('Release identity mismatch');
+          if(build.attributes.processingState!=='VALID'||build.attributes.expired) throw new Error('Build not ready: '+build.attributes.processingState);
+          let detail=(await api('/v1/builds/'+build.id+'/buildBetaDetail')).data;
+          if(!['READY_FOR_BETA_TESTING','IN_BETA_TESTING'].includes(detail?.attributes?.internalBuildState)) throw new Error('Internal testing not ready: '+detail?.attributes?.internalBuildState);
+          const groups=(await api('/v1/apps/'+APP+'/betaGroups?limit=200')).data;
+          const matched=groups.filter(x=>x.attributes?.name===GROUP&&x.attributes?.isInternalGroup===true);
+          if(matched.length!==1) throw new Error('Existing internal QA group is not uniquely identified');
+          const group=matched[0];
+          let linked=(await api('/v1/builds/'+build.id+'/betaGroups?limit=200')).data;
+          let changed=false;
+          if(!linked.some(x=>x.id===group.id)&&group.attributes.hasAccessToAllBuilds!==true) {
+            await api('/v1/betaGroups/'+group.id+'/relationships/builds','POST',{data:[{type:'builds',id:build.id}]});
+            changed=true;
+          }
+          for(let attempt=0;attempt<3;attempt++) {
+            linked=(await api('/v1/builds/'+build.id+'/betaGroups?limit=200')).data;
+            detail=(await api('/v1/builds/'+build.id+'/buildBetaDetail')).data;
+            if((linked.some(x=>x.id===group.id)||group.attributes.hasAccessToAllBuilds===true)&&detail.attributes.internalBuildState==='IN_BETA_TESTING') break;
+            if(attempt<2) await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          const connected=linked.some(x=>x.id===group.id)||group.attributes.hasAccessToAllBuilds===true;
+          const testerData=await api('/v1/betaGroups/'+group.id+'/relationships/betaTesters?limit=200');
+          const result={appId:APP,version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,group:GROUP,groupConnected:connected,existingTesterCount:testerData.data.length,internalBuildState:detail.attributes.internalBuildState,groupAssignmentAdded:changed,newTestersAdded:false,reviewSubmitted:false,readyForExistingTesters:connected&&detail.attributes.internalBuildState==='IN_BETA_TESTING'};
+          console.log('MANEE_TESTFLIGHT_DELIVERY_RESULT '+JSON.stringify(result));
+          if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,'MANEE 1.44 delivery verification\n\n'+JSON.stringify(result,null,2)+'\n');
+          if(!result.readyForExistingTesters) throw new Error('Build delivery remains unconfirmed; see recorded status.');
+          
+          MANEE_NODE
