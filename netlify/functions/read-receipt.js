@@ -1,4 +1,5 @@
-const {reply,parseBody,authorize,imageMatches,minimizedContext}=require('./lib/request-security.cjs');
+const {reply,parseBody,authorize}=require('./lib/request-security.cjs');
+const {normalizeReceiptImage}=require('./lib/validated-image.cjs');
 const { blockExternalService } = require("./lib/manee-environment.cjs");
 // Netlify Function: 정산표 사진을 Claude Vision으로 읽어서 숫자를 뽑아줘요.
 // 이 파일은 서버(넷리파이) 쪽에서만 실행돼요. API 키가 여기 있어도
@@ -15,10 +16,10 @@ exports.handler = async function(event) {
   const permission=await authorize(event,body,'read-receipt');if(permission.response)return permission.response;
   const apiKey=process.env.ANTHROPIC_API_KEY;if(!apiKey)return reply(503,'서비스를 준비 중이에요.');
 
-  const { base64Data, mediaType } = body;
-  if (!imageMatches(base64Data,mediaType)) {
-    return { statusCode: 400, body: JSON.stringify({ error: "이미지 데이터가 없어요." }) };
-  }
+  let normalized;
+  try { normalized = await normalizeReceiptImage(body.base64Data, body.mediaType); }
+  catch { return reply(400, '이미지를 읽을 수 없어요. JPG·PNG·WebP 사진을 다시 선택해 주세요.'); }
+  const { base64Data, mediaType } = normalized;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
