@@ -96,7 +96,8 @@ jobs:
           if-no-files-found: error
   archive:
     needs: [verify]
-    runs-on: macos-15
+    # The standard arm64 pool is currently reporting hosted-runner capacity errors.
+    runs-on: macos-15-intel
     timeout-minutes: 60
     defaults:
       run:
