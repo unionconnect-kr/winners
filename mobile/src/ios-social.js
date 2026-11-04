@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { iosOAuthUrl } from './ios-oauth-url.js';
+import { nativeSocialScheme } from './native-environment.mjs';
 
 export function createSocialNative({app, browser, scheme, origin}) {
   let listener;
@@ -33,5 +34,5 @@ export function createSocialNative({app, browser, scheme, origin}) {
 
 export function installIosSocial(config) {
   window.MANEE_SOCIAL_NATIVE = createSocialNative({app:App,browser:Browser,
-    scheme:'kr.co.manee.app.staging',origin:new URL(config.supabaseUrl).origin});
+    scheme:nativeSocialScheme(config),origin:new URL(config.supabaseUrl).origin});
 }

@@ -2,6 +2,7 @@ import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {iosUrlSchemePlist} from '../src/native-environment.mjs';
 const mobile=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 // Xcode only runs on macOS. sips produces the mandatory opaque 1024px icon
 // from the existing MANEE artwork; no default Capacitor artwork ships in CI.
@@ -12,6 +13,8 @@ execFileSync('/usr/bin/sips',['-z','1024','1024',source,'--out',resolve(assets,'
 const splash=resolve(assets,'Splash.imageset');
 const catalog=JSON.parse(readFileSync(resolve(splash,'Contents.json'),'utf8'));
 const buildInfo=JSON.parse(readFileSync(resolve(mobile,'www/build-info.json'),'utf8'));
+const infoPlist=resolve(mobile,'ios/App/App/Info.plist');
+writeFileSync(infoPlist,iosUrlSchemePlist(readFileSync(infoPlist,'utf8'),buildInfo.environment));
 const launch=buildInfo.deviceFeedback?resolve(mobile,'assets/launch-144.png'):source;
 for(const image of catalog.images)copyFileSync(launch,resolve(splash,image.filename));
 if(buildInfo.deviceFeedback){

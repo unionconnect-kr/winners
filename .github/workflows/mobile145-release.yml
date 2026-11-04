@@ -7,7 +7,7 @@ permissions:
   contents: read
 concurrency:
   group: mobile145-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-24.04
@@ -83,6 +83,7 @@ jobs:
           assert "uses-permission: name='android.permission.POST_NOTIFICATIONS'" in report
           assert "uses-permission: name='com.android.vending.BILLING'" in report
           assert 'application-debuggable' not in report
+          assert "application-label:'매니'" in report
           print('Release APK package, version, permissions and non-debuggable manifest verified.')
           PY
       - uses: actions/upload-artifact@v4

@@ -12,8 +12,25 @@ import {hardenUi} from '../../scripts/harden-ui.mjs';
 import {release145Html} from './release145-html.mjs';
 import {verifyAndroidAssets} from './verify-android-build.mjs';
 import {uploadTestFlight} from './upload-testflight.mjs';
+import {nativeSocialScheme,iosUrlSchemePlist} from '../src/native-environment.mjs';
+import {createSocialNative} from '../src/ios-social.js';
 const baseline=readFileSync(new URL('../release139/assets/index.html',import.meta.url),'utf8');
 const environments=JSON.parse(readFileSync(new URL('../../config/environments.json',import.meta.url),'utf8'));
+test('production OAuth callback and iOS URL registration agree and reject test-app callbacks',async()=>{
+ const scheme=nativeSocialScheme(environments.production);
+ assert.equal(scheme,'kr.co.manee.app');assert.equal(nativeSocialScheme(environments.staging),'kr.co.manee.app.staging');
+ assert.throws(()=>nativeSocialScheme({...environments.production,projectRef:environments.staging.projectRef}));
+ const plist=readFileSync(new URL('../ios/App/App/Info.plist',import.meta.url),'utf8');
+ const production=iosUrlSchemePlist(plist,'production');assert.doesNotMatch(production,/kr\.co\.manee\.app\.staging/);
+ assert.equal(iosUrlSchemePlist(production,'production'),production);
+ assert.match(iosUrlSchemePlist(production,'staging'),/kr\.co\.manee\.app\.staging/);
+ const seen=[];let receive;
+ const bridge=createSocialNative({scheme,origin:environments.production.supabaseUrl,app:{getLaunchUrl:async()=>({url:'kr.co.manee.app://auth/callback?code=cold'}),addListener:async(_n,fn)=>{receive=fn;return{remove:async()=>{}};}},browser:{close:async()=>{}}});
+ await bridge.listen(url=>seen.push(url));
+ await receive({url:'kr.co.manee.app.staging://auth/callback?code=wrong'});
+ await receive({url:'kr.co.manee.app://auth/callback?code=warm'});
+ assert.deepEqual(seen,['kr.co.manee.app://auth/callback?code=cold','kr.co.manee.app://auth/callback?code=warm']);
+});
 for(const platform of ['android','ios'])test(`1.45 ${platform} promotes approved screens while retaining calendar, roles and guarded service calls`,()=>{
  const qa=feedback144Html(signupCheckoutHtml(launch143Html(hardenUi(adaptIos139(baseline,platform)),platform)));
  const html=release145Html(qa,platform,'https://winners-staffapp.netlify.app');
