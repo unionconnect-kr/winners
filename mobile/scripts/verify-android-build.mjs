@@ -13,9 +13,16 @@ export function verifyAndroidAssets({info, appConfig, environment, environments,
   assert.ok(appConfig.includes(environments[environment].projectRef));
   assert.ok(!appConfig.includes(environments[environment === 'production' ? 'staging' : 'production'].projectRef));
   if (environment === 'production') {
-    assert.ok(['play-internal-setup','paid-pilot'].includes(releasePurpose), 'Unknown release purpose.');
+    assert.ok(['play-internal-setup','paid-pilot','store-update'].includes(releasePurpose), 'Unknown release purpose.');
     assert.equal(info.releasePurpose, releasePurpose, 'Wrong Android release purpose.');
-    assert.equal(info.billingEnabled, releasePurpose === 'paid-pilot', 'Billing flag does not match release purpose.');
+    assert.equal(info.billingEnabled, ['paid-pilot','store-update'].includes(releasePurpose), 'Billing flag does not match release purpose.');
+    if (releasePurpose === 'store-update') {
+      assert.equal(info.versionName, '1.45');
+      assert.equal(info.versionCode, 46);
+      assert.equal(info.pushEnabled, true);
+      assert.equal(info.signupCheckoutEnabled, true);
+      assert.equal(info.nativeAuthStorage, 'keystore-v1');
+    }
     assert.equal(firebaseProject, 'manee-production-3eafa');
   }
 }
