@@ -1,4 +1,4 @@
-"""Package 1.40 web assets over the hash-pinned 1.39 staging native shell.
+"""Package 1.41 security web assets over the hash-pinned 1.39 staging native shell.
 No signing material is consumed; sign the result separately with its original key.
 """
 from pathlib import Path
@@ -16,16 +16,16 @@ while off<len(m):
    at=off+16+start+i*each;name=struct.unpack_from('<I',m,at+4)[0]
    if name<len(resources) and resources[name]==0x0101021b:
     assert struct.unpack_from('<I',m,at+16)[0]==40
-    struct.pack_into('<I',m,at+16,41);version_changed=True
+    struct.pack_into('<I',m,at+16,42);version_changed=True
  off+=size
 assert version_changed
 for encoding in ['utf-8','utf-16le']:
- old='1.39-sector1-4-test'.encode(encoding);new='1.40-sector1-4-test'.encode(encoding)
+ old='1.39-sector1-4-test'.encode(encoding);new='1.41-sector1-4-test'.encode(encoding)
  if old in m:
   assert len(old)==len(new);m=m.replace(old,new);break
 else:raise ValueError('Missing baseline version name')
 config=json.loads(z.read('assets/capacitor.config.json'));config['android']['zoomEnabled']=False
-info=json.loads((assets/'build-info.json').read_text());assert info['platform']=='android' and info['environment']=='staging' and info['versionCode']==41
+info=json.loads((assets/'build-info.json').read_text());assert info['platform']=='android' and info['environment']=='staging' and info['versionCode']==42
 html=(assets/'index.html').read_text()
 for forbidden in ['__QA','sb_secret_','SOLAPI_API_SECRET','SOLAPI_API_KEY','fixture-only','40일','매니 1.39','manee_ios_push_context']:
  assert forbidden not in html,forbidden
@@ -66,5 +66,5 @@ with zipfile.ZipFile(out) as check:
   with out.open('rb') as f:f.seek(entry.header_offset+26);name,extra=struct.unpack('<HH',f.read(4))
   offset=entry.header_offset+30+name+extra
   assert offset%(16384 if entry.filename.endswith('.so') else 4)==0,entry.filename
-result={'versionName':info['versionName'],'versionCode':41,'packageName':'kr.co.manee.app.staging','backend':'manee-staging','changedEntries':changed,'nativeClassesAndResourcesUnchanged':True,'storedAlignmentVerified':True,'baselineSha256':hashlib.sha256(base.read_bytes()).hexdigest()}
+result={'versionName':info['versionName'],'versionCode':42,'packageName':'kr.co.manee.app.staging','backend':'manee-staging','changedEntries':changed,'nativeClassesAndResourcesUnchanged':True,'storedAlignmentVerified':True,'baselineSha256':hashlib.sha256(base.read_bytes()).hexdigest()}
 out.with_suffix('.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))

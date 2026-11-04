@@ -1,0 +1,258 @@
+{
+  "policies": [
+    {
+      "cmd": "ALL",
+      "qual": "private.can_manage_store(store_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "crew",
+      "permissive": "PERMISSIVE",
+      "policyname": "crew_manage",
+      "schemaname": "public",
+      "with_check": "private.can_manage_store(store_id)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(private.has_store_membership(store_id, NULL::text[]) OR private.has_platform_role(ARRAY['super_admin'::text, 'admin'::text, 'support'::text, 'read_only'::text]))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "crew",
+      "permissive": "RESTRICTIVE",
+      "policyname": "franchise_personal_data_boundary",
+      "schemaname": "public",
+      "with_check": "(private.has_store_membership(store_id, NULL::text[]) OR private.has_platform_role(ARRAY['super_admin'::text, 'admin'::text, 'support'::text, 'read_only'::text]))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "( SELECT private.can_delete_financials(expense_entries.store_id) AS can_delete_financials)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "expense_entries",
+      "permissive": "PERMISSIVE",
+      "policyname": "expense_entries_delete_v2",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "expense_entries",
+      "permissive": "PERMISSIVE",
+      "policyname": "expense_entries_insert_v2",
+      "schemaname": "public",
+      "with_check": "( SELECT private.can_write_financials(expense_entries.store_id) AS can_write_financials)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "( SELECT private.can_view_financials(expense_entries.store_id) AS can_view_financials)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "expense_entries",
+      "permissive": "PERMISSIVE",
+      "policyname": "expense_entries_select_v2",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "( SELECT private.can_manage_store(expense_entries.store_id) AS can_manage_store)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "expense_entries",
+      "permissive": "PERMISSIVE",
+      "policyname": "expense_entries_update_v2",
+      "schemaname": "public",
+      "with_check": "( SELECT private.can_manage_store(expense_entries.store_id) AS can_manage_store)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "private.is_live_manee_session()",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "profiles",
+      "permissive": "RESTRICTIVE",
+      "policyname": "manee_live_session_required",
+      "schemaname": "public",
+      "with_check": "private.is_live_manee_session()"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "private.has_platform_role(ARRAY['super_admin'::text, 'admin'::text, 'support'::text, 'read_only'::text])",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "profiles_admin_read",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "profiles_select_self",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(private.has_store_membership(store_id, NULL::text[]) OR private.has_platform_role(ARRAY['super_admin'::text, 'admin'::text, 'support'::text, 'read_only'::text]))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "RESTRICTIVE",
+      "policyname": "franchise_personal_data_boundary",
+      "schemaname": "public",
+      "with_check": "(private.has_store_membership(store_id, NULL::text[]) OR private.has_platform_role(ARRAY['super_admin'::text, 'admin'::text, 'support'::text, 'read_only'::text]))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "private.is_live_manee_session()",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "RESTRICTIVE",
+      "policyname": "manee_live_session_required",
+      "schemaname": "public",
+      "with_check": "private.is_live_manee_session()"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "( SELECT private.can_delete_financials(sales_reports.store_id) AS can_delete_financials)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "PERMISSIVE",
+      "policyname": "sales_reports_delete_v2",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "PERMISSIVE",
+      "policyname": "sales_reports_insert_v2",
+      "schemaname": "public",
+      "with_check": "( SELECT private.can_write_financials(sales_reports.store_id) AS can_write_financials)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "( SELECT private.can_view_financials(sales_reports.store_id) AS can_view_financials)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "PERMISSIVE",
+      "policyname": "sales_reports_select_v2",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "( SELECT private.can_write_financials(sales_reports.store_id) AS can_write_financials)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "sales_reports",
+      "permissive": "PERMISSIVE",
+      "policyname": "sales_reports_update_v2",
+      "schemaname": "public",
+      "with_check": "( SELECT private.can_write_financials(sales_reports.store_id) AS can_write_financials)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "store_memberships",
+      "permissive": "PERMISSIVE",
+      "policyname": "store_memberships_select_self",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "can_manage_store",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.can_manage_store(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    private.has_platform_role(array['super_admin','admin']::text[])\n    or private.has_store_membership(target_store_id, array['owner','manager']::text[]);\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "can_view_financials",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.can_view_financials(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    private.has_platform_role(array['super_admin','admin','support','read_only']::text[])\n    or private.has_sales_access(target_store_id)\n    or exists (\n      select 1\n      from public.stores s\n      where s.id = target_store_id\n        and s.archived_at is null\n        and s.franchise_id is not null\n        and private.has_franchise_membership(s.franchise_id, array['admin','operator','viewer']::text[])\n    );\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "can_view_store",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.can_view_store(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    private.has_platform_role(array['super_admin','admin','support','read_only']::text[])\n    or private.has_store_membership(target_store_id, null)\n    or exists (\n      select 1\n      from public.stores s\n      where s.id = target_store_id\n        and s.archived_at is null\n        and s.franchise_id is not null\n        and private.has_franchise_membership(s.franchise_id, array['admin','operator','viewer']::text[])\n    );\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "can_write_financials",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.can_write_financials(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    private.has_platform_role(array['super_admin','admin']::text[])\n    or private.has_sales_access(target_store_id);\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "current_crew_id",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.current_crew_id(target_store_id uuid)\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select sm.crew_id from public.store_memberships sm\n  join public.crew c on c.id=sm.crew_id and c.store_id=sm.store_id\n  where sm.user_id=(select auth.uid()) and sm.store_id=target_store_id\n    and sm.status='active' and sm.role in ('staff','manager')\n    and private.has_store_membership(target_store_id,array['staff','manager']::text[]) limit 1;\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "has_platform_role",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.has_platform_role(allowed_roles text[])\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.platform_admins pa\n    where pa.user_id = (select auth.uid())\n      and pa.status = 'active'\n      and pa.role = any(allowed_roles)\n  );\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "has_sales_access",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.has_sales_access(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select private.has_store_membership(target_store_id,array['owner','manager']::text[])\n    or (private.has_store_membership(target_store_id,array['staff']::text[]) and exists(\n      select 1 from public.crew c where c.id=private.current_crew_id(target_store_id) and c.store_id=target_store_id and c.sales_access));\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "has_store_membership",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.has_store_membership(target_store_id uuid, allowed_roles text[] DEFAULT NULL::text[])\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1 from public.store_memberships sm\n    join public.profiles p on p.user_id=sm.user_id and p.status='active'\n    join public.stores s on s.id=sm.store_id and s.archived_at is null\n    left join public.crew c on c.id=sm.crew_id and c.store_id=sm.store_id\n    where sm.user_id=(select auth.uid()) and sm.store_id=target_store_id and sm.status='active'\n      and (\n        allowed_roles is null\n        or sm.role = any(allowed_roles)\n        or (sm.role='staff' and c.is_manager and 'manager' = any(allowed_roles))\n      )\n      and (sm.role='owner' or (sm.role in ('staff','manager') and c.id is not null\n        and (c.resign_date is null or c.resign_date > (now() at time zone 'Asia/Seoul')::date)))\n  );\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "is_live_manee_session",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.is_live_manee_session()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists(select 1 from auth.sessions s join public.profiles p on p.user_id=s.user_id and p.status='active'\n    where s.id=(select case when auth.jwt()->>'session_id' ~ '^[0-9a-fA-F-]{36}$' then (auth.jwt()->>'session_id')::uuid else null end)\n      and s.user_id=(select auth.uid()) and (s.not_after is null or s.not_after>now()));\n$function$\n"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "name": "is_store_owner",
+      "schema": "private",
+      "definition": "CREATE OR REPLACE FUNCTION private.is_store_owner(target_store_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    private.has_platform_role(array['super_admin','admin']::text[])\n    or private.has_store_membership(target_store_id, array['owner']::text[]);\n$function$\n"
+    }
+  ]
+}

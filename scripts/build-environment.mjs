@@ -1,3 +1,4 @@
+import {securityHeaders} from './security-headers.mjs';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,7 @@ const staffAuthAnchor = 'const MANEE_STAFF_AUTH_ENABLED = MANEE_IS_STAGING;';
 if (html.split(staffAuthAnchor).length !== 2) throw new Error('Review staff Auth activation anchor before building.');
 if (environment === 'production') html = html.replace(staffAuthAnchor,'const MANEE_STAFF_AUTH_ENABLED = true; // security-v2 production cutover');
 writeFileSync(resolve(output,'index.html'),html);
+writeFileSync(resolve(output,'_headers'),securityHeaders(html+'\n'+readFileSync(resolve(root,'account-deletion.html'),'utf8'),config));
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
 cpSync(resolve(root,'owner-ui.css'),resolve(output,'owner-ui.css'));
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});

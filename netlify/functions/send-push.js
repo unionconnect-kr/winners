@@ -1,3 +1,4 @@
+const {reply,parseBody,authorize}=require('./lib/request-security.cjs');
 const { blockExternalService } = require("./lib/manee-environment.cjs");
 // netlify/functions/send-push.js
 // 매장의 구독자(사장님/매니저)들에게 푸시알림을 보내는 함수
@@ -25,8 +26,19 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { storeId, title, body, url, tag, excludeCrewId, managerOnly, ownerOnly,
-      targetUserId, targetSubscriptionId, expectedVapidPublicKey } = JSON.parse(event.body || '{}');
+    let input;try{input=parseBody(event,8192);}catch(e){return reply(e.status||400,'잘못된 요청이에요.');}
+    const permission=await authorize(event,input,'send-push');if(permission.response)return permission.response;
+    // A staff member can notify the owner only, with server-owned text and no destination selectors.
+    if(permission.servicePolicy?.pushMode==='member'){
+      const tag=typeof input.tag==='string'?input.tag:'';
+      const kind=tag==='attendance'?'출퇴근':/^reservation(?:-cancel)?$/.test(tag)?'예약':/^expense-entry-(?:edited|deleted|created)-/.test(tag)?'지출':null;
+      if(!kind||input.targetUserId!==undefined||input.targetSubscriptionId!==undefined)return reply(403,'허용되지 않은 알림 요청이에요.');
+      input={storeId:input.storeId,title:'매장 업무 알림',body:'직원이 '+kind+' 내역 변경을 알렸어요. 앱에서 확인해 주세요.',url:'/',tag:'staff-'+kind,ownerOnly:true};
+    }else if(permission.servicePolicy?.pushMode!=='manager')return reply(403,'알림 권한을 확인해 주세요.');
+    const {storeId,title,body,url,tag,excludeCrewId,managerOnly,ownerOnly,targetUserId,targetSubscriptionId,expectedVapidPublicKey}=input;
+    if(typeof title!=='string'||title.length>100||(body!=null&&(typeof body!=='string'||body.length>1000))||(tag!=null&&(typeof tag!=='string'||tag.length>80)))return reply(400,'알림 내용을 확인해 주세요.');
+    if(url!=null&&(typeof url!=='string'||!/^\/(?!\/)/.test(url)||/[\\\u0000-\u0020]/.test(url)))return reply(400,'알림 주소를 확인해 주세요.');
+    if(targetUserId&&targetUserId!==permission.userId)return reply(403,'본인 기기에만 시험 알림을 보낼 수 있어요.');
     if (!storeId || !title) {
       return { statusCode: 400, body: JSON.stringify({ error: 'storeId, title 필요' }) };
     }

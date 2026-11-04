@@ -4,18 +4,20 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
+const security=createRequire(import.meta.url)('../netlify/functions/lib/request-security.cjs');
 const {getVapidDetails}=createRequire(import.meta.url)('../netlify/functions/lib/push-vapid.cjs');
 const code=readFileSync(new URL('../netlify/functions/send-push.js',import.meta.url),'utf8');
 const user='00000000-0000-4000-8000-000000000001',store='00000000-0000-4000-8000-000000000101';
 const pair=crypto.createECDH('prime256v1');pair.generateKeys();
 const environment={VAPID_PUBLIC_KEY:pair.getPublicKey().toString('base64url'),VAPID_PRIVATE_KEY:pair.getPrivateKey().toString('base64url')};
-function handler({failure,env=environment}={}){
+function handler({failure,env=environment,pushMode='manager'}={}){
  const filters=[],sends=[],deleted=[];
  const rows=[{id:23,user_id:user,store_id:store,role:'storeOwner',endpoint:'secret-endpoint',p256dh:'secret-key',auth:'secret-auth'},
  {id:24,user_id:'other-user',store_id:store,role:'storeOwner',endpoint:'other-endpoint'},
  {id:25,user_id:user,store_id:'other-store',role:'storeOwner',endpoint:'third-endpoint'}];
  const db={from:()=>({select(){const q={eq(k,v){filters.push([k,v]);return q;},then(resolve){resolve({data:rows.filter(r=>filters.every(([k,v])=>r[k]===v))});}};return q;},delete:()=>({eq:async(k,v)=>deleted.push([k,v])})})};
  const context={exports:{},process:{env},Buffer,require(name){
+  if(name==='./lib/request-security.cjs')return {...security,authorize:async()=>({userId:user,servicePolicy:{pushMode}})};
   if(name==='./lib/manee-environment.cjs')return {blockExternalService:()=>null};
   if(name==='./lib/push-vapid.cjs')return {getVapidDetails:()=>getVapidDetails(env)};
   if(name==='@supabase/supabase-js')return {createClient:()=>db};
@@ -52,4 +54,12 @@ test('client key or server key-pair mismatches fail before any push is attempted
 test('a stale copied public-key setting cannot differ from the actual signing pair',async()=>{
  const h=handler({env:{...environment,VAPID_PUBLIC_KEY:'outdated-copied-value'}});
  assert.equal(JSON.parse((await h.call()).body).sent,1);assert.equal(h.sends.length,1);
+});
+
+test('staff events use owner-only server text and cannot select devices or broadcast arbitrary content',async()=>{
+ const h=handler({pushMode:'member'});
+ const r=await h.call({targetUserId:undefined,targetSubscriptionId:undefined,tag:'attendance',title:'forged admin',body:'attacker text',ownerOnly:false,url:'https://evil.invalid'});
+ assert.equal(r.statusCode,200);assert.equal(h.sends.length,2);
+ for(const send of h.sends){const payload=JSON.parse(send.payload);assert.equal(payload.url,'/');assert.equal(payload.title,'매장 업무 알림');assert.ok(!payload.body.includes('attacker'));}
+ const denied=handler({pushMode:'member'});assert.equal((await denied.call()).statusCode,403);assert.equal(denied.sends.length,0);
 });

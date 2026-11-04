@@ -1,0 +1,20 @@
+[
+  {
+    "nspname": "private",
+    "proname": "has_franchise_membership",
+    "definition": "CREATE OR REPLACE FUNCTION private.has_franchise_membership(target_franchise_id uuid, allowed_roles text[] DEFAULT NULL::text[])\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.franchise_memberships fm\n    where fm.user_id = (select auth.uid())\n      and fm.franchise_id = target_franchise_id\n      and fm.status = 'active'\n      and (allowed_roles is null or fm.role = any(allowed_roles))\n  );\n$function$\n",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "nspname": "private",
+    "proname": "has_platform_role",
+    "definition": "CREATE OR REPLACE FUNCTION private.has_platform_role(allowed_roles text[])\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select private.is_live_manee_session() and exists (\n    select 1\n    from public.platform_admins pa\n    where pa.user_id = (select auth.uid())\n      and pa.status = 'active'\n      and pa.role = any(allowed_roles)\n  );\n$function$\n",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "nspname": "private",
+    "proname": "is_platform_admin",
+    "definition": "CREATE OR REPLACE FUNCTION private.is_platform_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.platform_admins pa\n    where pa.user_id = (select auth.uid())\n      and pa.status = 'active'\n  );\n$function$\n",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  }
+]
