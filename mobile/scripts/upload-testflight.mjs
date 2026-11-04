@@ -4,11 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { checkConnection } from './check-apple-connection.mjs';
 
-// Manual upload only. This does not submit a review or invite any testers.
+// Explicit main upload or the user-requested 1.43 update workflow only. No review submission or tester invitations.
 export async function uploadTestFlight(env, ipa, {
   check = checkConnection, run = spawnSync, platform = process.platform,
 } = {}) {
-  if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main' ||
+  const manual = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.GITHUB_REF === 'refs/heads/main';
+  const matched143 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/mobile-launch-143-20261104' &&
+    env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile143.yml@refs/heads/codex/mobile-launch-143-20261104';
+  if ((!manual && !matched143) ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');
   }

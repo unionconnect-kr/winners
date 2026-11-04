@@ -42,3 +42,12 @@ test('Apple validation precedes upload; private key and child environment are sc
     }
   } finally { rmSync(temp,{recursive:true,force:true}); }
 });
+
+test('only the designated matching 1.43 workflow may upload the requested update', async()=>{
+ const approved={...base,GITHUB_EVENT_NAME:'push',GITHUB_REF:'refs/heads/codex/mobile-launch-143-20261104',GITHUB_WORKFLOW_REF:'unionconnect-kr/winners/.github/workflows/mobile143.yml@refs/heads/codex/mobile-launch-143-20261104'};
+ for(const overrides of [{GITHUB_WORKFLOW_REF:'other'},{GITHUB_REF:'refs/heads/other'},{GITHUB_EVENT_NAME:'pull_request'},{MANEE_UPLOAD_TESTFLIGHT:'false'}]){
+  await assert.rejects(uploadTestFlight({...approved,...overrides},'/tmp/app.ipa',{platform:'darwin',check:()=>assert.fail('No Apple call')}),/UPLOAD_NOT_REQUESTED/);
+ }
+ const temp=mkdtempSync(join(tmpdir(),'manee143-upload-'));
+ try{let checked=false;const result=await uploadTestFlight({...approved,RUNNER_TEMP:temp},'/tmp/app.ipa',{platform:'darwin',check:async()=>{checked=true;},run:()=>({status:0})});assert.equal(result.uploaded,true);assert.equal(checked,true);assert.deepEqual(readdirSync(temp),[]);}finally{rmSync(temp,{recursive:true,force:true});}
+});

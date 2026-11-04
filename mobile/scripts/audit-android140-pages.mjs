@@ -12,7 +12,7 @@ const require=createRequire(import.meta.url),engines=require(process.env.PLAYWRI
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../www');
 const out=process.env.ANDROID_UI_AUDIT_OUT||mkdtempSync(resolve(tmpdir(),'manee-ui-audit-'));mkdirSync(out,{recursive:true});
 const info=JSON.parse(readFileSync(root+'/build-info.json','utf8'));
-if(info.platform!=='android'||![41,42,43].includes(info.versionCode)||info.environment!=='staging'||info.sourceAndroidVersion!==40)throw Error('Build Android 1.40–1.42 staging assets after mobile tests and before this audit.');
+if(info.platform!=='android'||![41,42,43,44].includes(info.versionCode)||info.environment!=='staging'||info.sourceAndroidVersion!==40)throw Error('Build Android 1.40–1.42 staging assets after mobile tests and before this audit.');
 let html=mockSecureAuthForAudit(readFileSync(root+'/index.html','utf8'));
 // Native plugin calls are outside this offline presentation audit.
 html=html.replace('<script src="/native.js"></script>','<script>window.MANEE_NATIVE={configure(){},refresh(){},openSettings(){},openSubscriptionStatus(){}};</script>');
