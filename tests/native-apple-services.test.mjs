@@ -69,3 +69,59 @@ test('additional products require exact allocated product and transaction bindin
  assert.equal(billing.validateTransaction(t,'Production',token,t.productId).productId,t.productId);
  assert.throws(()=>billing.validateTransaction({...t,productId:'manee.store11.monthly'},'Production',token,'manee.store11.monthly'));
 });
+
+
+test('APNs rejection diagnostics are bounded and never include provider response content',()=>{
+ assert.deepEqual(push.apnsResult(200,''),{sent:true,expired:false});
+ for(const reason of ['InvalidProviderToken','ExpiredProviderToken','DeviceTokenNotForTopic','BadDeviceToken','Unregistered']){
+  const result=push.apnsResult(reason==='Unregistered'?410:403,JSON.stringify({reason,token:'secret',debug:'private'}));
+  assert.equal(result.reason,reason);assert.doesNotMatch(JSON.stringify(result),/secret|private/);
+ }
+ assert.equal(push.apnsResult(400,'{"reason":"unknown private value"}').reason,'ApnsRejected');
+ assert.equal(push.apnsResult(400,'{"reason":"BadDeviceToken"}').expired,true);
+ assert.equal(push.apnsResult(503,'invalid').expired,false);
+});
+
+
+test('push signing validity is distinguishable without exposing private key parse failures',()=>{
+ for(const key of ['invalid secret','',Buffer.from('invalid secret').toString('base64')]){
+  assert.throws(()=>push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'TESTKEY123',APNS_PRIVATE_KEY:key}),/^(Error: push_signing_key_invalid|Error: push_not_ready)$/);
+ }
+ assert.equal(push.apnsResult(403,'{"reason":"BadEnvironmentKeyIdInToken"}').reason,'BadEnvironmentKeyIdInToken');
+});
+
+
+test('PEM copied through an environment editor supports literal and escaped line endings',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const pem=privateKey.export({format:'pem',type:'pkcs8'});
+ const values=[pem,pem.replaceAll('\n',''),pem.replaceAll('\n',' '),pem.replaceAll('\n','\\n'),pem.replaceAll('\n','\\\\n'),pem.replaceAll('\n','\\r\\n'),JSON.stringify(pem)];
+ for(const value of values){
+  const jwt=push.providerToken({APNS_TEAM_ID:'J7AWFKW86N',APNS_KEY_ID:'FORMATKEY1',APNS_PRIVATE_KEY:value});
+  const [h,p,sig]=jwt.split('.');
+  assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
+ }
+});
+
+test('Apple billing signs valid ES256 tokens after environment PEM normalization',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const pem=privateKey.export({format:'pem',type:'pkcs8'});
+ const formats=[pem,pem.replaceAll('\n',''),pem.replaceAll('\n',' '),pem.replaceAll('\n','\\n'),pem.replaceAll('\n','\\\\n'),pem.replaceAll('\n','\\r\\n'),JSON.stringify(pem)];
+ for(const value of formats){
+  const env={APPLE_IAP_KEY_ID:'TESTKEY123',APPLE_IAP_ISSUER_ID:token,APPLE_IAP_PRIVATE_KEY:value,APPLE_IAP_ENVIRONMENT:'Production'};
+  assert.equal(billing.signingReady(env),true);
+  const api=billing.apple(env),jwt=api.client.createBearerToken();
+  const [h,p,sig]=jwt.split('.'),claims=JSON.parse(Buffer.from(p,'base64url'));
+  assert.equal(claims.bid,'kr.co.manee.app');assert.equal(claims.aud,'appstoreconnect-v1');
+  assert.equal(claims.exp-claims.iat,300);
+  assert.ok(verify('sha256',Buffer.from(h+'.'+p),{key:publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(sig,'base64url')));
+ }
+});
+test('Apple billing rejects invalid and non-P256 keys with bounded diagnostics',()=>{
+ const wrongCurve=generateKeyPairSync('ec',{namedCurve:'secp384r1'}).privateKey.export({format:'pem',type:'pkcs8'});
+ for(const key of ['private secret',wrongCurve,'"invalid JSON']){
+  const env={APPLE_IAP_KEY_ID:'TESTKEY123',APPLE_IAP_ISSUER_ID:token,APPLE_IAP_PRIVATE_KEY:key,APPLE_IAP_ENVIRONMENT:'Sandbox'};
+  assert.equal(billing.signingReady(env),false);
+  assert.throws(()=>billing.apple(env),/^Error: billing_signing_key_invalid$/);
+ }
+ assert.equal(billing.signingReady({}),false);
+});

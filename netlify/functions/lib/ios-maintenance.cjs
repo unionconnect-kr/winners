@@ -3,21 +3,21 @@ const {timingSafeEqual}=require('node:crypto');
 const {sendApns,configured}=require('./native-push.cjs');
 const {apple,currentRecord}=require('./apple-billing.cjs');
 const respond=(statusCode,data)=>({statusCode,headers:{'Content-Type':'application/json','Cache-Control':'no-store'},body:JSON.stringify(data)});
-function maintenanceHandler({mode,db,env=process.env,send=sendApns,apiFactory=apple}){
+function maintenanceHandler({mode,db,env=process.env,send=sendApns,apiFactory=apple,scheduled=false}){
  return async event=>{
   if(event.httpMethod!=='POST')return respond(405,{error:'method_not_allowed'});
   const expected=env.IOS_MAINTENANCE_TOKEN;
   const supplied=(event.headers?.authorization||event.headers?.Authorization||'').replace(/^Bearer /,'');
-  if(!/^[a-f0-9]{64}$/.test(expected||'')||!/^[a-f0-9]{64}$/.test(supplied)||!timingSafeEqual(Buffer.from(expected),Buffer.from(supplied)))return respond(401,{error:'authentication_required'});
+  if(!scheduled&&(!/^[a-f0-9]{64}$/.test(expected||'')||!/^[a-f0-9]{64}$/.test(supplied)||!timingSafeEqual(Buffer.from(expected),Buffer.from(supplied))))return respond(401,{error:'authentication_required'});
   if(mode==='push'&&!configured(env))return respond(503,{error:'push_not_ready'});
   try{
    const client=typeof db==='function'?db():db;
-   const claimed=await client.rpc(mode==='push'?'manee_claim_ios_deliveries':'manee_ios_claim_refresh',mode==='push'?{p_dispatch_token:supplied}:{});
+   const claimed=await client.rpc(mode==='push'?(scheduled?'manee_ios_claim_scheduled_deliveries':'manee_claim_ios_deliveries'):'manee_ios_claim_refresh',mode==='push'&&!scheduled?{p_dispatch_token:supplied}:{});
    if(claimed.error||!Array.isArray(claimed.data))throw Error('claim_failed');
    let sent=0,failed=0,skipped=0;
-   // Each SQL claim is leased and bounded to ten records. Sensitive source
+   // Each SQL claim is leased and bounded to fifty scheduled records. Sensitive source
    // content, receipt JWS and device tokens are never logged or returned.
-   for(const job of claimed.data){
+   await Promise.all(claimed.data.map(async job=>{
     if(mode==='push'){
      let result='retry';
      try{
@@ -41,6 +41,10 @@ function maintenanceHandler({mode,db,env=process.env,send=sendApns,apiFactory=ap
      const finish=await client.rpc('manee_ios_finish_refresh',{p_environment:job.environment,p_original_id:job.original_id,p_lease:job.refresh_lease,p_ok:ok});
      if(!ok||finish.error)failed++;else sent++;
     }
+   }));
+   if(scheduled){
+    const recorded=await client.rpc('manee_ios_record_worker',{p_mode:mode,p_processed:claimed.data.length,p_failed:failed});
+    if(recorded.error)throw Error('heartbeat_failed');
    }
    return respond(200,{processed:claimed.data.length,succeeded:sent,failed,skipped});
   }catch{return respond(503,{error:'maintenance_unavailable'});}

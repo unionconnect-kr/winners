@@ -20,4 +20,5 @@ function notice(title, text) {
 native.openSettings=()=>notice('아이폰 테스트 앱 안내','매니 1.39 · 테스트 데이터만 입력해 주세요. 로그인, 매장·직원 관리, 매출·지출, 보고서 저장·공유를 확인할 수 있어요. 구독 결제와 휴대폰 푸시는 아직 연결되지 않았어요.');
 native.openSubscriptionStatus=()=>notice('매니 구독','이 테스트 버전에서는 결제할 수 없어요. 구독 상태는 정식 결제 연결 후 확인할 수 있어요.');
 native.refresh=()=>{};
+native.afterOwnerSignup=async()=>({status:'unavailable'});
 native.push=async()=>({subscribed:false,ready:false,message});

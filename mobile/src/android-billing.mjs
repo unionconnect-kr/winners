@@ -34,6 +34,13 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
     busy = true;
     try { return await task(context()); } finally { busy = false; }
   };
+  // Only restore allocations returned for this authenticated owner. Legacy
+  // additional-store purchases keep their immutable server-side bindings.
+  const relevantPurchases = (purchases, info) => {
+    const products=info.billingScope==='account'&&Array.isArray(info.restoreProductIds)
+      ? info.restoreProductIds : [info.productId];
+    return (purchases||[]).filter(p=>p.productIds?.some(id=>products.includes(id)));
+  };
   return {
     status: async () => {
       const info=await call(context(), {action:'status'});
@@ -57,7 +64,7 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
         await release();
         throw Error('구독 연결을 준비하고 있어요.');
       }
-      if (info.active===true || (info.testOnly===true && info.testActive===true)){
+      if (info.active===true || info.otherPlatformActive===true || (info.testOnly===true && info.testActive===true)){
         await release();
         return {status: 'alreadyActive',testActive:info.testOnly===true&&info.testActive===true};
       }
@@ -66,7 +73,7 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
       try{
         const current = await playBilling.purchases();
         unchanged(c);
-        const relevant = (current.purchases || []).filter(p => p.productIds?.includes(info.productId));
+        const relevant = relevantPurchases(current.purchases, info);
         if (relevant.length) {
           const results = await verify(c, relevant);
           if(results.length)await release();
@@ -98,7 +105,7 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
       if(!info.ready || !info.productId)throw Error('이 매장의 구독 연결을 준비하고 있어요.');
       const current = await playBilling.purchases();
       unchanged(c);
-      const relevant=(current.purchases||[]).filter(p=>p.productIds?.includes(info.productId));
+      const relevant=relevantPurchases(current.purchases,info);
       const results = await verify(c, relevant);
       return {status: results.length ? 'restored' : relevant.some(p => p.state === 'pending') ? 'pending' : 'empty', results};
     }),

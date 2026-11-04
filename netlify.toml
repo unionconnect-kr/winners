@@ -14,8 +14,19 @@
 [functions."notify-reservations-cron"]
   schedule = "0 15 * * *"
 
+[functions."read-receipt"]
+  node_bundler = "esbuild"
+  external_node_modules = ["sharp"]
+
 [functions."notify-reservation-reminders-cron"]
   schedule = "*/10 * * * *"
 
 [functions."notify-monthly-costs-cron"]
 schedule = "0 1 * * *"
+
+# Netlify disables HTTP routes for these scheduled-only workers.
+[functions."ios-push-scheduled"]
+  schedule = "* * * * *"
+
+[functions."ios-billing-scheduled"]
+  schedule = "* * * * *"

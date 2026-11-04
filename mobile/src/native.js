@@ -10,6 +10,7 @@ import { reportBytesToBase64 } from './report-file.js';
 import { createIosPush } from './ios-push.js';
 import { createNotificationNavigation } from './android-notification-navigation.js';
 import { subscriptionView } from './store-subscription.mjs';
+import {createSignupCheckout} from './signup-checkout.mjs';
 const storeKit=registerPlugin('ManeeStoreKit');
 const reportFiles=registerPlugin('ManeeReportFiles');
 let getContext=()=>null,dialog=null,closing=false,refreshed=null;
@@ -18,7 +19,8 @@ const messages={billing_not_ready:'구독 연결을 준비하고 있어요.',ser
  push_access_denied:'연결된 매장을 확인하고 다시 로그인해 주세요.',
  owner_access_denied:'사장님 계정으로 로그인하고 매장을 선택해 주세요.',authentication_required:'다시 로그인해 주세요.',
  purchase_mismatch:'이 구매는 현재 매장과 연결되지 않았어요. 처음 구독한 계정과 매장을 확인해 주세요.',
- other_platform_subscribed:'이 매장에는 이미 이용권이 연결돼 있어요. 매장 이용권에서 확인해 주세요.',
+ other_platform_subscribed:'이 계정은 다른 스토어에서 구독 중이에요. 기존 구독을 확인해 주세요.',
+ checkout_in_progress:'다른 기기에서 이 계정의 결제를 진행 중이에요. 잠시 후 구매 복원을 눌러 주세요.',
  other_store_subscribed:'다른 매장에서 이용 중인 구독이 있어요. 추가 매장 결제는 준비 중이에요.'};
 async function request(context,name,body){
  const {data,error}=await context.db.auth.getSession();
@@ -32,6 +34,9 @@ async function request(context,name,body){
  return result;
 }
 const billing=createBillingClient({storeKit,request,getContext:()=>getContext()});
+const afterOwnerSignup=createSignupCheckout({getContext:()=>getContext(),enabled:true,
+ readAccess:async c=>{const r=await c.db.rpc('manee_store_billing_access',{p_store_id:c.storeId});if(r.error)throw r.error;return r.data;},
+ openCheckout:()=>openSettings()});
 function sameContext(c){const now=getContext();return !closing&&now?.userId===c.userId&&now?.storeId===c.storeId;}
 const notifications=createIosPush({push:PushNotifications,getContext:()=>getContext(),request,storage:localStorage});
 const navigation=createNotificationNavigation({allowedRoles:['storeOwner','staff'],push:PushNotifications,getContext:()=>getContext(),open:(data,isCurrent)=>openNotification(data,isCurrent)});
@@ -90,12 +95,12 @@ async function openSettings(){
  const button=(text,fn)=>{const b=element('button',text,sheet);b.type='button';b.style.cssText='display:block;width:100%;padding:13px;margin:10px 0;border:1px solid #ccd9d2;border-radius:10px;background:#f2f7f4;color:#174b37;font-size:16px';
   b.onclick=async()=>{if(busy)return;busy=true;buttons.forEach(x=>x.disabled=true);try{if(!sameContext(c))throw Error('매장을 다시 선택해 주세요.');await fn();}catch(e){status.textContent=e.message||'다시 시도해 주세요.';}finally{busy=false;buttons.forEach(x=>x.disabled=false);}};buttons.push(b);return b;};
  const resultText=result=>{
-  if(result.otherPlatformActive)return '이 매장에는 이미 이용권이 연결돼 있어요. 매장 이용권에서 확인할 수 있어요.';
+  if(result.otherPlatformActive)return '이 계정은 다른 스토어에서 구독 중이에요. 기존 이용권을 확인해 주세요.';
   if(result.status==='cancelled')return '구매를 취소했어요.';
   if(result.status==='pending')return '구매 승인을 기다리고 있어요. 승인 후 구매 복원을 눌러 주세요.';
   if(result.status==='empty')return '복원할 구매가 없어요.';
   if(result.subscriptions?.some(s=>s.testActive))return '테스트 구독이 확인됐어요. 실제 이용권과 구분해 저장했어요.';
-  if(result.subscriptions?.some(s=>s.active))return '이 매장의 구독이 확인됐어요.';
+  if(result.subscriptions?.some(s=>s.active))return '이 계정의 구독이 확인됐어요.';
   return '구매 내역을 확인했어요. 현재 활성 구독은 없어요.';
  };
  const displayResult=result=>{status.textContent=resultText(result);if(result.subscriptions?.some(s=>s.active||s.testActive)){hasActivePurchase=true;buy.hidden=true;buy.style.display='none';}};
@@ -130,6 +135,7 @@ async function openSettings(){
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }
 window.MANEE_NATIVE={
+ afterOwnerSignup,
  async saveFile({bytes,filename,mimeType}){
   return reportFiles.save({data:reportBytesToBase64(bytes),filename,mimeType});
  },

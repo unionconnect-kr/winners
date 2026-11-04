@@ -19,6 +19,10 @@ async function hash(value: string) {
 function sessionId(token: string) {
   try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).session_id || null } catch { return null }
 }
+function sessionAal(token: string) {
+  // Call only after Auth has verified this exact token; never accept body claims.
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal === 'aal2' ? 'aal2' : 'aal1' } catch { return 'aal1' }
+}
 const invalidReset = () => reply({ error: 'invalid_recovery', message: '아이디와 재설정 코드를 확인해 주세요. 코드는 발급 후 15분 동안 한 번만 사용할 수 있어요.' }, 400)
 const uncertain = () => reply({ error: 'recovery_uncertain', message: '처리 결과를 확인하지 못했어요. 새 비밀번호로 먼저 로그인해 주세요. 안 되면 본사에 새 코드를 요청해 주세요.' }, 503)
 
@@ -116,12 +120,12 @@ Deno.serve(async req => {
       const requestId = String(body.request_id || '')
       if (!/^[0-9a-f-]{36}$/i.test(requestId)) return reply({ error: 'invalid_request' }, 400)
       if (action === 'reject') {
-        const result = await service('reject', { actor_user_id: uid, session_id: sid, request_id: requestId })
+        const result = await service('reject', { actor_user_id: uid, session_id: sid, actor_aal: sessionAal(token), request_id: requestId })
         if (!result.ok) return reply({ error: result.error || 'request_unavailable', message: '이 요청을 처리할 권한이 없거나 이미 처리됐어요.' }, 403)
         return reply({ ok: true })
       }
       const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0')
-      const result = await service('issue', { actor_user_id: uid, session_id: sid, request_id: requestId, code_hash: await hash(code) })
+      const result = await service('issue', { actor_user_id: uid, session_id: sid, actor_aal: sessionAal(token), request_id: requestId, code_hash: await hash(code) })
       if (!result.ok) return reply({ error: result.error || 'request_unavailable', message: '이 요청을 처리할 권한이 없거나 이미 처리됐어요.' }, 403)
       return reply({ ok: true, reset_code: code, expires_in_minutes: 15 })
     }

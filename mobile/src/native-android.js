@@ -9,6 +9,7 @@ import { createNotificationNavigation } from './android-notification-navigation.
 import {createAndroidBillingClient} from './android-billing.mjs';
 import {openAndroidBilling} from './android-billing-ui.mjs';
 import {subscriptionView} from './store-subscription.mjs';
+import {createSignupCheckout} from './signup-checkout.mjs';
 const playBilling=registerPlugin('ManeePlayBilling');
 const billing=createAndroidBillingClient({playBilling,allowPaid:ANDROID_PAID_BILLING,getContext:()=>getContext(),request:async(c,_name,body)=>{
  const {data:auth,error:authError}=await c.db.auth.getSession();
@@ -22,6 +23,9 @@ const billing=createAndroidBillingClient({playBilling,allowPaid:ANDROID_PAID_BIL
 const ReportFiles = registerPlugin('ManeeReportFiles');
 
 let getContext = () => null;
+const afterOwnerSignup=createSignupCheckout({getContext:()=>getContext(),enabled:ANDROID_PAID_BILLING,
+  readAccess:async c=>{const r=await c.db.rpc('manee_store_billing_access',{p_store_id:c.storeId});if(r.error)throw r.error;return r.data;},
+  openCheckout:()=>openAndroidBilling({billing,getContext,document})});
 let openNotification = async () => 'pending';
 const notifications = createAndroidPush({ push: PushNotifications, getContext: () => getContext(), projectId: ANDROID_FIREBASE_PROJECT, storage: localStorage });
 const navigation=createNotificationNavigation({push:PushNotifications,getContext:()=>getContext(),open:(data,isCurrent)=>openNotification(data,isCurrent)});
@@ -31,13 +35,14 @@ void navigation.start().catch(()=>{});
 window.MANEE_GEOLOCATION = createAndroidGeolocation(Geolocation);
 
 window.MANEE_NATIVE = {
+  afterOwnerSignup,
   async saveFile({ bytes, filename, mimeType }) {
     return ReportFiles.save({ data: reportBytesToBase64(bytes), filename, mimeType });
   },
   configure(callback, onNotification) { getContext = callback;if(onNotification)openNotification=onNotification;void navigation.flush(); },
   push(action) { return notifications.action(action); },
   refresh() { void navigation.start().then(()=>navigation.flush()).catch(()=>{}); },
-  async prepareLogout() { navigation.clear();await notifications.prepareLogout(); },
+  async prepareLogout() { if(billing.isBusy())throw Error('구매 처리가 끝난 뒤 로그아웃해 주세요.');navigation.clear();await notifications.prepareLogout(); },
   openSubscriptionStatus() {
     if (document.getElementById('manee-subscription-status')) return;
     const c=getContext();if(c?.role!=='storeOwner'||!c.storeId||!c.userId)return;

@@ -73,9 +73,18 @@ Deno.serve(async (req) => {
     if (verifyError || !verified.user) { console.error('franchise_signup_verify_failed'); return json({ error: 'invalid_session', message: '다시 로그인해 주세요.' }, 401) }
     const actorId = verified.user.id
 
-    const { data: isAdmin, error: adminCheckError } = await admin.from('platform_admins').select('user_id').eq('user_id', actorId).eq('status', 'active').maybeSingle()
+    // Decode only after getUser has verified this exact token. Request body claims
+    // cannot elevate a reviewer, and the user-scoped query enforces live-session RLS.
+    let aal: string | null = null
+    try { aal = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal } catch {}
+    if (aal !== 'aal2') return json({ error: 'mfa_required', message: '관리자 2단계 인증을 완료한 뒤 다시 시도해 주세요.' }, 403)
+    const reviewer = createClient(url, publishableKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: isAdmin, error: adminCheckError } = await reviewer.from('platform_admins').select('user_id').eq('user_id', actorId).eq('status', 'active').maybeSingle()
     if (adminCheckError) console.error('franchise_signup_admin_check_error')
-    if (!isAdmin) return json({ error: 'owner_required', message: '본사 관리자만 프랜차이즈 계정을 만들 수 있어요.' }, 403)
+    if (adminCheckError || !isAdmin) return json({ error: 'owner_required', message: '본사 관리자 권한과 로그인 상태를 확인해 주세요.' }, 403)
 
     const body = await req.json().catch(() => ({}))
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_request', message: '가입 정보를 확인해주세요.' }, 400)
