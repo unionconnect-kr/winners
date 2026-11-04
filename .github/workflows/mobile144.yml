@@ -57,6 +57,7 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          disk-size: 2048M
           disable-animations: true
           script: cd mobile/android && ./gradlew :app:connectedDebugAndroidTest -PmaneeQa144 -Pandroid.testInstrumentationRunnerArguments.class=kr.co.manee.app.SecureAuthStoreTest,kr.co.manee.app.SecureAuthBridgeTest
       - uses: actions/upload-artifact@v4
