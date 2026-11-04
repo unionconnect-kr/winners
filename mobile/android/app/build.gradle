@@ -42,7 +42,7 @@ android {
 }
 
 gradle.taskGraph.whenReady { graph ->
-    if (project.hasProperty('maneeRelease145') && graph.allTasks.any { it.name.toLowerCase().contains('debug') }) {
+    if (project.hasProperty('maneeRelease145') && graph.allTasks.any { it.path == ':app:preDebugBuild' }) {
         throw new GradleException('Store updates must use the production release variant.');
     }
     if ((project.hasProperty('maneeQa142') || project.hasProperty('maneeQa143') || project.hasProperty('maneeQa144')) && graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
@@ -86,3 +86,4 @@ apply from: 'capacitor.build.gradle'
 if (file("google-services.json").exists() || file("src/release/google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
+
