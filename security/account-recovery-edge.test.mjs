@@ -11,6 +11,7 @@ function harness(options={}){
   const calls=[];let handler;
   const ok=data=>({data,error:null});
   const admin={
+    from:()=>({select:()=>({eq(){return this;},async maybeSingle(){return ok({user_id:"verified-user"});}})}),
     rpc:async(name,args)=>{calls.push({name,args});
       if(name==='consume_auth_rate_limit')return options.rateError?{error:{code:'offline'}}:ok(options.rateAllowed??true);
       assert.equal(name,'manee_support_recovery_service');
@@ -67,7 +68,7 @@ test('The reviewer receives one 6-digit code while the database receives only it
   assert.equal(JSON.stringify(stored).includes(r.body.reset_code),false);
 });
 test('Reset consumes the hashed code before updating only the resolved Auth identity',async()=>{
-  const h=harness();const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password',user_id:'victim'};
+  const h=harness();const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password7',user_id:'victim'};
   const r=await h.run(payload);assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true});
   const consume=h.calls.find(c=>c.args?.p_action==='consume');
   assert.equal(consume.args.p_payload.code_hash,createHash('sha256').update('123456').digest('hex'));
@@ -75,18 +76,18 @@ test('Reset consumes the hashed code before updating only the resolved Auth iden
   assert.ok(h.calls.indexOf(consume)<h.calls.indexOf(update));
 });
 test('Invalid proof and rate limits prevent password changes',async()=>{
-  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password'};
+  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password7'};
   for(const options of [{invalidCode:true},{rateAllowed:false},{rateError:true}]){const h=harness(options);assert.ok((await h.run(payload)).status>=400);assert.equal(h.calls.some(c=>c.name==='updateUserById'),false);}
   const malformed=harness();assert.equal((await malformed.run({...payload,reset_code:'123'})).status,400);assert.equal(malformed.calls.some(c=>c.args?.p_action==='consume'),false);
 });
 test('A signed-in user can change their own password only after reauthentication',async()=>{
-  const payload={action:'change_password',current_password:'old-password',new_password:'synthetic-new-password'};
+  const payload={action:'change_password',current_password:'old-password',new_password:'synthetic-new-password7'};
   const wrong=harness({wrongPassword:true});assert.equal((await wrong.run(payload,true)).status,400);assert.equal(wrong.calls.some(c=>c.name==='updateUserById'),false);
   const h=harness();const r=await h.run(payload,true);assert.equal(r.status,200);
   assert.equal(h.calls.find(c=>c.name==='updateUserById').id,'verified-user');assert.equal(h.calls.some(c=>c.name==='signOut'),true);
 });
 test('Ambiguous Auth update returns uncertainty without returning a session or code',async()=>{
-  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password'};
+  const payload={action:'reset',username:'worker_a',reset_code:'123456',new_password:'synthetic-new-password7'};
   for(const options of [{updateThrow:true},{updateError:true},{completeError:true},{rpcError:'complete'}]){
     const h=harness(options);const r=await h.run(payload);assert.equal(r.status,503);assert.equal(r.body.error,'recovery_uncertain');
     assert.equal(r.body.session,undefined);assert.equal(r.body.reset_code,undefined);
