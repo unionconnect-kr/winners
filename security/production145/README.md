@@ -1,6 +1,6 @@
 # MANEE 1.45 backend promotion
 
-This change prepares the backend APIs used by the 1.45 mobile clients: manager permissions, staff expenses, sales and vendor writes, contracts, notices, reservations, verified-phone signup and social signup. It does not deploy the database, Edge Functions, web application or store builds.
+This change prepares the backend APIs used by the 1.45 mobile clients: manager permissions, staff expenses, sales and vendor writes, contracts, notices, reservations, verified-phone signup and social signup. The database package was applied through the migration service after approval, and the three new SMS/social/Naver Edge Functions were deployed. Web rollout, existing signup-handler cutover and store releases are separate steps.
 
 ## Database package
 
@@ -24,7 +24,10 @@ Production notification dispatch and the production attendance live-session guar
 
 - 39 offline Edge tests passed: authenticated social identity, provider-result handling, allowed project routing, age consent, signup roles, SMS proof requirements and uncertain-operation recovery. Provider requests are mocked.
 - A staging transaction passed the synthetic owner/staff/manager smoke script, including duplicate expense requests, cross-store denial and revoked-session denial. All fixtures were rolled back.
-- The full promotion transaction has not been applied to production. Its integrated smoke test must pass during the actual migration. Store purchase, real SMS, real push and final-device tests remain rollout checks.
+- The full promotion transaction passed in production and was recorded as migration `20261104174345_manee_145_production_service_parity`. The exact applied SQL is also checked in under `supabase/migrations/` using that service-generated version.
+- A post-commit catalog read matched all 53 function definitions, all 25 additive columns and RLS on all 9 new tables. None of the selected functions is executable by `anon`. Synthetic store fixtures were absent after commit.
+- The three new Edge Functions are active at version 1. HTTP checks return the expected 400 for an invalid SMS request and 401 for unauthenticated social/Naver requests.
+- Store purchase, real SMS, real push and final-device tests remain rollout checks. Provider settings and compatible signup clients must be verified before replacing existing signup handlers.
 
 Run the offline checks with:
 
