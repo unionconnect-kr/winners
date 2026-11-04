@@ -1,3 +1,4 @@
+import {hardenUi} from '../../scripts/harden-ui.mjs';
 import {readFileSync,writeFileSync,cpSync,rmSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
@@ -15,7 +16,7 @@ mkdirSync(resolve(out,'vendor'),{recursive:true});
 cpSync(resolve(mobile,'node_modules/xlsx-js-style/dist/xlsx.bundle.js'),resolve(out,'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile,'node_modules/@supabase/supabase-js/dist/umd/supabase.js'),resolve(out,'vendor/supabase.js'));
 for(const name of ['native.js','cordova.js','cordova_plugins.js'])rmSync(resolve(out,name),{force:true});
-writeFileSync(resolve(out,'index.html'),adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8')));
+writeFileSync(resolve(out,'index.html'),hardenUi(adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8'))));
 writeFileSync(resolve(out,'social-auth.js'),adaptIos139Social(readFileSync(resolve(assets,'social-auth.js'),'utf8')));
 await build({entryPoints:[resolve(mobile,'src/native-ios139.js')],bundle:true,format:'iife',target:'safari15',minify:true,
  define:{NATIVE_SERVICES_ORIGIN:JSON.stringify('https://staging-services-disabled.invalid'),NATIVE_PUBLIC_ORIGIN:JSON.stringify('https://winners-staffapp.netlify.app')},outfile:resolve(out,'native.js')});

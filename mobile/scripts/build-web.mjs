@@ -38,7 +38,7 @@ replaceOnce('const MANEE_STAFF_AUTH_ENABLED = MANEE_IS_STAGING;',
   'const MANEE_STAFF_AUTH_ENABLED = true; // Native builds always require staff Auth.');
 replaceOnce('<script src="/app-config.js"></script>',
   '<script src="/app-config.js"></script>\n<script src="/native.js"></script>');
-replaceOnce('<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>',
+replaceOnce('<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>',
   '<script src="/vendor/xlsx.bundle.js"></script>');
 replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>',
   '<script src="/vendor/supabase.js"></script>');

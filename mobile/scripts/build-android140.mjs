@@ -1,3 +1,4 @@
+import {hardenUi} from '../../scripts/harden-ui.mjs';
 import {readFileSync,writeFileSync,cpSync,rmSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
@@ -15,7 +16,7 @@ for(const name of ['index.html','social-auth.js','owner-ui.css','app-config.js']
  if(!readFileSync(resolve(assets,name)).equals(readFileSync(resolve(baseline,name))))throw Error('APK/source mismatch: '+name);
 }
 rmSync(out,{recursive:true,force:true});mkdirSync(out,{recursive:true});cpSync(baseline,out,{recursive:true});
-writeFileSync(resolve(out,'index.html'),adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8'),'android').replaceAll('매니 1.39','매니 1.40'));
+writeFileSync(resolve(out,'index.html'),hardenUi(adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8'),'android').replaceAll('매니 1.39','매니 1.41').replaceAll('매니 1.40','매니 1.41')));
 writeFileSync(resolve(out,'social-auth.js'),adaptIos139Social(readFileSync(resolve(assets,'social-auth.js'),'utf8'),'android'));
 // Android's native shell already supplies system-bar/keyboard insets.
 const css=readFileSync(resolve(mobile,'src/ios-ui.css'),'utf8')
@@ -26,5 +27,5 @@ writeFileSync(resolve(out,'android-ui.css'),css);
 const bridge=readFileSync(resolve(baseline,'native.js'),'utf8');
 const guard=await build({stdin:{contents:"import {guardAndroidSocial} from './src/android-social-guard.js'; guardAndroidSocial(window.MANEE_SOCIAL_NATIVE,new URL(window.MANEE_CONFIG.supabaseUrl).origin);",resolveDir:mobile},bundle:true,format:'iife',target:'chrome100',minify:true,write:false});
 writeFileSync(resolve(out,'native.js'),bridge+'\n'+guard.outputFiles[0].text);
-writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.40-sector1-4-test',versionCode:41,buildDate:'2026-11-04',sourceAndroidVersion:40,sourceIosBuild:'1.14.1',baselineNativeSha256:createHash('sha256').update(bridge).digest('hex')},null,2)+'\n');
-console.log('Prepared Android 1.40 staging assets; existing Android native bridge preserved.');
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.41-sector1-4-test',versionCode:42,buildDate:'2026-11-04',sourceAndroidVersion:40,sourceIosBuild:'1.14.1',baselineNativeSha256:createHash('sha256').update(bridge).digest('hex')},null,2)+'\n');
+console.log('Prepared Android 1.41 security staging assets; existing Android native bridge preserved.');
