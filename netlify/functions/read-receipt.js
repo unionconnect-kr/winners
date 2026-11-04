@@ -1,3 +1,4 @@
+const {reply,parseBody,authorize,imageMatches,minimizedContext}=require('./lib/request-security.cjs');
 const { blockExternalService } = require("./lib/manee-environment.cjs");
 // Netlify Function: 정산표 사진을 Claude Vision으로 읽어서 숫자를 뽑아줘요.
 // 이 파일은 서버(넷리파이) 쪽에서만 실행돼요. API 키가 여기 있어도
@@ -10,29 +11,19 @@ exports.handler = async function(event) {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "서버에 ANTHROPIC_API_KEY 환경변수가 설정되지 않았어요." })
-    };
-  }
-
-  let body;
-  try {
-    body = JSON.parse(event.body);
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: "잘못된 요청이에요." }) };
-  }
+  let body;try{body=parseBody(event,4300000);}catch(e){return reply(e.status||400,'잘못된 요청이에요.');}
+  const permission=await authorize(event,body,'read-receipt');if(permission.response)return permission.response;
+  const apiKey=process.env.ANTHROPIC_API_KEY;if(!apiKey)return reply(503,'서비스를 준비 중이에요.');
 
   const { base64Data, mediaType } = body;
-  if (!base64Data || !mediaType) {
+  if (!imageMatches(base64Data,mediaType)) {
     return { statusCode: 400, body: JSON.stringify({ error: "이미지 데이터가 없어요." }) };
   }
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: AbortSignal.timeout(25000),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -56,8 +47,8 @@ exports.handler = async function(event) {
 
     if (!response.ok) {
       return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: "Anthropic API 오류", detail: data })
+        statusCode: 502,
+        body: JSON.stringify({ error: "외부 서비스 응답을 확인하지 못했어요. 잠시 후 다시 시도해 주세요." })
       };
     }
 
