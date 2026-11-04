@@ -5,9 +5,12 @@
   "android": {
     "includePlugins": [
       "@capacitor/geolocation",
-      "@capacitor/push-notifications"
+      "@capacitor/push-notifications",
+      "@capacitor/app",
+      "@capacitor/browser"
     ],
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "zoomEnabled": false
   },
   "ios": {
     "contentInset": "never",

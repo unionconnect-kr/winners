@@ -1,0 +1,74 @@
+name: Android 1.42 complete secure QA
+on:
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/android142.yml']
+permissions:
+  contents: read
+concurrency:
+  group: android142-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  complete-app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --prefix mobile
+      - name: Mobile regressions and complete 1.42 assets
+        run: |
+          npm --prefix mobile test
+          node mobile/scripts/build-android142.mjs staging
+          npm --prefix mobile run sync:android
+      - name: Build full native APK
+        working-directory: mobile/android
+        run: ./gradlew :app:assembleDebug -PmaneeQa142
+      - name: Verify APK contents and signature
+        run: node mobile/scripts/verify-android-apk.mjs mobile/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Install Chromium presentation audit
+        run: |
+          npm install --prefix "$RUNNER_TEMP/manee-playwright" --ignore-scripts --no-save playwright@1.62.1
+          node "$RUNNER_TEMP/manee-playwright/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Audit complete Android screens and inputs
+        run: |
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
+          ANDROID_UI_AUDIT_OUT="$RUNNER_TEMP/android142-pages" \
+          AUDIT_ENGINE=chromium node mobile/scripts/audit-android140-pages.mjs
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test Keystore and the packaged WebView bridge
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: cd mobile/android && ./gradlew :app:connectedDebugAndroidTest -PmaneeQa142 -Pandroid.testInstrumentationRunnerArguments.class=kr.co.manee.app.SecureAuthStoreTest,kr.co.manee.app.SecureAuthBridgeTest
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: manee-1.42-complete-staging-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android142-validation
+          path: |
+            mobile/android/app/build/reports/androidTests/connected/
+            ${{ runner.temp }}/android142-pages
+          retention-days: 14
