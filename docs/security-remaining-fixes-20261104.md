@@ -11,11 +11,15 @@ staging disposal using existing retention periods.
   Original policy is preserved in `private.manee_security_policy_backup` under
   `profile_session_20261104`. Every live active-profile session had identical
   profile visibility before/after the change. Backup rows are not client-readable.
-- **Staging only:** `attachment_structure_validation` installed. Two triggers
-  protect sales-report photos and contract attachments; installed function
-  hashes match the release record. Production deployment was rejected by
-  automatic approval review pending explicit approval of possible upload
-  compatibility impact. No alternate production execution was attempted.
+- **Production and staging:** `attachment_structure_validation` installed.
+  Production installation followed explicit user approval of upload limits and
+  PDF compatibility impact after the earlier automatic-review rejection.
+  Production has one sales-report attachment trigger; its contract table does
+  not exist. Staging has both sales-report and contract attachment triggers.
+  All 1,068 existing production inline photos passed compatibility checks;
+  the 697 sales-report rows and all photos remained present. Three function
+  hashes match the release record, client access to that record is denied,
+  and ten live validator cases matched their expected allow/deny results.
 - **Staging only:** `staging_retention_schedule_and_sms_cleanup` installed.
   Four reservations past the established seven-day deadline were disposed of;
   four unexpired reservations remain. Completed deletion requests use the
@@ -59,9 +63,11 @@ No client role, including service_role, can run maintenance functions.
   skips, zero failures**. The scenario suites contain multiple assertions and
   are included in this total.
 - Staging: attachment triggers enabled, three function hashes matched, fake
-  PNG/PDF refused. Production attachment functions are still absent.
+  PNG/PDF refused. Production also passed five valid and five invalid input
+  cases after deployment. Existing business triggers remain enabled.
 - All three staging retention jobs active; zero currently due reservations
-  and SMS challenges after the bounded first run.
+  and SMS challenges after the bounded first run. All three scheduled jobs
+  subsequently completed successfully (reservation, completed case, SMS).
 
 ## Rollback / stop
 
@@ -73,4 +79,5 @@ script verifies commands and unschedules only the three reviewed jobs.
 Already disposed records cannot be recovered with the stop script.
 
 These are explicit operator scripts under `security/`; normal web builds do
-not execute them. Production attachment installation still requires approval.
+not execute them. Production attachment installation is now complete.
+Full image decoding/re-encoding and malware scanning remain outside this change.
