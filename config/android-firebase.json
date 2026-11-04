@@ -1,0 +1,10 @@
+{
+  "staging": {
+    "projectId": "manee-staging",
+    "packageName": "kr.co.manee.app.staging"
+  },
+  "production": {
+    "projectId": "manee-production-3eafa",
+    "packageName": "kr.co.manee.app"
+  }
+}
