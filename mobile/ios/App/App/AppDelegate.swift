@@ -1,3 +1,4 @@
+import Security
 import UIKit
 import Capacitor
 import StoreKit
@@ -58,6 +59,7 @@ class ManeeBridgeViewController: CAPBridgeViewController {
         webView?.scrollView.isDirectionalLockEnabled = true
         bridge?.registerPluginInstance(ManeeStoreKitPlugin())
         bridge?.registerPluginInstance(ManeeReportFilesPlugin())
+        bridge?.registerPluginInstance(ManeeSecureAuthPlugin())
     }
 }
 
@@ -250,3 +252,71 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+
+// Local auth storage only: never synchronize these secrets through iCloud.
+@objc(ManeeSecureAuthPlugin)
+public class ManeeSecureAuthPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ManeeSecureAuthPlugin"
+    public let jsName = "ManeeSecureAuth"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise)
+    ]
+    private let service = "kr.co.manee.secure-auth.v1"
+    private static let lock = NSLock()
+    private static var transient: [String:String] = [:]
+    private var initialized = false
+    private func prepare() throws {
+        if initialized { return }
+        let marker = "manee.secure-auth.installed.v1"
+        if !UserDefaults.standard.bool(forKey: marker) {
+            let status = SecItemDelete([kSecClass:kSecClassGenericPassword,kSecAttrService:service] as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw NSError(domain:"SecureAuth",code:1) }
+            UserDefaults.standard.set(true,forKey:marker)
+        }
+        initialized = true
+    }
+    private func slot(_ call: CAPPluginCall) throws -> String {
+        guard let key=call.getString("key"), key.range(of:"^(localStorage|sessionStorage):(sb-[a-z]{20}-auth-token(-code-verifier|-user)?|manee-[a-z]{20}-(auth(-code-verifier|-user)?|social-(code-verifier|pending)))$",options:.regularExpression) != nil else { throw NSError(domain:"SecureAuth",code:2) }
+        return key
+    }
+    private func query(_ key:String) -> [CFString:Any] {
+        return [kSecClass:kSecClassGenericPassword,kSecAttrService:service,kSecAttrAccount:key,kSecAttrSynchronizable:false]
+    }
+    @objc func get(_ call: CAPPluginCall) {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        do {
+            try prepare(); let key=try slot(call)
+            if key.hasPrefix("sessionStorage:") { call.resolve(["value":Self.transient[key] as Any? ?? NSNull()]); return }
+            var q=query(key);q[kSecReturnData]=true;q[kSecMatchLimit]=kSecMatchLimitOne
+            var result:CFTypeRef?;let status=SecItemCopyMatching(q as CFDictionary,&result)
+            if status == errSecItemNotFound { call.resolve(["value":NSNull()]);return }
+            guard status == errSecSuccess, let data=result as? Data, let value=String(data:data,encoding:.utf8) else { throw NSError(domain:"SecureAuth",code:3) }
+            call.resolve(["value":value])
+        } catch { call.reject("Secure auth storage unavailable") }
+    }
+    @objc func set(_ call: CAPPluginCall) {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        do {
+            try prepare();let key=try slot(call)
+            guard let value=call.getString("value"),let data=value.data(using:.utf8),data.count<=65536 else { throw NSError(domain:"SecureAuth",code:4) }
+            if key.hasPrefix("sessionStorage:") { Self.transient[key]=value;call.resolve();return }
+            let attributes:[CFString:Any]=[kSecValueData:data,kSecAttrAccessible:kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+            var status=SecItemUpdate(query(key) as CFDictionary,attributes as CFDictionary)
+            if status == errSecItemNotFound {var q=query(key);attributes.forEach{q[$0.key]=$0.value};status=SecItemAdd(q as CFDictionary,nil)}
+            guard status == errSecSuccess else {throw NSError(domain:"SecureAuth",code:5)}
+            call.resolve()
+        } catch { call.reject("Secure auth storage unavailable") }
+    }
+    @objc func remove(_ call: CAPPluginCall) {
+        Self.lock.lock(); defer { Self.lock.unlock() }
+        do {
+            try prepare();let key=try slot(call)
+            if key.hasPrefix("sessionStorage:") { Self.transient.removeValue(forKey:key);call.resolve();return }
+            let status=SecItemDelete(query(key) as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {throw NSError(domain:"SecureAuth",code:6)}
+            call.resolve()
+        } catch { call.reject("Secure auth storage unavailable") }
+    }
+}

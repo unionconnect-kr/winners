@@ -1,3 +1,4 @@
+import {mockSecureAuthForAudit} from './secure-auth-audit-fixture.mjs';
 // Offline WebKit presentation fixtures. No live accounts or server writes.
 import {readFileSync,writeFileSync,mkdirSync,mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -9,7 +10,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'../www');
 const out=process.env.IOS_UI_AUDIT_OUT||mkdtempSync(resolve(tmpdir(),'manee-ui-audit-'));mkdirSync(out,{recursive:true});
 const info=JSON.parse(readFileSync(root+'/build-info.json','utf8'));
 if(info.platform!=='ios'||info.environment!=='staging'||info.sourceAndroidVersion!==40)throw Error('Run npm --prefix mobile run build:ios139 after the mobile tests, before this audit.');
-let html=readFileSync(root+'/index.html','utf8');
+let html=mockSecureAuthForAudit(readFileSync(root+'/index.html','utf8'));
 // Native plugin calls are outside this offline presentation audit.
 html=html.replace('<script src="/native.js"></script>','<script>window.MANEE_NATIVE={configure(){}};</script>');
 html=html.replace('  initializeSocialLogin();',`window.qa={state,render,renderLanding,renderOnboardingWizard,renderStaffApp,renderOwnerShell,r136,r136Overlay,sector4,renderSector4Sheet,renderOwnerHome,renderOwnerPeople,renderOwnerSales,renderOwnerOperations,renderOwnerMore};`);

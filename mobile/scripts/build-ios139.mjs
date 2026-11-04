@@ -1,3 +1,4 @@
+import {secureAuthHtml} from './secure-auth-html.mjs';
 import {hardenUi} from '../../scripts/harden-ui.mjs';
 import {readFileSync,writeFileSync,cpSync,rmSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -16,9 +17,11 @@ mkdirSync(resolve(out,'vendor'),{recursive:true});
 cpSync(resolve(mobile,'node_modules/xlsx-js-style/dist/xlsx.bundle.js'),resolve(out,'vendor/xlsx.bundle.js'));
 cpSync(resolve(mobile,'node_modules/@supabase/supabase-js/dist/umd/supabase.js'),resolve(out,'vendor/supabase.js'));
 for(const name of ['native.js','cordova.js','cordova_plugins.js'])rmSync(resolve(out,name),{force:true});
-writeFileSync(resolve(out,'index.html'),hardenUi(adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8'))));
+writeFileSync(resolve(out,'index.html'),secureAuthHtml(hardenUi(adaptIos139(readFileSync(resolve(assets,'index.html'),'utf8')))));
 writeFileSync(resolve(out,'social-auth.js'),adaptIos139Social(readFileSync(resolve(assets,'social-auth.js'),'utf8')));
 await build({entryPoints:[resolve(mobile,'src/native-ios139.js')],bundle:true,format:'iife',target:'safari15',minify:true,
  define:{NATIVE_SERVICES_ORIGIN:JSON.stringify('https://staging-services-disabled.invalid'),NATIVE_PUBLIC_ORIGIN:JSON.stringify('https://winners-staffapp.netlify.app')},outfile:resolve(out,'native.js')});
 writeFileSync(resolve(out,'build-info.json'),JSON.stringify({environment:'staging',platform:'ios',projectRef:info.projectRef,versionName:'1.39-ios-test',sourceAndroidVersion:40,servicesReady:false},null,2)+'\n');
 console.log('Prepared iOS 1.39 staging assets; production data and Apple uploads are unchanged.');
+
+await build({entryPoints:[resolve(mobile,'src/secure-auth-bootstrap.js')],bundle:true,format:'iife',target:'safari15',outfile:resolve(out,'secure-auth.js'),minify:true});

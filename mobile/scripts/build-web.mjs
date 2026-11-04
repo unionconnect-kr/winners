@@ -1,3 +1,4 @@
+import {secureAuthHtml} from './secure-auth-html.mjs';
 import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,7 +127,7 @@ html = html.replaceAll('"/.netlify/functions/', '"' + functionsOrigin + '/.netli
 const output = resolve(mobile, 'www');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(resolve(output, 'vendor'), { recursive: true });
-writeFileSync(resolve(output, 'index.html'), html);
+writeFileSync(resolve(output, 'index.html'), secureAuthHtml(html));
 writeFileSync(resolve(output, 'app-config.js'), 'window.MANEE_CONFIG = Object.freeze(' + JSON.stringify(config) + ');\n');
 for (const asset of ['owner-ui.css', 'report-assets', 'icons', 'manifest.json']) {
   cpSync(resolve(root, asset), resolve(output, asset), { recursive: true });
@@ -138,3 +139,5 @@ await build({ entryPoints: [resolve(mobile, platform === 'android' ? 'src/native
   outfile: resolve(output, 'native.js'), format: 'iife', target: platform === 'android' ? 'chrome100' : 'safari15', minify: true });
 writeFileSync(resolve(output, 'build-info.json'), JSON.stringify({ environment, platform, projectRef: config.projectRef, ...(platform === 'android' ? { androidPushProjectId, ...(androidProduction ? { releasePurpose: androidReleasePurpose, billingEnabled: androidReleasePurpose === 'paid-pilot' } : {}) } : {}) }, null, 2) + '\n');
 console.log(`Prepared ${environment} native web assets (${config.projectRef}).`);
+
+await build({entryPoints:[resolve(mobile,'src/secure-auth-bootstrap.js')],bundle:true,format:'iife',target:'safari15',outfile:resolve(output,'secure-auth.js'),minify:true});
