@@ -33,7 +33,16 @@ assert.equal(info.projectRef, environments.staging.projectRef);
 const appConfig = unpack('assets/public/app-config.js');
 assert.ok(!appConfig.includes(environments.production.projectRef), 'Production backend is packaged.');
 const plugins = JSON.parse(unpack('assets/capacitor.plugins.json'));
-assert.deepEqual(plugins.map(p => p.pkg), ['@capacitor/geolocation', '@capacitor/push-notifications']);
+assert.deepEqual(plugins.map(p => p.pkg), ['@capacitor/geolocation', '@capacitor/push-notifications', '@capacitor/app', '@capacitor/browser']);
+assert.match(manifest, /kr\.co\.manee\.app\.staging/);
+assert.match(manifest, /\/callback/);
+if (info.versionCode === 43) {
+  assert.match(badging, /versionCode='43'/);
+  assert.match(badging, /versionName='1\.42-sector1-4-test'/);
+  assert.equal(info.nativeAuthStorage, 'keystore-v1');
+  assert.ok(unpack('assets/public/secure-auth.js').includes('ManeeSecureAuth'));
+  assert.ok(unpack('assets/public/index.html').includes('MANEE_SECURE_STORAGE.wrap(maneeAuthStorage)'));
+}
 assert.doesNotMatch(unpack('assets/public/native.js'), /ManeeStoreKit|ios-push|ios-billing/);
 run('apksigner', ['verify', '--verbose', apk]);
 console.log('Verified signed staging APK: Android 7+, target API 36, staging backend, foreground location, FCM opt-in support, Play Billing transport, no audio/contact/calendar permissions.');
