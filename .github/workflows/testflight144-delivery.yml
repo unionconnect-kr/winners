@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Read authorized build and group metadata
+      - name: Connect requested 1.44 build to existing internal QA group
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -56,7 +56,21 @@ jobs:
           const matched=groups.filter(x=>x.attributes?.name===GROUP&&x.attributes?.isInternalGroup===true);
           if(matched.length!==1) throw new Error('Existing internal QA group is not uniquely identified');
           const group=matched[0];
-          const result={appId:APP,version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,group:GROUP,hasAccessToAllBuilds:group.attributes.hasAccessToAllBuilds??null,internalBuildState:detail.attributes.internalBuildState,buildGroupMembershipVerified:false,groupAssignmentAdded:false,newTestersAdded:false,reviewSubmitted:false};
-          console.log('MANEE_TESTFLIGHT_METADATA_RESULT '+JSON.stringify(result));
-          if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Authorized MANEE 1.44 metadata\\n\\n'+JSON.stringify(result,null,2)+'\\n');
+          console.log('MANEE_TESTFLIGHT_PREFLIGHT '+JSON.stringify({version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,internalBuildState:detail.attributes.internalBuildState,group:GROUP}));
+          let assignmentAccepted=false;
+          if(group.attributes.hasAccessToAllBuilds===true) {
+            assignmentAccepted=true;
+          } else {
+            await api('/v1/betaGroups/'+group.id+'/relationships/builds','POST',{data:[{type:'builds',id:build.id}]});
+            assignmentAccepted=true;
+          }
+          for(let attempt=0;attempt<7;attempt++) {
+            detail=(await api('/v1/builds/'+build.id+'/buildBetaDetail')).data;
+            if(detail.attributes.internalBuildState==='IN_BETA_TESTING') break;
+            if(attempt<6) await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          const result={appId:APP,version:VERSION,buildNumber:BUILD,processingState:build.attributes.processingState,group:GROUP,assignmentAccepted,internalBuildState:detail.attributes.internalBuildState,newTestersAdded:false,reviewSubmitted:false,readyForExistingTesters:assignmentAccepted&&detail.attributes.internalBuildState==='IN_BETA_TESTING'};
+          console.log('MANEE_TESTFLIGHT_DELIVERY_RESULT '+JSON.stringify(result));
+          if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,'MANEE 1.44 delivery\\n\\n'+JSON.stringify(result,null,2)+'\\n');
+          if(!result.readyForExistingTesters) throw new Error('Assignment accepted, but Apple testing availability is not confirmed yet.');
           MANEE_NODE
