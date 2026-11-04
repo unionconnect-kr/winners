@@ -1,0 +1,184 @@
+{
+  "capturedAt": "2026-11-04T04:23:38.658Z",
+  "prod": {
+    "profile_policy": {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_select_self",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    "functions": [
+      {
+        "schema": "private",
+        "name": "is_live_manee_session",
+        "definition": "CREATE OR REPLACE FUNCTION private.is_live_manee_session()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists(select 1 from auth.sessions s join public.profiles p on p.user_id=s.user_id and p.status='active'\n    where s.id=(select case when auth.jwt()->>'session_id' ~ '^[0-9a-fA-F-]{36}$' then (auth.jwt()->>'session_id')::uuid else null end)\n      and s.user_id=(select auth.uid()) and (s.not_after is null or s.not_after>now()));\n$function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_reservation_retention_deadline",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_reservation_retention_deadline(p_date date, p_time text)\n RETURNS timestamp with time zone\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n select case\n  when p_time is null or btrim(p_time)='' then\n   ((p_date+1)::timestamp at time zone 'Asia/Seoul')+interval '168 hours'\n  when btrim(p_time) ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$' then\n   ((p_date+btrim(p_time)::time) at time zone 'Asia/Seoul')+interval '168 hours'\n  else null -- malformed legacy times require private operator review\n end\n$function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_purge_expired_reservations",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_purge_expired_reservations(p_limit integer DEFAULT 500)\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\ndeclare removed integer;\nbegin\n if auth.uid() is not null then raise exception 'Maintenance requires no customer session' using errcode='42501';end if;\n if p_limit is null or p_limit not between 1 and 1000 then\n  raise exception 'Invalid retention batch size' using errcode='22023';\n end if;\n with due as (\n  select r.id from public.reservations r\n   where r.date <= (now() at time zone 'Asia/Seoul')::date-7\n    and private.manee_reservation_retention_deadline(r.date,r.time)<=now()\n   order by r.date,r.id for update skip locked limit p_limit\n ), erased as (\n  delete from public.reservations r using due where r.id=due.id returning r.id\n ) select count(*)::integer into removed from erased;\n return removed;\nend $function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_purge_completed_deletion_cases",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_purge_completed_deletion_cases(p_limit integer DEFAULT 500)\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\ndeclare removed integer;\nbegin\n if auth.uid() is not null then\n  raise exception 'Maintenance requires no customer session' using errcode='42501';\n end if;\n if p_limit is null or p_limit not between 1 and 1000 then\n  raise exception 'Invalid retention batch size' using errcode='22023';\n end if;\n with due as (\n  select id from private.account_deletion_requests\n   where status='completed' and completed_at<=now()-interval '720 hours'\n   order by completed_at,id for update skip locked limit p_limit\n ), erased as (\n  delete from private.account_deletion_requests r using due\n   where r.id=due.id returning r.id\n ) select count(*)::integer into removed from erased;\n return removed;\nend $function$\n"
+      }
+    ],
+    "backup_columns": [
+      {
+        "column": "change_id",
+        "type": "text"
+      },
+      {
+        "column": "table_name",
+        "type": "text"
+      },
+      {
+        "column": "policy_name",
+        "type": "text"
+      },
+      {
+        "column": "original_qual",
+        "type": "text"
+      },
+      {
+        "column": "applied_qual",
+        "type": "text"
+      },
+      {
+        "column": "captured_at",
+        "type": "timestamp with time zone"
+      }
+    ],
+    "attachment_triggers": [
+      "CREATE TRIGGER manee_billing_write_gate BEFORE INSERT OR DELETE OR UPDATE ON public.sales_reports FOR EACH ROW EXECUTE FUNCTION private.manee_guard_billed_write()",
+      "CREATE TRIGGER manee_guard_business_record BEFORE INSERT OR UPDATE ON public.sales_reports FOR EACH ROW EXECUTE FUNCTION private.guard_business_record()"
+    ],
+    "cron": [
+      {
+        "name": "daily-subscription-snapshot",
+        "schedule": "5 16 * * *",
+        "active": true
+      },
+      {
+        "name": "manee-android-business-push",
+        "schedule": "* * * * *",
+        "active": true
+      },
+      {
+        "name": "manee-billing-refresh",
+        "schedule": "* * * * *",
+        "active": true
+      },
+      {
+        "name": "manee-reservation-retention",
+        "schedule": "* * * * *",
+        "active": true
+      },
+      {
+        "name": "manee-completed-deletion-case-retention",
+        "schedule": "15 * * * *",
+        "active": true
+      }
+    ]
+  },
+  "stage": {
+    "profile_policy": {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_select_self",
+      "permissive": "PERMISSIVE",
+      "roles": [
+        "authenticated"
+      ],
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "with_check": null
+    },
+    "functions": [
+      {
+        "schema": "private",
+        "name": "is_live_manee_session",
+        "definition": "CREATE OR REPLACE FUNCTION private.is_live_manee_session()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists(select 1 from auth.sessions s join public.profiles p on p.user_id=s.user_id and p.status='active'\n    where s.id=(select case when auth.jwt()->>'session_id' ~ '^[0-9a-fA-F-]{36}$' then (auth.jwt()->>'session_id')::uuid else null end)\n      and s.user_id=(select auth.uid()) and (s.not_after is null or s.not_after>now()));\n$function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_reservation_retention_deadline",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_reservation_retention_deadline(p_date date, p_time text)\n RETURNS timestamp with time zone\n LANGUAGE sql\n IMMUTABLE PARALLEL SAFE\n SET search_path TO ''\nAS $function$\n select case\n  when p_time is null or btrim(p_time)='' then\n   ((p_date+1)::timestamp at time zone 'Asia/Seoul')+interval '168 hours'\n  when btrim(p_time) ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$' then\n   ((p_date+btrim(p_time)::time) at time zone 'Asia/Seoul')+interval '168 hours'\n  else null -- malformed legacy times require private operator review\n end\n$function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_purge_expired_reservations",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_purge_expired_reservations(p_limit integer DEFAULT 500)\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\ndeclare removed integer;\nbegin\n if auth.uid() is not null then raise exception 'Maintenance requires no customer session' using errcode='42501';end if;\n if p_limit is null or p_limit not between 1 and 1000 then\n  raise exception 'Invalid retention batch size' using errcode='22023';\n end if;\n with due as (\n  select r.id from public.reservations r\n   where r.date <= (now() at time zone 'Asia/Seoul')::date-7\n    and private.manee_reservation_retention_deadline(r.date,r.time)<=now()\n   order by r.date,r.id for update skip locked limit p_limit\n ), erased as (\n  delete from public.reservations r using due where r.id=due.id returning r.id\n ) select count(*)::integer into removed from erased;\n return removed;\nend $function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_purge_completed_deletion_cases",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_purge_completed_deletion_cases(p_limit integer DEFAULT 500)\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\ndeclare removed integer;\nbegin\n if auth.uid() is not null then\n  raise exception 'Maintenance requires no customer session' using errcode='42501';\n end if;\n if p_limit is null or p_limit not between 1 and 1000 then\n  raise exception 'Invalid retention batch size' using errcode='22023';\n end if;\n with due as (\n  select id from private.account_deletion_requests\n   where status='completed' and completed_at<=now()-interval '720 hours'\n   order by completed_at,id for update skip locked limit p_limit\n ), erased as (\n  delete from private.account_deletion_requests r using due\n   where r.id=due.id returning r.id\n ) select count(*)::integer into removed from erased;\n return removed;\nend $function$\n"
+      },
+      {
+        "schema": "private",
+        "name": "manee_sms_service",
+        "definition": "CREATE OR REPLACE FUNCTION private.manee_sms_service(p_action text, p_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n c private.manee_sms_challenges%rowtype;\n uid uuid; sid uuid; op uuid; cid uuid; uname text; ph text; phash text; v_purpose text;\n send_allowed boolean:=false;\n bad jsonb:=jsonb_build_object('ok',false,'error','verification_invalid');\nbegin\n if p_action='credentials' then\n   uid:=(p_payload->>'user_id')::uuid; sid:=(p_payload->>'session_id')::uuid;\n   if not private.manee_sms_ordinary_user(uid) or not exists(select 1 from auth.sessions s where s.id=sid and s.user_id=uid and (s.not_after is null or s.not_after>now())) then return bad; end if;\n   return (select jsonb_build_object('ok',true,'username',p.username,'email',u.email) from public.profiles p join auth.users u on u.id=p.user_id where p.user_id=uid);\n elsif p_action='request' then\n   cid:=(p_payload->>'id')::uuid; v_purpose:=p_payload->>'purpose'; uname:=p_payload->>'username';\n   ph:=p_payload->>'phone'; phash:=p_payload->>'phone_hash';\n   if v_purpose not in ('signup_owner','signup_staff','reset','bind') or uname !~ '^[a-z0-9가-힣._-]{4,30}$' or ph !~ '^\\+8210[0-9]{8}$' or phash !~ '^[0-9a-f]{64}$' or (p_payload->>'code_hash') !~ '^[0-9a-f]{64}$' then return bad; end if;\n   -- Serialize requests for a destination. Do not use a client-supplied IP as the only abuse limit.\n   perform pg_advisory_xact_lock(hashtextextended('manee-sms:'||phash,0));\n   if exists(select 1 from private.manee_sms_challenges where phone_hash=phash and created_at>clock_timestamp()-interval '60 seconds') then\n     return jsonb_build_object('ok',false,'error','rate_limited','retry_after',60); end if;\n   if not public.consume_auth_rate_limit('sms_phone_hour',phash,3600,5)\n      or not public.consume_auth_rate_limit('sms_phone_day',phash,86400,10)\n      or not public.consume_auth_rate_limit('sms_username_hour',p_payload->>'username_hash',3600,5)\n      or not public.consume_auth_rate_limit('sms_ip_hour',p_payload->>'ip_hash',3600,10)\n      or not public.consume_auth_rate_limit('sms_staging_day','all',86400,100) then\n     return jsonb_build_object('ok',false,'error','rate_limited','retry_after',3600); end if;\n   if v_purpose in ('signup_owner','signup_staff') then\n     send_allowed:=not public.is_manee_username_reserved(uname);\n   elsif v_purpose='reset' then\n     select b.user_id into uid from private.manee_sms_bindings b join public.profiles p on p.user_id=b.user_id\n       where b.phone_e164=ph and p.username=uname and private.manee_sms_ordinary_user(b.user_id);\n     send_allowed:=uid is not null;\n   else\n     uid:=(p_payload->>'user_id')::uuid; sid:=(p_payload->>'session_id')::uuid;\n     send_allowed:=private.manee_sms_ordinary_user(uid)\n       and exists(select 1 from public.profiles p where p.user_id=uid and p.username=uname)\n       and exists(select 1 from auth.sessions s where s.id=sid and s.user_id=uid and (s.not_after is null or s.not_after>now()));\n     if not send_allowed then return bad; end if;\n   end if;\n   -- Keep only a short-lived, bounded verification history. Verified bindings are stored separately.\n   delete from private.manee_sms_challenges where created_at<clock_timestamp()-interval '7 days';\n   update private.manee_sms_challenges set status='expired',code_hash=null,proof_hash=null\n     where phone_hash=phash and username=uname and purpose=v_purpose and status in ('sending','sent','verified');\n   insert into private.manee_sms_challenges(id,purpose,username,phone_e164,phone_hash,target_user_id,session_id,code_hash,status)\n     values(cid,v_purpose,uname,ph,phash,uid,sid,case when send_allowed then p_payload->>'code_hash' else null end,case when send_allowed then 'sending' else 'failed' end);\n   return jsonb_build_object('ok',true,'send_allowed',send_allowed);\n elsif p_action in ('sent','failed') then\n   update private.manee_sms_challenges set status=case when p_action='sent' then 'sent' else 'failed' end,\n     expires_at=clock_timestamp()+interval '3 minutes',code_hash=case when p_action='sent' then code_hash else null end\n     where id=(p_payload->>'id')::uuid and status='sending';\n   return jsonb_build_object('ok',found);\n end if;\n select * into c from private.manee_sms_challenges where id=(p_payload->>'id')::uuid for update;\n if not found then return bad; end if;\n if p_action in ('verify','claim') then\n   if c.username<>coalesce(p_payload->>'username','') or c.purpose<>coalesce(p_payload->>'purpose','') then return bad; end if;\n   if c.purpose='bind' and (c.target_user_id is distinct from (p_payload->>'user_id')::uuid or c.session_id is distinct from (p_payload->>'session_id')::uuid\n     or not exists(select 1 from auth.sessions s where s.id=c.session_id and s.user_id=c.target_user_id and (s.not_after is null or s.not_after>now()))) then return bad; end if;\n end if;\n if p_action='verify' then\n   if c.status<>'sent' or c.expires_at<=clock_timestamp() or c.failed_attempts>=5 then return bad; end if;\n   if c.code_hash is distinct from (p_payload->>'code_hash') then\n     update private.manee_sms_challenges set failed_attempts=failed_attempts+1,\n       status=case when failed_attempts+1>=5 then 'expired' else status end,\n       code_hash=case when failed_attempts+1>=5 then null else code_hash end where id=c.id;\n     return bad;\n   end if;\n   if (p_payload->>'proof_hash') is null or (p_payload->>'proof_hash') !~ '^[0-9a-f]{64}$' then return bad; end if;\n   update private.manee_sms_challenges set status='verified',code_hash=null,proof_hash=p_payload->>'proof_hash',proof_expires_at=clock_timestamp()+interval '10 minutes' where id=c.id;\n   return jsonb_build_object('ok',true);\n elsif p_action='claim' then\n   if c.status<>'verified' or c.proof_expires_at<=clock_timestamp() or c.proof_hash is distinct from (p_payload->>'proof_hash') then return bad; end if;\n   if c.purpose in ('reset','bind') and not private.manee_sms_ordinary_user(c.target_user_id) then return bad; end if;\n   if c.purpose='reset' and not exists(select 1 from private.manee_sms_bindings b where b.user_id=c.target_user_id and b.phone_e164=c.phone_e164) then return bad; end if;\n   if c.purpose='reset' then delete from auth.sessions where user_id=c.target_user_id; end if;\n   op:=gen_random_uuid();\n   update private.manee_sms_challenges set status='consuming',proof_hash=null,operation_id=op where id=c.id;\n   return jsonb_build_object('ok',true,'operation_id',op,'user_id',c.target_user_id,'phone',c.phone_e164);\n elsif p_action='complete' then\n   if c.operation_id is distinct from (p_payload->>'operation_id')::uuid or c.status<>'consuming' then return bad; end if;\n   uid:=(p_payload->>'user_id')::uuid;\n   if not private.manee_sms_ordinary_user(uid) or not exists(select 1 from public.profiles p where p.user_id=uid and p.username=c.username) then return bad; end if;\n   if c.purpose in ('reset','bind') and uid is distinct from c.target_user_id then return bad; end if;\n   if c.purpose<>'reset' then\n     insert into private.manee_sms_bindings(user_id,phone_e164,verified_at) values(uid,c.phone_e164,clock_timestamp())\n       on conflict(user_id) do update set phone_e164=excluded.phone_e164,verified_at=excluded.verified_at;\n     -- Public contact fields are not an authority for password recovery.\n     update public.profiles set phone_e164=c.phone_e164,phone_verified_at=clock_timestamp() where user_id=uid;\n   else\n     -- auth.refresh_tokens cascades from auth.sessions; existing RLS checks live sessions.\n     delete from auth.sessions where user_id=uid;\n   end if;\n   update private.manee_sms_challenges set status='completed',target_user_id=uid,finished_at=clock_timestamp() where id=c.id;\n   return jsonb_build_object('ok',true);\n end if;\n return bad;\nend;\n$function$\n"
+      }
+    ],
+    "backup_columns": [
+      {
+        "column": "change_id",
+        "type": "text"
+      },
+      {
+        "column": "table_name",
+        "type": "text"
+      },
+      {
+        "column": "policy_name",
+        "type": "text"
+      },
+      {
+        "column": "original_qual",
+        "type": "text"
+      },
+      {
+        "column": "applied_qual",
+        "type": "text"
+      },
+      {
+        "column": "captured_at",
+        "type": "timestamp with time zone"
+      }
+    ],
+    "attachment_triggers": [
+      "CREATE TRIGGER manee_billing_write_gate BEFORE INSERT OR DELETE OR UPDATE ON public.sales_reports FOR EACH ROW EXECUTE FUNCTION private.manee_guard_billed_write()",
+      "CREATE TRIGGER manee_guard_business_record BEFORE INSERT OR UPDATE ON public.sales_reports FOR EACH ROW EXECUTE FUNCTION private.guard_business_record()"
+    ],
+    "cron": [
+      {
+        "name": "daily-subscription-snapshot",
+        "schedule": "5 16 * * *",
+        "active": true
+      },
+      {
+        "name": "manee-android-business-push",
+        "schedule": "* * * * *",
+        "active": true
+      },
+      {
+        "name": "manee-billing-refresh",
+        "schedule": "* * * * *",
+        "active": false
+      }
+    ]
+  }
+}
