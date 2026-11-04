@@ -1,0 +1,115 @@
+name: Upload reviewed iOS QA 1.8.1
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ios-push-state-upload-20261016.yml']
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'Reviewed MANEE build only; no review submission or invitations'
+        type: choice
+        required: true
+        default: '1.8.1'
+        options: ['1.8.1']
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: manee-testflight-6820833544-1-8-1
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.build == '1.8.1')
+    runs-on: macos-15
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test the pinned uploader without Apple credentials
+        run: node --test .github/scripts/ios-qa-connection.test.mjs .github/scripts/ios-push-state-upload.test.mjs
+      - name: Verify immutable build provenance and archive digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import hashlib, io, json, os, pathlib, subprocess, zipfile
+          repo = 'unionconnect-kr/winners'
+          commit = '8e419577c7d81066c6913981539c1505a57abaf6'
+          run_id, artifact_id = 38868894387, 12032670482
+          digest = '8213ab27ed884dbb815c637b88c838428bb9096c41e59089058c6d0fb70151fb'
+          def api(path):
+              return subprocess.check_output(['gh', 'api', 'repos/' + repo + path], timeout=120)
+          def require(ok, message):
+              if not ok:
+                  raise SystemExit(message)
+          run = json.loads(api('/actions/runs/' + str(run_id)))
+          require(run['head_sha'] == commit and run['conclusion'] == 'success'
+                  and run['event'] == 'push'
+                  and run['path'] == '.github/workflows/ios-signed-build.yml'
+                  and run['repository']['full_name'] == repo
+                  and run['head_repository']['full_name'] == repo, 'Untrusted source build')
+          artifact = json.loads(api('/actions/artifacts/' + str(artifact_id)))
+          require(artifact['id'] == artifact_id and artifact['name'] == 'manee-ios-signed-8-1'
+                  and not artifact['expired'] and artifact['workflow_run']['id'] == run_id
+                  and artifact['workflow_run']['head_sha'] == commit
+                  and artifact['digest'] == 'sha256:' + digest
+                  and 0 < artifact['size_in_bytes'] < 100 * 1024 * 1024, 'Unexpected artifact')
+          archive = api('/actions/artifacts/' + str(artifact_id) + '/zip')
+          require(hashlib.sha256(archive).hexdigest() == digest, 'Archive digest mismatch')
+          with zipfile.ZipFile(io.BytesIO(archive)) as package:
+              entries = [entry for entry in package.infolist() if not entry.is_dir()]
+              require(len(entries) == 1, 'Expected exactly one IPA')
+              entry = entries[0]
+              path = pathlib.PurePosixPath(entry.filename)
+              require(not path.is_absolute() and '..' not in path.parts
+                      and '\\' not in entry.filename and path.suffix == '.ipa'
+                      and 0 < entry.file_size <= 250 * 1024 * 1024, 'Invalid IPA archive member')
+              directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-reviewed-ipa'
+              directory.mkdir(mode=0o700)
+              destination = directory / 'MANEE-1.0-1.8.1.ipa'
+              destination.write_bytes(package.read(entry))
+              destination.chmod(0o600)
+          print('Reviewed source, successful signed build, fixed artifact and SHA-256 verified.')
+          PY
+      - name: Select Xcode and verify Apple upload tools
+        run: |
+          set -euo pipefail
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcrun altool --help > "$RUNNER_TEMP/manee-reviewed-altool-help.txt" 2>&1
+          grep -q -- '--validate-app' "$RUNNER_TEMP/manee-reviewed-altool-help.txt"
+          grep -q -- '--upload-app' "$RUNNER_TEMP/manee-reviewed-altool-help.txt"
+      - name: Validate and upload the reviewed IPA to the fixed MANEE app
+        env:
+          MANEE_UPLOAD_TESTFLIGHT: 'true'
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261016-1.8.1'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/ios-push-state-upload.mjs "$RUNNER_TEMP/manee-reviewed-ipa/MANEE-1.0-1.8.1.ipa"
+          echo 'Apple upload accepted; processing is pending. No review submission or tester invitation.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Read Apple processing and catalog readiness without exposing account data
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/ios-push-state-readiness.mjs
+      - name: Remove temporary upload material
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/manee-reviewed-ipa" "$RUNNER_TEMP"/manee-upload-*
+          rm -f "$RUNNER_TEMP/manee-reviewed-altool-help.txt"

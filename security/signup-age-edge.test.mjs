@@ -17,7 +17,7 @@ function harness(slug,options={}){
    if(name.startsWith('bootstrap_'))return options.bootstrapError?{error:{code:'23505',message:'private-provider-detail'}}:ok('new-business-id');
    throw Error('Unexpected RPC');},
   from(table){calls.push({table});const q={select(){return q},eq(){return q},async maybeSingle(){
-   if(table==='platform_admins')return ok(options.notAdmin?null:{user_id:'verified-actor'});
+   if(table==='platform_admins')return options.adminQueryError?{error:{message:'offline'}}:ok(options.notAdmin?null:{user_id:'verified-actor'});
    assert.equal(table,'profiles');return options.recoveryError?{error:{code:'offline'}}:ok(options.recoveredProfile||null);
   }};return q;},
   auth:{getUser:async()=>{calls.push({name:'getUser'});return options.badSession?{error:{message:'private-provider-detail'},data:{user:null}}:ok({user:{id:'verified-actor'}})},admin:{
@@ -25,15 +25,15 @@ function harness(slug,options={}){
    deleteUser:async id=>{calls.push({name:'deleteUser',id});return options.cleanupError?{error:{message:'private-provider-detail'}}:ok({})},
   }},
  };
- const client={auth:{signInWithPassword:async()=>ok({session:null})}};
+ const client={from:table=>{calls.push({name:'userScopedAdminQuery'});return admin.from(table);},auth:{signInWithPassword:async()=>ok({session:null})}};
  const env={SUPABASE_URL:'https://obpkzecgswnfuyhwvncd.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
- const context=createContext({Request,Response,TextEncoder,crypto:webcrypto,Date,console:{error:(...a)=>logs.push(a),log:(...a)=>logs.push(a)},
-  createClient:(_,key)=>key===env.SUPABASE_SERVICE_ROLE_KEY?admin:client,
+ const context=createContext({Request,Response,TextEncoder,atob,crypto:webcrypto,Date,console:{error:(...a)=>logs.push(a),log:(...a)=>logs.push(a)},
+  createClient:(_,key,opts)=>{if(key===env.SUPABASE_SERVICE_ROLE_KEY)return admin;if(slug==='manee-franchise-signup')assert.match(opts.global.headers.Authorization,/^Bearer /);return client;},
   Deno:{env:{get:name=>env[name]},serve:fn=>handler=fn}});
  const source=readFileSync(new URL('../supabase/functions/'+slug+'/index.ts',import.meta.url),'utf8');
  const code=source.replace(/^import \{ createClient \} from 'npm:@supabase\/supabase-js@2\.116\.0'\r?\n/,'');
  assert.notEqual(code,source);new Script(stripTypeScriptTypes(code)).runInContext(context);
- return {calls,logs,async run(body=defaults){const response=await handler(new Request('https://offline.invalid',{method:'POST',headers:{apikey:'synthetic-public',authorization:'Bearer synthetic-session','Content-Type':'application/json'},body:JSON.stringify(body)}));return {status:response.status,body:await response.json(),cache:response.headers.get('cache-control')};}};
+ return {calls,logs,async run(body=defaults){const response=await handler(new Request('https://offline.invalid',{method:'POST',headers:{apikey:'synthetic-public',authorization:'Bearer fixture.'+Buffer.from(JSON.stringify({aal:options.aal??'aal2',session_id:'synthetic-session'})).toString('base64url')+'.fixture','Content-Type':'application/json'},body:JSON.stringify(body)}));return {status:response.status,body:await response.json(),cache:response.headers.get('cache-control')};}};
 }
 for(const slug of slugs){
  test(slug+' requires literal true before rate limiting, Auth creation or bootstrap',async()=>{
@@ -59,7 +59,7 @@ for(const slug of slugs){
  });
 }
 test('franchise age confirmation does not replace the verified platform-admin boundary',async()=>{
- for(const options of [{notAdmin:true},{badSession:true}]){const h=harness('manee-franchise-signup',options);assert.ok([401,403].includes((await h.run()).status));assert.equal(h.calls.some(c=>c.name==='createUser'),false);}
+ for(const options of [{notAdmin:true},{badSession:true},{adminQueryError:true}]){const h=harness('manee-franchise-signup',options);assert.ok([401,403].includes((await h.run()).status));assert.equal(h.calls.some(c=>c.name==='createUser'),false);}
 });
 test('owner bootstrap uncertainty never deletes an identity whose profile may have committed',async()=>{
  for(const options of [{recoveredProfile:{user_id:'new-auth-id'}},{recoveryError:true}]){
@@ -68,15 +68,27 @@ test('owner bootstrap uncertainty never deletes an identity whose profile may ha
  const known=harness('manee-signup',{bootstrapError:true});assert.equal((await known.run()).status,409);assert.deepEqual(known.calls.filter(c=>c.name==='deleteUser').map(c=>c.id),['new-auth-id']);
  const failed=harness('manee-signup',{bootstrapError:true,cleanupError:true});assert.equal((await failed.run()).body.error,'signup_cleanup_failed');
 });
+test('franchise failures expose no provider details or actor identity in responses/logs',async()=>{
+ const h=harness('manee-franchise-signup',{lookupError:true});const r=await h.run();assert.equal(r.status,503);
+ assert.doesNotMatch(JSON.stringify([r.body,h.logs]),/private-provider-detail|verified-actor|synthetic-password|synthetic-secret/);
+ assert.equal(Object.hasOwn(r.body,'debug'),false);
+});
+
+test('franchise signup requires verified AAL2 before a user-scoped live-session query or Auth creation',async()=>{
+ for(const aal of ['aal1','invalid','']){
+  const h=harness('manee-franchise-signup',{aal});const result=await h.run({...defaults,aal:'aal2',actor_aal:'aal2'});
+  assert.equal(result.status,403);assert.equal(result.body.error,'mfa_required');
+  assert.equal(h.calls.some(c=>c.name==='createUser'||c.name==='userScopedAdminQuery'),false);
+ }
+ const h=harness('manee-franchise-signup');assert.equal((await h.run()).status,201);
+ assert.ok(h.calls.findIndex(c=>c.name==='getUser')<h.calls.findIndex(c=>c.name==='userScopedAdminQuery'));
+ assert.ok(h.calls.findIndex(c=>c.name==='userScopedAdminQuery')<h.calls.findIndex(c=>c.name==='createUser'));
+});
+
 test('Owner signup cannot create an identity with missing or rejected SMS proof',async()=>{
  for(const [options,values] of [[{},{sms_proof:''}],[{smsDenied:true},{}]]){
   const h=harness('manee-signup',options),r=await h.run({...defaults,...values});
   assert.equal(r.status,400);assert.equal(r.body.error,'phone_verification_required');
   assert.equal(h.calls.some(c=>c.name==='createUser'),false);
  }
-});
-test('franchise failures expose no provider details or actor identity in responses/logs',async()=>{
- const h=harness('manee-franchise-signup',{lookupError:true});const r=await h.run();assert.equal(r.status,503);
- assert.doesNotMatch(JSON.stringify([r.body,h.logs]),/private-provider-detail|verified-actor|synthetic-password|synthetic-secret/);
- assert.equal(Object.hasOwn(r.body,'debug'),false);
 });

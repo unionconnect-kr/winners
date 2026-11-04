@@ -120,3 +120,12 @@ records in a real operating store solely for testing.
   remain separate from a signed IPA or a successful TestFlight upload.
 
 Additional build/deployment run IDs and outcomes are recorded below once verified.
+
+## Verified follow-up checkpoint
+
+The follow-up source `16ffc5c6` compiled and signed successfully as build 1.6.1
+(run `38800572039`). It was subsequently validated/uploaded by `38802227581`;
+Apple processing returned VALID / READY_FOR_BETA_TESTING. The external group
+exists. Production endpoints are deployed with IAP/APNs credential presence and
+checkout disabled. See `ios-scheduled-workers-2026-10-16.md` for the pending
+scheduler migration, actual catalog gaps and the next single physical checklist.

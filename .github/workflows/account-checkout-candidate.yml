@@ -1,0 +1,27 @@
+name: Account checkout integration candidate
+on:
+  pull_request:
+    paths: ['mobile/**', 'tests/account-billing-scope.test.mjs', '.github/workflows/account-checkout-candidate.yml']
+permissions:
+  contents: read
+concurrency:
+  group: account-checkout-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci && npm ci --prefix mobile
+      - name: Client, account entitlement and server regressions
+        run: |
+          npm --prefix mobile test
+          node --test --test-concurrency=2 tests/account-billing-scope.test.mjs tests/android-billing-endpoint.test.mjs tests/native-ios-checkout.test.mjs tests/native-apple-services.test.mjs security/signup-age-edge.test.mjs
+      - name: Complete staging assets with current billing clients
+        run: |
+          node mobile/scripts/build-launch-checkout.mjs android staging
+          node mobile/scripts/build-launch-checkout.mjs ios staging

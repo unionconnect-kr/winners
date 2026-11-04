@@ -33,7 +33,8 @@ test('all external service handlers reject anonymous calls before provider or se
    if(n.includes('request-security'))return h.guard;if(n.includes('manee-environment'))return {blockExternalService:()=>null};
    if(n==='web-push')return {setVapidDetails:()=>{calls++;},sendNotification:()=>{calls++;}};
    if(n==='@supabase/supabase-js')return {createClient:()=>{calls++;throw Error('unexpected privileged query');}};
-   if(n.includes('push-vapid'))return {getVapidDetails:()=>{calls++;}};throw Error(n);
+   if(n.includes('push-vapid'))return {getVapidDetails:()=>{calls++;}};
+   if(n.includes('validated-image'))return {normalizeReceiptImage:()=>{calls++;throw Error('unexpected decode');}};throw Error(n);
   }});
   const r=await exports.handler({httpMethod:'POST',headers:{},body:JSON.stringify({storeId:uuid,title:'test',messages:[{role:'user',content:'test'}],context:{}})});
   assert.equal(r.statusCode,401,name);assert.equal(calls,0,name);

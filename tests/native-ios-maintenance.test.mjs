@@ -27,3 +27,11 @@ test('provider errors retry without dropping valid APNs registrations',async()=>
  await handler({httpMethod:'POST',headers:{authorization:'Bearer '+token}});
  assert.equal(calls.at(-1)[1].p_result,'retry');assert.equal(calls.some(c=>c[0]==='manee_ios_drop_push'),false);
 });
+test('scheduled-only factory uses the service-role job API and records a heartbeat',async()=>{
+ const calls=[];const db={rpc:async(name,args)=>{calls.push([name,args]);return {data:name==='manee_ios_claim_scheduled_deliveries'?[]:true};}};
+ const handler=maintenanceHandler({mode:'push',env:{...env,IOS_MAINTENANCE_TOKEN:undefined},db,scheduled:true});
+ assert.equal((await handler({httpMethod:'POST'})).statusCode,200);
+ assert.equal(calls[0][0],'manee_ios_claim_scheduled_deliveries');assert.equal(calls[1][0],'manee_ios_record_worker');
+ const external=maintenanceHandler({mode:'push',env:{...env,IOS_MAINTENANCE_TOKEN:undefined},db});
+ assert.equal((await external({httpMethod:'POST',body:'{"scheduled":true}'})).statusCode,401);
+});
