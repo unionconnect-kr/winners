@@ -1,0 +1,25 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+import {build} from 'esbuild';
+import {androidFirebaseProject} from './android-firebase-config.mjs';
+import {release145Html} from './release145-html.mjs';
+const mobile=fileURLToPath(new URL('..',import.meta.url));
+const platform=process.argv[2];
+if(!['android','ios'].includes(platform)||process.argv[3]!=='production')throw Error('Specify android|ios production explicitly');
+const config=JSON.parse(readFileSync(resolve(mobile,'../config/environments.json'),'utf8')).production;
+if(config.environment!=='production'||config.projectRef!=='bhwuuxcrzxespkjlmqxr'||config.supabaseUrl!==`https://${config.projectRef}.supabase.co`)throw Error('Unexpected release backend');
+const publicOrigin=new URL(JSON.parse(readFileSync(resolve(mobile,'../config/public-sites.json'),'utf8'))[0].origin).origin;
+const firebase=platform==='android'?androidFirebaseProject(resolve(mobile,'android/app/src/release/google-services.json'),'production'):null;
+execFileSync(process.execPath,['scripts/build-feedback144.mjs',platform,'staging'],{cwd:mobile,stdio:'inherit'});
+const out=resolve(mobile,'www');
+writeFileSync(resolve(out,'index.html'),release145Html(readFileSync(resolve(out,'index.html'),'utf8'),platform,publicOrigin));
+writeFileSync(resolve(out,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify({...config,socialProviders:{naver:true}})+');\n');
+const css=resolve(out,`${platform}-ui.css`);
+writeFileSync(css,readFileSync(css,'utf8').replace(`--${platform}-banner-height:28px`,`--${platform}-banner-height:0px`));
+await build({entryPoints:[resolve(mobile,platform==='android'?'src/native-android-launch.js':'src/native-ios-release.js')],bundle:true,format:'iife',target:platform==='android'?'chrome100':'safari15',minify:true,
+ define:{ANDROID_PAID_BILLING:'true',ANDROID_PRODUCTION:'true',ANDROID_FIREBASE_PROJECT:JSON.stringify(firebase),NATIVE_SERVICES_ORIGIN:JSON.stringify(publicOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},outfile:resolve(out,'native.js')});
+const info={environment:'production',platform,projectRef:config.projectRef,versionName:'1.45',versionCode:46,releaseVersion:'1.45',deviceFeedback:true,sourceVersion:'1.44',releasePurpose:'store-update',pushEnabled:true,billingEnabled:true,signupCheckoutEnabled:true,servicesOrigin:publicOrigin,nativeAuthStorage:platform==='android'?'keystore-v1':'keychain-v1',...(platform==='android'?{androidPushProjectId:firebase}:{})};
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify(info,null,2)+'\n');
+console.log(`Prepared production ${platform} 1.45 store-update assets; external service rollout remains independently verified.`);
