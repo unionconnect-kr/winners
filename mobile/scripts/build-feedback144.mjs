@@ -1,0 +1,16 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+import {feedback144Html} from './feedback144-html.mjs';
+const mobile=fileURLToPath(new URL('..',import.meta.url)),platform=process.argv[2];
+if(!['android','ios'].includes(platform)||process.argv[3]!=='staging')throw Error('Specify android|ios staging');
+execFileSync(process.execPath,['scripts/build-launch-checkout.mjs',platform,'staging'],{cwd:mobile,stdio:'inherit'});
+const out=resolve(mobile,'www');
+writeFileSync(resolve(out,'index.html'),feedback144Html(readFileSync(resolve(out,'index.html'),'utf8')));
+copyFileSync(resolve(mobile,'src/feedback144.css'),resolve(out,'feedback144.css'));
+copyFileSync(resolve(mobile,'assets/launch-144.png'),resolve(out,'launch-144.png'));
+writeFileSync(resolve(out,'native.js'),readFileSync(resolve(out,'native.js'),'utf8').replaceAll('매니 1.43','매니 1.44'));
+const info=JSON.parse(readFileSync(resolve(out,'build-info.json'),'utf8'));
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.44',versionCode:45,releaseVersion:'1.44',deviceFeedback:true,pushEnabled:false,servicesReady:false},null,2)+'\n');
+console.log('1.44 complete device feedback candidate; staging, push and purchases disabled.');

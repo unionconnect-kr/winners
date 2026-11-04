@@ -22,9 +22,11 @@ public class SecureAuthBridgeTest {
  }
  @Test public void packagedPageConnectsToRealVaultAndSocialPlugins()throws Exception{
   try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+   var context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+   String version=context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName.split("-")[0];
    boolean initialized=false;
    for(int i=0;i<100;i++){
-    if("true".equals(evaluate(scenario,"Boolean(window.MANEE_SECURE_STORAGE && (document.body.innerText.includes('매니 1.42') || document.body.innerText.includes('매니 1.43')))"))){initialized=true;break;}
+    if("true".equals(evaluate(scenario,"Boolean(window.MANEE_SECURE_STORAGE && document.body.innerText.includes('매니 "+version+"'))"))){initialized=true;break;}
     Thread.sleep(100);
    }
    assertTrue("Complete secure page did not load",initialized);

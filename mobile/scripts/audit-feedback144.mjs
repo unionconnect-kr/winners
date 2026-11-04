@@ -1,0 +1,69 @@
+import {mockSecureAuthForAudit} from './secure-auth-audit-fixture.mjs';
+// Full offline iPhone page inventory; network writes, SMS, payments and native plugins are excluded.
+import {pageCases,seedPage,showPage} from './ios-page-fixtures.mjs';
+import {checkInputs} from './ios-page-interactions.mjs';
+import {checkDeviceFeedback} from './ios-device-interactions.mjs';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),engines=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../www');
+const out=process.env.FEEDBACK_AUDIT_OUT||mkdtempSync(resolve(tmpdir(),'manee-ui-audit-'));mkdirSync(out,{recursive:true});
+const info=JSON.parse(readFileSync(root+'/build-info.json','utf8'));
+if(info.releaseVersion!=='1.44'||info.environment!=='staging')throw Error('Run npm --prefix mobile run build:ios139 after the mobile tests, before this audit.');
+let html=mockSecureAuthForAudit(readFileSync(root+'/index.html','utf8'));
+// Native plugin calls are outside this offline presentation audit.
+const nativeNotice=readFileSync(resolve(root,'../src/native-ios139.js'),'utf8').replace(/^import .*;$/gm,'').replace('installIosSocial(window.MANEE_CONFIG);','');
+html=html.replace('<script src="/native.js"></script>','<script>window.MANEE_NATIVE={configure(){},refresh(){}};'+nativeNotice+'</script>');
+html=html.replace(/\((?:async )?function\(\)\{/,start=>start+' const setTimeout=()=>0; const clearTimeout=()=>{}; const setInterval=()=>0;');
+html=html.replace('  initializeSocialLogin();',`window.qa={native:window.MANEE_NATIVE,state,render,renderLanding,renderOnboardingWizard,renderStaffApp,renderOwnerShell,r136,r136Overlay,sector4,renderSector4Sheet,renderOwnerHome,renderOwnerPeople,renderOwnerSales,renderOwnerOperations,renderOwnerMore,sector2,sector3,renderSector2View,renderSector3Sheet,r134,r134Overlay,r134ContractDefaults,renderConfirmOverlay,renderLightbox,renderAddStoreForm,renderSalesReportForm,r135AiSheet,renderInfoModal,r134GuideSelector,todayKey,bizToday,monthKey,r138RecentDays,db,renderOwnerStorePicker,bindLandingEvents,ownerSignupNext,ownerSignupDraft,handleStaffAuthClick,bindSector3,bindSector4,bindR136,bindOnboardingWizardEvents,decorateSocialEntry,renderVatDetail,renderFixedExpenseManage,renderMonthlyCostReview,renderOwnerProfileChanges,renderAttConfirmPrompt};`);
+const browser=await engines[process.env.AUDIT_ENGINE||'webkit'].launch({headless:true});
+const results=[],interactions=[];
+for(const width of [320,375,390,430]){
+ const context=await browser.newContext({viewport:{width,height:844},isMobile:true,hasTouch:true,locale:'ko-KR'});
+ await context.addInitScript(()=>{const NativeDate=Date,instant=NativeDate.parse('2026-11-03T10:00:00Z');window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[instant]));}static now(){return instant;}};});
+ const page=await context.newPage();page.setDefaultTimeout(5000);
+ page.on("pageerror",e=>console.error("Page script:",e.message));
+ // All requests are intercepted. Only loopback fixture assets are fulfilled;
+ // every other host is aborted before any network request can be sent.
+ await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.hostname!=='127.0.0.1')return route.abort();const path=url.pathname==='/'?'/index.html':url.pathname;try{await route.fulfill({body:path==='/index.html'?html:readFileSync(root+path),contentType:path.endsWith('.png')?'image/png':path.endsWith('.ttf')?'font/ttf':path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'text/html'});}catch{await route.abort();}});
+ await page.goto('http://127.0.0.1:8765/');await page.waitForFunction(()=>window.qa);
+ await page.addStyleTag({content:`@font-face{font-family:QA;src:url('/report-assets/NanumGothic-Regular.ttf')}body,.app,.app *,dialog,dialog *{font-family:QA,sans-serif!important}.ios-test-banner{font-family:QA,sans-serif!important}:root{--ios-safe-top:47px;--ios-safe-bottom:34px}`});await page.evaluate(seedPage);await page.evaluate(()=>document.fonts.ready);
+ const scenes=pageCases.filter(x=>x.kind==='setting'&&x.id==='notifications'||x.kind==='more-page'&&x.id==='attendance-confirm'||x.kind==='team'&&x.id==='account');
+ for(const scene of scenes){
+  try{
+   await page.evaluate(showPage,scene);
+   if(scene.id==='attendance-confirm')await page.evaluate(()=>{qa.state.role='staff';qa.state.attConfirmPrompt={attId:'a',checkIn:'10:00',checkOut:'18:30',editing:false};document.getElementById('app').className='app team-ui';document.getElementById('app').innerHTML=qa.renderAttConfirmPrompt();});
+   const checks=await page.evaluate(()=>{
+    const controls=[...document.querySelectorAll('.app select,.app textarea,.app input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]):not([type=range]):not([type=color])')].filter(e=>e.getBoundingClientRect().height>0);
+    const bad=controls.filter(e=>e.getBoundingClientRect().height<47||parseFloat(getComputedStyle(e).fontSize)<16||getComputedStyle(e).appearance!=='none').map(e=>({id:e.id,name:e.name,type:e.type,height:e.getBoundingClientRect().height,font:getComputedStyle(e).fontSize}));
+    const wrappedActions=[...document.querySelectorAll('.s4-heading>.s4-btn,.s4-filters>.s4-btn,.setup-actions>button,.s2-heading>button,.s2-actions>button,.sms-row>button')].filter(e=>{if(!e.getBoundingClientRect().height)return false;const r=document.createRange();r.selectNodeContents(e);return new Set([...r.getClientRects()].map(x=>Math.round(x.top))).size>1;}).map(e=>e.textContent);
+    const overflow=[...document.querySelectorAll('.app input,.app select,.app textarea,.app [role=dialog],dialog[open]')].filter(e=>{const r=e.getBoundingClientRect();return r.height>0&&getComputedStyle(e).visibility!=='hidden'&&(r.right>innerWidth+1||r.left< -1)}).map(e=>e.id||e.className||e.tagName);
+    const decoratedControls=[];for(const el of document.querySelectorAll('.owner-picker select')){const icon=el.parentElement.querySelector('svg');const r=el.getBoundingClientRect();if(icon&&r.left+parseFloat(getComputedStyle(el).paddingLeft)<icon.getBoundingClientRect().right+6)decoratedControls.push('Store name overlaps icon');if(getComputedStyle(el).backgroundImage!=='none')decoratedControls.push('Duplicate store selector arrow');}
+    const invalidText=/undefined|NaN|Invalid Date|�/.test(document.getElementById('app').innerText);
+    const visibleIds=[...document.querySelectorAll('.app [id]')].filter(e=>e.getBoundingClientRect().height>0).map(e=>e.id);const duplicateIds=visibleIds.filter((id,i)=>visibleIds.indexOf(id)!==i);
+    return {controls:controls.length,bad,overflow,wrappedActions,invalidText,duplicateIds,decoratedControls,bodyWidth:document.documentElement.scrollWidth};
+   });
+   const alignment=await page.locator('#owner-push-toggle-btn,.confirm-row button').evaluateAll(es=>es.map(e=>({text:e.textContent,height:e.getBoundingClientRect().height,width:e.getBoundingClientRect().width,display:getComputedStyle(e).display,align:getComputedStyle(e).textAlign})));
+   if(alignment.some(x=>x.height<48||x.height>64||x.align!=='center'||x.display!=='flex'))throw Error('Action alignment failed: '+JSON.stringify(alignment));
+   if(scene.id==='attendance-confirm'&&(alignment.length!==2||Math.abs(alignment[0].width-alignment[1].width)>1))throw Error('Attendance actions must be equal width');
+   if(scene.id==='account'&&/Apple|애플/.test(await page.locator('#app').innerText()))throw Error('Apple linking exposed');
+   results.push({width,scene:scene.name,...checks,alignment});
+   if(width===390){await page.screenshot({path:resolve(out,scene.name+'.png'),fullPage:true});await page.evaluate(()=>{for(const el of document.querySelectorAll('.s3-body,.s4-body,.s3-sheet,.s4-sheet,.expense-editor,dialog[open]'))el.scrollTop=el.scrollHeight;window.scrollTo(0,document.documentElement.scrollHeight);});await page.screenshot({path:resolve(out,scene.name+'-bottom.png'),fullPage:false});}
+
+  }catch(e){results.push({width,scene:scene.name,error:e.message.slice(0,240)});}
+ }
+ await page.evaluate(()=>{document.getElementById('app').innerHTML='<div class="splash-screen manee-launch144"><img src="/launch-144.png" alt="매니 · Your Store Manager"></div>';});
+ await page.waitForFunction(()=>document.querySelector('.manee-launch144 img')?.naturalWidth>0);
+ const imageState=await page.locator('.manee-launch144 img').evaluate(e=>({width:e.naturalWidth,height:e.naturalHeight,fit:getComputedStyle(e).objectFit}));
+ if(imageState.fit!=='contain'||imageState.width!==852||imageState.height!==1846)throw Error('Launch image changed or clipped: '+JSON.stringify(imageState));
+ await page.screenshot({path:resolve(out,'launch-'+width+'.png')});
+ await context.close();
+}
+writeFileSync(resolve(out,'interactions.json'),JSON.stringify(interactions,null,2));
+writeFileSync(resolve(out,'results.json'),JSON.stringify(results,null,2));
+console.log(JSON.stringify({scenes:results.length,interactions,controls:results.reduce((n,r)=>n+(r.controls||0),0),failures:results.filter(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.invalidText||r.duplicateIds.length||r.decoratedControls.length||r.bodyWidth>r.width+1)},null,2));
+await browser.close();
+if(interactions.some(r=>!r.passed)||results.some(r=>r.error||r.bad.length||r.overflow.length||r.wrappedActions.length||r.invalidText||r.duplicateIds.length||r.decoratedControls.length||r.bodyWidth>r.width+1))process.exitCode=1;

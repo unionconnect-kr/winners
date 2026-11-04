@@ -25,12 +25,12 @@ export function adaptIos139(source, platform = 'ios') {
   once('가입하고 1개월 무료로 시작하기</button>', '가입하고 시작하기</button>');
   once('placeholder="아이디를 입력해 주세요" spellcheck="false"', 'placeholder="아이디를 입력해 주세요" maxlength="30" spellcheck="false"');
   once('placeholder="비밀번호를 입력해 주세요" autocomplete="current-password"', 'placeholder="비밀번호를 입력해 주세요" maxlength="72" autocomplete="current-password"');
-  if(ios){
   once('카카오·네이버·Apple로 가입했다면', '카카오·네이버로 가입했다면');
   once("const providerName={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const providerName={kakao:'카카오',naver:'네이버'}");
   once("const label={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const label={kakao:'카카오',naver:'네이버'}");
   once("return '<span aria-hidden=\"true\"></span>';", "return '';");
   once("if(!linking&&!available[provider]||linking&&provider==='apple'&&!available.apple&&!linked)continue;", "if(!linking&&!available[provider])continue;");
+  if(ios){
   once("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
     "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
   once("else feedback(result?.status==='saved'?label+' 파일을 저장했어요.'",
@@ -55,7 +55,7 @@ export function adaptIos139(source, platform = 'ios') {
   return adaptIosDeviceFeedback(html);
 }
 
-// Keep the archived Android baseline intact; only the iPhone bundle omits Apple.
+// Both packaged platforms expose only Kakao and Naver; archived inputs stay immutable.
 export function adaptIos139Social(source, platform = 'ios') {
   if(!['ios','android'].includes(platform))throw Error('Unsupported platform');
   let script=source;
@@ -65,7 +65,7 @@ export function adaptIos139Social(source, platform = 'ios') {
     ["ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true,\n        apple: settings.external?.apple === true };", "ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true };"],
     ["      // Ship the same privacy-preserving choices on iPhone before exposing Kakao.\n      if (options.platform === 'ios' && !ready.apple) ready.kakao = ready.naver = false;\n", ""]
   ];
-  for(const [before,after] of platform==='ios'?changes:[]){
+  for(const [before,after] of changes){
     if(script.split(before).length!==2)throw Error('iOS social auth anchor mismatch: '+before.slice(0,90));
     script=script.replace(before,after);
   }

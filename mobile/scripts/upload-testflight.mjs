@@ -11,7 +11,9 @@ export async function uploadTestFlight(env, ipa, {
   const manual = env.GITHUB_EVENT_NAME === 'workflow_dispatch' && env.GITHUB_REF === 'refs/heads/main';
   const matched143 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/mobile-launch-143-20261104' &&
     env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile143.yml@refs/heads/codex/mobile-launch-143-20261104';
-  if ((!manual && !matched143) ||
+  const feedback144 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/mobile-feedback-144-20261104' &&
+    env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile144.yml@refs/heads/codex/mobile-feedback-144-20261104';
+  if ((!manual && !matched143 && !feedback144) ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');
   }
