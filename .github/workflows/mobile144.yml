@@ -45,7 +45,7 @@ jobs:
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
           ANDROID_UI_AUDIT_OUT="$RUNNER_TEMP/android144-pages" \
           AUDIT_ENGINE=chromium node mobile/scripts/audit-android140-pages.mjs
-          AUDIT_ENGINE=chromium PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" node mobile/scripts/audit-feedback144.mjs
+          FEEDBACK_AUDIT_OUT="$RUNNER_TEMP/android144-pages/feedback" AUDIT_ENGINE=chromium PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" node mobile/scripts/audit-feedback144.mjs
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -101,7 +101,7 @@ jobs:
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
           IOS_UI_AUDIT_OUT="$RUNNER_TEMP/manee-page-results" \
           node mobile/scripts/audit-ios-pages.mjs
-          AUDIT_ENGINE=webkit PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" node mobile/scripts/audit-feedback144.mjs
+          FEEDBACK_AUDIT_OUT="$RUNNER_TEMP/manee-page-results/feedback" AUDIT_ENGINE=webkit PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" node mobile/scripts/audit-feedback144.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
