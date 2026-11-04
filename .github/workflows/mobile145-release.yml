@@ -96,7 +96,7 @@ jobs:
           if-no-files-found: error
   archive:
     needs: [verify]
-    runs-on: macos-15-intel
+    runs-on: macos-15
     timeout-minutes: 60
     defaults:
       run:
