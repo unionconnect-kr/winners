@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">매니 테스트</string>
-    <string name="title_activity_main">매니 테스트</string>
+    <string name="app_name">매니</string>
+    <string name="title_activity_main">매니</string>
     <string name="package_name">kr.co.manee.app</string>
     <string name="custom_url_scheme">kr.co.manee.app.staging</string>
 </resources>

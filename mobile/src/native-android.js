@@ -43,7 +43,7 @@ window.MANEE_NATIVE = {
     const c=getContext();if(c?.role!=='storeOwner'||!c.storeId||!c.userId)return;
     const dialog=document.createElement('dialog');dialog.id='manee-subscription-status';
     dialog.style.cssText='max-width:420px;width:90%;border:0;border-radius:20px;padding:24px;line-height:1.6;color:#18352a';
-    const heading=document.createElement('h2');heading.textContent='매장 이용권';dialog.append(heading);
+    const heading=document.createElement('h2');heading.textContent='매니 구독';dialog.append(heading);
     const store=document.createElement('p');store.textContent=c.storeName||'선택한 매장';dialog.append(store);
     const title=document.createElement('strong');title.textContent='상태를 확인하고 있어요…';dialog.append(title);
     const message=document.createElement('p');message.setAttribute('role','status');dialog.append(message);
@@ -69,7 +69,7 @@ window.MANEE_NATIVE = {
         title.textContent=view.title;message.textContent=view.message;
         if(view.testActive){sandbox.hidden=false;sandbox.textContent='이 매장의 Google Play 테스트 구매가 확인되었습니다. 테스트 이용권은 정식 결제와 구분됩니다.';}
         billingAction.hidden=bill?.ready!==true||typeof bill.testOnly!=='boolean';
-        billingAction.textContent=bill?.testOnly===false?'매장 이용권 구독·구매 복원':'Google Play 결제 테스트·구매 복원';
+        billingAction.textContent=bill?.testOnly===false?'매니 구독 구독·구매 복원':'Google Play 결제 테스트·구매 복원';
       }catch{if(same())message.textContent='잠시 후 새로고침해 주세요.';}
       finally{if(current===seq&&same())refresh.disabled=false;}
     }
@@ -86,8 +86,8 @@ window.MANEE_NATIVE = {
       <p>직원 관리·출퇴근·매출·지출·보고서를 한곳에서 관리하세요.</p>
       <p>PDF·엑셀은 저장 위치를 선택해 휴대폰에 저장할 수 있습니다.</p>
       <p>${ANDROID_FIREBASE_PROJECT ? "휴대폰 알림은 더보기 > 매장 설정에서 연결해 주세요. 출퇴근·예약·월말 보고서 알림을 받을 수 있습니다." : "휴대폰 알림은 연결 준비 중입니다. 앱 안의 알림은 계속 확인할 수 있습니다."}</p>
-      ${ANDROID_PRODUCTION ? '<p>매장 이용권에서 구독 가능 여부를 확인할 수 있습니다.</p>' : '<p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>'}
-      ${ANDROID_PRODUCTION && getContext()?.role==='storeOwner' ? '<button type="button" id="android-billing-test" style="width:100%;padding:12px">매장 이용권·구매 복원</button>' : ''}
+      ${ANDROID_PRODUCTION ? '<p>매니 구독에서 구독 가능 여부를 확인할 수 있습니다.</p>' : '<p>AI 답변·영수증 자동 인식·음성 입력·구독 결제는 아직 지원하지 않습니다.</p>'}
+      ${ANDROID_PRODUCTION && getContext()?.role==='storeOwner' ? '<button type="button" id="android-billing-test" style="width:100%;padding:12px">매니 구독·구매 복원</button>' : ''}
       <p id="android-push-result" role="status"></p>
       ${ANDROID_FIREBASE_PROJECT ? '<button type="button" id="android-test-push" style="width:100%;padding:12px">테스트 알림 보내기</button>' : ""}
       <button type="button" id="android-info-close" style="width:100%;padding:12px">확인</button>`;

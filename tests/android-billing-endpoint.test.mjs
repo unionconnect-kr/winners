@@ -6,6 +6,7 @@ import {createHandler,PRODUCT} from '../supabase/functions/manee-android-billing
 import {createProductionAccess} from '../supabase/functions/manee-android-billing/production-access.mjs';
 const storeId='22222222-2222-4222-8222-222222222222';
 const checkoutId='33333333-3333-4333-8333-333333333333';
+const accountData=(productId=PRODUCT,billingStoreId=storeId)=>({productId,billingStoreId,restoreProductIds:productId?[productId]:[],otherPlatformActive:false});
 const product={packageName:'kr.co.manee.app',productId:PRODUCT,basePlans:[{basePlanId:'monthly',state:'ACTIVE',autoRenewingBasePlanType:{billingPeriodDuration:'P1M'},regionalConfigs:[{regionCode:'KR',newSubscriberAvailability:true}]}]};
 const req=(body={action:'status',storeId},headers={authorization:'Bearer test-token'})=>new Request('https://example.com',{method:'POST',headers,body:JSON.stringify(body)});
 function setup({auth=true,owner=true,resource=product}={}){
@@ -58,7 +59,7 @@ test('Edge deployment contains the same verification code as the tested server c
 test('only explicitly allowed owners can verify sandbox receipts through the endpoint',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';const ids=google.binding(userId,storeId);let saves=0,acks=0;
  const resource={testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_account_context'?accountData():name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{get:async()=>resource,acknowledge:async()=>acks++},service:{rpc:async()=>{saves++;return {data:true};}}};
  assert.equal((await createHandler(options)(req({action:'verify',storeId,purchaseToken:'test'}))).status,503);
  assert.equal(saves,0);assert.equal(acks,0);
  const handler=createHandler({...options,testAccess:async()=>true});
@@ -76,7 +77,7 @@ test('production receipts require an exact owner/store permission and a live rec
  const paidProduct=structuredClone(product);
  paidProduct.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900'};
  const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
-  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true})}),
+  rpc:async name=>({data:name==='manee_android_account_context'?accountData():name==='manee_android_billing_status'?{subscriptions:[]}:name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true})}),
   api:{product:async()=>paidProduct,get:async()=>resource,acknowledge:async()=>acks++},
   service:{rpc:async()=>{saves++;return{data:true};}},testAccess:async()=>false,
   productionAccess:async({userId:u,storeId:s})=>permitted&&u===userId&&s===storeId};
@@ -102,7 +103,7 @@ test('paid prepare permits one checkout, returns conflict for another, and relea
  const userId='11111111-1111-4111-8111-111111111111';
  let status='claimed',released=false;
  const rpc=async(name,args)=>{
-  if(name==='manee_android_billing_product')return{data:PRODUCT};
+  if(name==='manee_android_account_context')return{data:accountData()};
   if(name==='manee_android_billing_status')return{data:{subscriptions:[]}};
   if(name==='manee_android_billing_checkout_claim')return{data:{status}};
   if(name==='manee_android_billing_checkout_release'){
@@ -130,7 +131,7 @@ test('paid preparation refuses wrong or missing Korean price while sandbox readi
  const catalog=structuredClone(product);
  let claims=0;
  const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},
-  rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:
+  rpc:async name=>({data:name==='manee_android_account_context'?accountData():
    name==='manee_android_billing_status'?{subscriptions:[]}:
    name==='manee_android_billing_checkout_claim'?(claims++,{status:'claimed'}):true})}),
   api:{product:async()=>catalog},service:{},productionAccess:async()=>true});
@@ -147,7 +148,7 @@ test('paid preparation refuses wrong or missing Korean price while sandbox readi
 
 test('test readiness and prepare are scoped to the approved store and rechecked after Google',async()=>{
  const userId='11111111-1111-4111-8111-111111111111';let access=true,checks=0;
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_billing_product'?PRODUCT:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_account_context'?accountData():name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
  api:{product:async()=>product},service:{},testAccess:async({storeId:s})=>{checks++;return access&&s===storeId;}};
  const h=createHandler(options);
  const ready=await(await h(req())).json();assert.equal(ready.ready,true);assert.equal(ready.testOnly,true);
@@ -178,7 +179,7 @@ test('store status is read with caller authorization and sandbox never becomes p
  let subscriptions=[{environment:'Sandbox',testActive:true,active:true,purchaseToken:'must-not-leak'}];
  let failed=false;const calls=[];
  const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async(name,args)=>{
- calls.push({name,args});return name==='manee_android_billing_product'?{data:PRODUCT}:name==='manee_android_billing_status'?{data:{subscriptions},error:failed?{}:null}:{data:true};
+ calls.push({name,args});return name==='manee_android_account_context'?{data:accountData()}:name==='manee_android_billing_status'?{data:{subscriptions},error:failed?{}:null}:{data:true};
  }}),api:{product:async()=>product},service:{},testAccess:async()=>true});
  let r=await(await handler(req())).json();assert.equal(r.active,false);assert.equal(r.testActive,true);assert.ok(!JSON.stringify(r).includes('must-not-leak'));
  assert.ok(calls.some(c=>c.name==='manee_android_billing_status'&&c.args.p_store_id===storeId));
@@ -191,7 +192,7 @@ test('store status is read with caller authorization and sandbox never becomes p
 
 test('catalog and preparation use server allocation, never a client-supplied product',async()=>{
  let sku='manee.store2.monthly';let queried;
- const h=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async name=>({data:name==='manee_android_billing_product'?sku:name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{product:async id=>{queried=id;return {...product,productId:id};}},service:{},testAccess:async()=>true});
+ const h=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:'11111111-1111-4111-8111-111111111111'}}})},rpc:async name=>({data:name==='manee_android_account_context'?accountData(sku):name==='manee_android_billing_status'?{subscriptions:[]}:true})}),api:{product:async id=>{queried=id;return {...product,productId:id};}},service:{},testAccess:async()=>true});
  const r=await(await h(req({action:'prepare',storeId,productId:'attacker'}))).json();assert.equal(r.productId,sku);assert.equal(queried,sku);
  sku=null;assert.equal((await(await h(req())).json()).reason,'additional_store_not_ready');
  assert.equal((await h(req({action:'prepare',storeId}))).status,503);
@@ -200,10 +201,23 @@ test('public rollout still denies nonowners and rechecks ownership after catalog
  const userId='11111111-1111-4111-8111-111111111111';
  const productionAccess=createProductionAccess({url:'https://bhwuuxcrzxespkjlmqxr.supabase.co',enabled:'yes-2026-launch',publicEnabled:'yes-2026-public-launch'});
  let owner=false,googleCalls=0;
- const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_push_context'?owner:name==='manee_android_billing_product'?'manee.store3.monthly':name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
+ const options={client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async name=>({data:name==='manee_android_push_context'?owner:name==='manee_android_account_context'?accountData('manee.store3.monthly'):name==='manee_android_billing_status'?{subscriptions:[]}:true})}),
   service:{},productionAccess,
   api:{product:async productId=>{googleCalls++;owner=false;return {...product,productId};}}};
  const handler=createHandler(options);
  assert.equal((await handler(req())).status,403);assert.equal(googleCalls,0);
  owner=true;assert.equal((await handler(req())).status,403);assert.equal(googleCalls,1);
+});
+
+test('account checkout keeps original Google profile binding when selected store changes',async()=>{
+ const userId='11111111-1111-4111-8111-111111111111',billingStore='44444444-4444-4444-8444-444444444444';
+ const ids=google.binding(userId,billingStore);let savedStore;
+ const paidProduct=structuredClone(product);paidProduct.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900'};
+ const resource={subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',acknowledgementState:'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
+ let owned=true;
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async(name,args)=>({data:name==='manee_android_push_context'?owned:name==='manee_android_account_context'?accountData(PRODUCT,billingStore):name==='manee_android_billing_status'?{subscriptions:[]}:name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true})}),api:{product:async()=>paidProduct,get:async()=>resource},service:{rpc:async(name,args)=>{savedStore=args.p_store_id;return{data:true};}},productionAccess:async()=>true});
+ const prepared=await(await handler(req({action:'prepare',storeId,checkoutId}))).json();
+ assert.equal(prepared.billingScope,'account');assert.equal(prepared.profileId,ids.profileId);
+ assert.equal((await handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'owned'}))).status,200);assert.equal(savedStore,billingStore);
+ owned=false;assert.equal((await handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'owned'}))).status,403);
 });

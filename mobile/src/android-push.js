@@ -68,7 +68,7 @@ export function createAndroidPush({ push, getContext, projectId, storage, timeou
     }
     if (permission.receive !== 'granted') {
       if (enabled(c)) { await rpc(c, null, false);storage.removeItem(key(c)); }
-      return { subscribed: false, ready: true, message: '휴대폰 설정 > 앱 > 매니 테스트 > 알림에서 알림을 허용해 주세요.' };
+      return { subscribed: false, ready: true, message: '휴대폰 설정 > 앱 > 매니 > 알림에서 알림을 허용해 주세요.' };
     }
     await push.createChannel({ id: 'manee_store', name: '매장 알림', description: '매니 매장 알림', importance: 4, visibility: 0 });check(c);
     const value = await token(c);check(c);

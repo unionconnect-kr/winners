@@ -76,7 +76,7 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
   purchase:async()=>({status:'purchased',results:[{verified:true,active:true}]})});
  await settle();
  const copy=f.document.body.children[0].children.map(e=>e.textContent||'').join(' ');
- assert.match(copy,/매장 이용권 구독/);
+ assert.match(copy,/매니 구독/);
  assert.match(copy,/1개월 무료 체험/);
  assert.match(copy,/월 9,900원/);
  assert.match(copy,/Play 스토어 구독 관리/);

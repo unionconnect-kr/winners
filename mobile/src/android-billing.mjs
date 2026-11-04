@@ -23,7 +23,7 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
       unchanged(c);
       if (purchase.state !== 'purchased') continue;
       if (!purchase.purchaseToken) throw Error('구매 내역을 확인하지 못했어요.');
-      const result = await call(c, {action: 'verify', purchaseToken: purchase.purchaseToken});
+      const result = await call(c, {action: 'verify', purchaseToken: purchase.purchaseToken,productId:purchase.productIds?.[0]});
       if (result.verified !== true) throw Error('구매 확인이 지연되고 있어요. 구매 복원을 눌러 주세요.');
       results.push(result);
     }
@@ -66,7 +66,7 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
       try{
         const current = await playBilling.purchases();
         unchanged(c);
-        const relevant = (current.purchases || []).filter(p => p.productIds?.includes(info.productId));
+        const relevant = (current.purchases || []).filter(p => p.productIds?.some(id=>(info.restoreProductIds||[info.productId]).includes(id)));
         if (relevant.length) {
           const results = await verify(c, relevant);
           if(results.length)await release();
@@ -95,10 +95,10 @@ export function createAndroidBillingClient({playBilling, request, getContext, al
     restore: () => run(async c => {
       const info=await call(c,{action:'status'});
       if(info.testOnly===false && !allowPaid)throw Error('이 앱은 유료 결제를 지원하지 않아요. 앱을 업데이트해 주세요.');
-      if(!info.ready || !info.productId)throw Error('이 매장의 구독 연결을 준비하고 있어요.');
+      if(!info.ready || !info.productId)throw Error('이 아이디의 구독 연결을 준비하고 있어요.');
       const current = await playBilling.purchases();
       unchanged(c);
-      const relevant=(current.purchases||[]).filter(p=>p.productIds?.includes(info.productId));
+      const relevant=(current.purchases||[]).filter(p=>p.productIds?.some(id=>(info.restoreProductIds||[info.productId]).includes(id)));
       const results = await verify(c, relevant);
       return {status: results.length ? 'restored' : relevant.some(p => p.state === 'pending') ? 'pending' : 'empty', results};
     }),

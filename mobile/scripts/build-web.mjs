@@ -44,7 +44,7 @@ replaceOnce('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.1
   '<script src="/vendor/supabase.js"></script>');
 replaceOnce('  // END MANEE_ENVIRONMENT',
   '  window.MANEE_NATIVE.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}),openNativeNotification);\n  // END MANEE_ENVIRONMENT');
-replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button><button id="native-subscription-btn">매장 이용권<span>›</span></button><button data-owner-setup-resume>`);
+replaceOnce('<div class="owner-menu"><button data-owner-setup-resume>', `<div class="owner-menu"><button id="native-settings-btn">${platform === 'android' ? (androidProduction ? '앱 안내' : '테스트 앱 안내') : '아이폰 구독·알림'}<span>›</span></button><button id="native-subscription-btn">매니 구독<span>›</span></button><button data-owner-setup-resume>`);
 replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\n    window.MANEE_NATIVE.refresh();\n    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());');
 {
   replaceOnce('    document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());',
@@ -54,7 +54,7 @@ replaceOnce('  function bindOwnerUIEvents(){', '  function bindOwnerUIEvents(){\
   replaceOnce('    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)',
     '    if(error?.code==="P4402") window.MANEE_NATIVE.subscriptionDenied();\n    if(error) throw error;\n    if(!Array.isArray(data) || data.length!==1)');
   replaceOnce("    if(error && error.code==='42501'){clearStaffAuthView();render();}",
-    "    if(error?.code==='P4402'){showToast('매장 이용권을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
+    "    if(error?.code==='P4402'){showToast('매니 구독을 확인해 주세요. 사장님께 문의해 주세요.');return;}\n    if(error && error.code==='42501'){clearStaffAuthView();render();}");
 if (platform === 'ios') {
   replaceOnce("    if(state.role!=='storeOwner')return 'rejected';", `    if(state.role==='staff'){
       if(data.kind!=='test'||currentStoreId()!==data.storeId)return 'rejected';

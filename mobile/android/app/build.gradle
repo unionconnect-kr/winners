@@ -7,8 +7,8 @@ android {
         applicationId "kr.co.manee.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 23
-        versionName "1.22"
+        versionCode 24
+        versionName "1.23"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -29,6 +29,8 @@ android {
         debug {
             applicationIdSuffix '.staging'
             versionNameSuffix '-android-test'
+            resValue 'string', 'app_name', '매니 테스트'
+            resValue 'string', 'title_activity_main', '매니 테스트'
         }
         release {
             signingConfig signingConfigs.upload
