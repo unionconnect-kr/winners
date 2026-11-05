@@ -1,4 +1,4 @@
-import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion} from './subscription-sheet.mjs';
+import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,closeSubscriptionSheet,reuseSubscriptionSheet} from './subscription-sheet.mjs';
 // Only offers returned as eligible by Google Play are shown. Never invent prices.
 export function testOffers(products,productId='manee.store1.monthly') {
  if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
@@ -16,16 +16,18 @@ export function testOffers(products,productId='manee.store1.monthly') {
  return (trial?[trial]:offers).map(o=>({productId:product.productId,offerToken:o.offerToken,trialDays:o.offerId==='trial-60days'?60:0,price:Number(o.phases.at(-1).amountMicros)/1000000===9900?'9,900원':o.phases.at(-1).price,
   label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':p.period==='P60D'?'60일':p.period})`).join(' → ')}));
 }
-export function openAndroidBilling({billing,getContext,document}) {
- if(document.getElementById('manee-android-billing'))return;
+export function openAndroidBilling({billing,getContext,document,launchTrial=false}) {
+ if(reuseSubscriptionSheet(document,'manee-android-billing'))return;
  const c=getContext();if(c?.role!=='storeOwner')return;
+ const previous=document.getElementById('manee-subscription-status');if(previous)closeSubscriptionSheet(previous);
  const view=createSubscriptionSheet(document,{id:'manee-android-billing',title:'매니 구독',storeName:c.storeName});const sheet=view.sheet;
  const same=()=>{const n=getContext();return sheet.isConnected&&n?.userId===c.userId&&n?.storeId===c.storeId;};
  const {heading,status}=view;setSubscriptionPromotion(view);
  let busy=false,subscriptionActive=false;const buttons=[],purchaseButtons=[];
- const button=(label,fn,kind='primary')=>{const el=subscriptionButton(view,label,async()=>{if(busy)return;busy=true;buttons.forEach(b=>b.disabled=true);try{
+ const execute=async fn=>{if(busy)return;busy=true;buttons.forEach(b=>b.disabled=true);try{
   if(!same())throw Error('계정 또는 매장을 다시 선택해 주세요.');await fn();
- }catch(e){if(sheet.isConnected){status.textContent=e.message||'연결을 확인해 주세요.';if(/^PLAY_|PRODUCT_UNAVAILABLE|OFFER_CHANGED/.test(e.code||'')){purchaseButtons.forEach(b=>b.hidden=true);retry.hidden=false;}}}finally{busy=false;buttons.forEach(b=>b.disabled=false);}},kind);buttons.push(el);return el;};
+ }catch(e){if(sheet.isConnected){status.textContent=e.message||'연결을 확인해 주세요.';if(/^PLAY_|PRODUCT_UNAVAILABLE|OFFER_CHANGED/.test(e.code||'')){purchaseButtons.forEach(b=>b.hidden=true);retry.hidden=false;}}}finally{busy=false;buttons.forEach(b=>b.disabled=false);}};
+ const button=(label,fn,kind='primary')=>{const el=subscriptionButton(view,label,()=>execute(fn),kind);buttons.push(el);return el;};
  let testMode=true;
  const show=r=>{if(!same())return;
   if(r.status==='alreadyActive'||r.results?.some(x=>x.active===true||(testMode&&x.testActive===true))){
@@ -33,8 +35,8 @@ export function openAndroidBilling({billing,getContext,document}) {
    view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';
   }
   status.textContent=r.status==='alreadyActive'?'이 매장에 이미 이용 중인 구독이 있어요.':r.status==='cancelled'?'구매를 취소했어요.':r.status==='pending'?'승인을 기다리고 있어요. 잠시 후 구매 복원을 눌러 주세요.':r.status==='empty'?'복원할 구매가 없어요.':r.results?.some(x=>testMode?x.testActive:x.active)?(testMode?'테스트 구매·서버 검증이 완료됐어요.':'Google Play 구매·서버 검증이 완료됐어요.'):(testMode?'구매 내역을 확인했어요. 현재 활성 테스트 구독은 없어요.':'구매 내역을 확인했어요. 현재 활성 구독은 없어요.');};
- const retry=button('요금·혜택 다시 확인',async()=>{sheet.close();openAndroidBilling({billing,getContext,document});});retry.hidden=true;
- const close=button('닫기',()=>sheet.close(),'secondary');
+ const retry=button('요금·혜택 다시 확인',async()=>{closeSubscriptionSheet(sheet);openAndroidBilling({billing,getContext,document});});retry.hidden=true;
+ const close=button('닫기',()=>closeSubscriptionSheet(sheet),'secondary');
  sheet.addEventListener('cancel',e=>{if(busy)e.preventDefault();});sheet.addEventListener('close',()=>sheet.remove(),{once:true});
  document.body.append(sheet);sheet.showModal();
  void(async()=>{try{
@@ -52,10 +54,12 @@ export function openAndroidBilling({billing,getContext,document}) {
   status.textContent=subscriptionActive?(testMode?'이 매장의 테스트 구독을 이용 중이에요.':'이 매장의 구독을 이용 중이에요.'):offers.length?'다음 화면에서 Google Play 결제 조건을 확인해 주세요.':(testMode?'현재 구매 가능한 상품이 없어요. Play 설치 계정과 내부 테스트 참여 상태를 확인해 주세요.':'현재 구매 가능한 상품이 없어요. Google Play 계정을 확인해 주세요.');
   if(subscriptionActive){view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';}
   else if(!offers.length){retry.hidden=false;}
+  let startTrial=null;
   if(!subscriptionActive)for(const offer of offers){
    if(offer.trialDays===60){
     const label=setSubscriptionOffer(view,offer);
-    const buy=button(testMode?label+' · 테스트 구매':label,async()=>show(await billing.purchase(offer)));buy.dataset.purchase='true';purchaseButtons.push(buy);
+    startTrial=async()=>{status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));};
+    const buy=button(testMode?label+' · 테스트 구매':label,startTrial);buy.dataset.purchase='true';purchaseButtons.push(buy);
    }else{
     // An absent eligible trial is not permission to silently charge immediately.
     status.textContent='현재 Google Play 계정에는 무료체험 상품이 표시되지 않았어요. 대상 여부를 다시 확인하거나 무료체험 없는 구독 요금을 확인해 주세요.';
@@ -72,6 +76,9 @@ export function openAndroidBilling({billing,getContext,document}) {
   }
   // Keep the primary action before close, with restoration in a quiet footer.
   view.actions.append(close);
+  // Only the explicit status-sheet action may open Play directly, and only for
+  // the eligible 60-day offer returned by Play. Paid-only offers require review.
+  if(launchTrial&&startTrial)await execute(startTrial);
 
  }catch(e){if(same()){status.textContent=e.message||'상품 연결을 확인하지 못했어요.';retry.hidden=false;}}})();
 }

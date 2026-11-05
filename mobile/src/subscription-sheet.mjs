@@ -1,4 +1,14 @@
 // Store-confirmed offers only. This view never starts or restores a purchase itself.
+export function closeSubscriptionSheet(sheet){
+ // Native dialog.close() queues its close event. Remove synchronously before a
+ // replacement checks the old ID, while retaining the normal close cleanup.
+ sheet.close();sheet.remove();
+}
+export function reuseSubscriptionSheet(document,id){
+ const sheet=document.getElementById(id);if(!sheet)return false;
+ if(sheet.open===false){sheet.remove();return false;}
+ sheet.focus?.();return true;
+}
 export function createSubscriptionSheet(document,{id,title,storeName}){
  const el=(tag,text,parent,style='')=>{const node=document.createElement(tag);if(text)node.textContent=text;node.style.cssText=style;parent?.append(node);return node;};
  const sheet=el('dialog',null,null,'border:1px solid #e2ebe5;border-radius:24px;padding:24px;width:calc(100% - 32px);max-width:420px;max-height:calc(100dvh - 48px);overflow-y:auto;box-sizing:border-box;background:#fff;color:#203c30;font-family:inherit;font-size:15px;line-height:1.55;box-shadow:0 20px 70px #163c2d30;text-align:left');sheet.id=id;sheet.setAttribute('aria-label',title);

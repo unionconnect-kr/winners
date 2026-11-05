@@ -8,7 +8,7 @@ import { createNotificationNavigation } from './android-notification-navigation.
 
 import {createAndroidBillingClient} from './android-billing.mjs';
 import {openAndroidBilling} from './android-billing-ui.mjs';
-import {createSubscriptionStatusSheet,subscriptionButton} from './subscription-sheet.mjs';
+import {createSubscriptionStatusSheet,subscriptionButton,closeSubscriptionSheet,reuseSubscriptionSheet} from './subscription-sheet.mjs';
 import {subscriptionView} from './store-subscription.mjs';
 import {createSignupCheckout} from './signup-checkout.mjs';
 const playBilling=registerPlugin('ManeePlayBilling');
@@ -45,13 +45,13 @@ window.MANEE_NATIVE = {
   refresh() { void navigation.start().then(()=>navigation.flush()).catch(()=>{}); },
   async prepareLogout() { if(billing.isBusy())throw Error('구매 처리가 끝난 뒤 로그아웃해 주세요.');navigation.clear();await notifications.prepareLogout(); },
   openSubscriptionStatus() {
-    if (document.getElementById('manee-subscription-status')) return;
+    if (reuseSubscriptionSheet(document,'manee-android-billing') || reuseSubscriptionSheet(document,'manee-subscription-status')) return;
     const c=getContext();if(c?.role!=='storeOwner'||!c.storeId||!c.userId)return;
     const sheetView=createSubscriptionStatusSheet(document,{storeName:c.storeName,platform:'android'});
     const dialog=sheetView.sheet,title=sheetView.price,message=sheetView.status;
     const sandbox=sheetView.el('p','',sheetView.card,'color:#67766d;font-size:12px');sandbox.hidden=true;
-    const billingAction=subscriptionButton(sheetView,'무료체험·구독 확인',()=>{dialog.close();openAndroidBilling({billing,getContext,document});});billingAction.hidden=true;
-    subscriptionButton(sheetView,'닫기',()=>dialog.close(),'secondary');
+    const billingAction=subscriptionButton(sheetView,'무료체험·구독 확인',()=>{closeSubscriptionSheet(dialog);openAndroidBilling({billing,getContext,document,launchTrial:true});});billingAction.hidden=true;
+    subscriptionButton(sheetView,'닫기',()=>closeSubscriptionSheet(dialog),'secondary');
     const refresh=subscriptionButton(sheetView,'상태 새로고침',()=>void load(),'link');
     dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
     let seq=0;
