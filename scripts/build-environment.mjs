@@ -47,8 +47,8 @@ const webConfig = {...config,
   socialProviders: {naver: true},
 };
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(webConfig)+');\n');
-writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.46-web',environment,projectRef:config.projectRef,
-  commit:process.env.COMMIT_REF || null,uiSource:'mobile-1.46',usernameRecoveryEnabled:true,smsAuthEnabled:webConfig.webSmsAuthEnabled},null,2)+'\n');
+writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.47-web',environment,projectRef:config.projectRef,
+  commit:process.env.COMMIT_REF || null,uiSource:'mobile-1.47',usernameRecoveryEnabled:true,smsResendSeconds:30,smsAuthEnabled:webConfig.webSmsAuthEnabled},null,2)+'\n');
 const manifest = JSON.parse(readFileSync(resolve(root,'manifest.json'),'utf8'));
 if (environment === 'staging') { manifest.name = '매니 테스트'; manifest.short_name = '매니 테스트'; }
 writeFileSync(resolve(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

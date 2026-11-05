@@ -12,7 +12,27 @@ function fixture(staff=false,fetchImpl){
   const q=s=>w.document.querySelector(s),input=(s,v)=>{q(s).value=v;q(s).dispatchEvent(new w.Event('input',{bubbles:true}));};
   return {w,q,input,close:()=>w.close()};
 }
-const challenge={ok:true,challenge_id:'12345678-1234-1234-1234-123456789012',expires_in:180,resend_after:60,message:'인증한 번호와 일치하면 인증번호를 보내드려요.'};
+const challenge={ok:true,challenge_id:'12345678-1234-1234-1234-123456789012',expires_in:180,resend_after:30,message:'인증번호를 보냈어요.'};
+test('resend stays disabled at 29 seconds and becomes available at 30',async()=>{
+  let calls=0,now=Date.now(),tick;
+  const f=fixture(false,async()=>{calls++;return Response.json(challenge);});
+  f.w.Date.now=()=>now;f.w.setInterval=fn=>{tick=fn;return 1;};f.w.clearInterval=()=>{};
+  try{
+    f.q('[data-find-username]').click();f.input('#manee-id-phone','01011110001');f.q('[data-mir-send]').click();await settle();
+    assert.equal(f.q('[data-mir-send]').textContent,'재전송 30초');
+    now+=29000;tick();assert.equal(f.q('[data-mir-send]').disabled,true);f.q('[data-mir-send]').click();assert.equal(calls,1);
+    now+=1000;tick();assert.equal(f.q('[data-mir-send]').disabled,false);f.q('[data-mir-send]').click();await settle();assert.equal(calls,2);
+  }finally{f.close();}
+});
+test('a verified unregistered phone shows a clear signup explanation',async()=>{
+  const f=fixture(false,async(_url,opts)=>Response.json(JSON.parse(opts.body).action==='request'?challenge:{ok:true,usernames:[]}));
+  try{
+    f.q('[data-find-username]').click();f.input('#manee-id-phone','01011110001');f.q('[data-mir-send]').click();await settle();
+    f.input('#manee-id-code','123456');f.q('dialog form').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await settle();
+    assert.match(f.q('[data-mir-intro]').textContent,/삭제한 계정은 신규가입/);assert.equal(f.q('dialog form').hidden,true);
+    f.q('.mir-account').click();assert.equal(f.q('dialog'),null);
+  }finally{f.close();}
+});
 test('owner and employee login show both recovery actions without duplicate insertion',async()=>{
   for(const staff of [false,true]){const f=fixture(staff);try{await settle();assert.equal(f.w.document.querySelectorAll('[data-find-username]').length,1);assert.match(f.q('.manee-recovery-links').textContent,/아이디 찾기\|비밀번호 찾기/);}finally{f.close();}}
 });
@@ -24,7 +44,7 @@ test('verified username selection prefills the existing login without changing s
     f.q('dialog form').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await settle();
     assert.equal(f.w.document.querySelectorAll('.mir-account').length,2);f.q('.mir-account').click();
     assert.equal(f.q('#store-login-username-input').value,'owner_one');assert.equal(f.q('dialog'),null);
-    assert.deepEqual(calls.map(x=>x.action),['request','verify']);assert.equal(f.w.localStorage.length,0);
+    assert.deepEqual(calls.map(x=>x.action),['request','verify']);assert.equal(calls[0].resend_seconds,30);assert.equal(f.w.localStorage.length,0);
   }finally{f.close();}
 });
 test('changing phone while a request is pending rejects the stale challenge and closes clear results',async()=>{
