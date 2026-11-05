@@ -1,0 +1,30 @@
+name: Connect reviewed MANEE 1.45 TestFlight
+on:
+  push:
+    branches: [codex/ios145-final-test-20261105]
+    paths: ['.github/scripts/ios145-status.mjs', '.github/scripts/ios145-status.test.mjs', '.github/workflows/ios145-final-test.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-ios145-final-test
+  cancel-in-progress: false
+jobs:
+  connect:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios145-final-test-20261105'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test .github/scripts/ios145-status.test.mjs
+      - name: Verify and connect only the existing internal QA group
+        env:
+          MANEE_AUTHORIZED_QA_UPLOAD: 'ios-20261105-1.45-145.5.2'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/ios145-status.mjs
