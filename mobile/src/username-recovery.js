@@ -30,7 +30,7 @@
       const wait = Math.max(0, Math.ceil((state.resend-Date.now())/1000));
       const left = Math.max(0, Math.ceil((state.expires-Date.now())/1000));
       send.disabled = state.busy || wait > 0;
-      send.textContent = state.busy ? '처리 중…' : wait ? '재전송 '+wait+'초' : state.challenge ? '재전송' : '인증번호 받기';
+      send.textContent = state.busy ? '처리 중…' : wait ? (state.challenge?'재전송 ':'재시도 ')+(wait>=60?Math.ceil(wait/60)+'분':wait+'초') : state.challenge ? '재전송' : '인증번호 받기';
       code.disabled = state.busy || !state.challenge;
       verify.disabled = state.busy || !state.challenge || !left || !/^\d{6}$/.test(code.value);
       clock.textContent = state.challenge ? left ? '남은 시간 '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0') : '인증번호가 만료됐어요. 재전송해 주세요.' : '인증번호는 3분 동안 유효해요.';

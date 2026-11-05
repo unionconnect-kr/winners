@@ -96,9 +96,22 @@ test('paid checkout is absent unless the server explicitly reports readiness and
  }
 });
 
-test('paid-only offer never claims a free trial and restore remains secondary',async()=>{
- const f=dialogFixture({status:async()=>({ready:true,testOnly:false,billingScope:'account',productId:product.productId}),products:async()=>({products:[{...product,offers:[product.offers[0]]}]})});await settle();
- assert.equal(f.visibleOffers()[0].textContent,'월 9,900원으로 구독하기');
+test('a paid-only offer requires reviewing immediate payment before a purchase button appears',async()=>{
+ let purchased=0;
+ const f=dialogFixture({status:async()=>({ready:true,testOnly:false,billingScope:'account',productId:product.productId}),products:async()=>({products:[{...product,offers:[product.offers[0]]}]}),purchase:async()=>{purchased++;return {status:'cancelled'};}});await settle();
+ assert.equal(f.visibleOffers().length,0);
+ await f.buttons().find(b=>b.textContent==='무료체험 없는 구독 요금 확인').onclick();
+ assert.equal(purchased,0);assert.equal(f.visibleOffers()[0].textContent,'월 9,900원으로 구독하기');
+ await f.visibleOffers()[0].onclick();assert.equal(purchased,1);
  assert.equal(f.buttons().find(b=>b.textContent==='기존 구독 복원').parent.tagName,'div');
- assert.match(f.visibleOffers()[0].style.cssText,/#16774c/);
+});
+test('a Play lookup failure keeps the trial promotion but offers only a retry, never a paid fallback',async()=>{
+ const f=dialogFixture({products:async()=>{throw Object.assign(new Error('offline'),{code:'PLAY_2'});}});await settle();
+ assert.equal(f.visibleOffers().length,0);
+ assert.equal(f.buttons().find(b=>b.textContent==='요금·혜택 다시 확인').hidden,false);
+});
+test('a Play checkout error invalidates old purchase options and requires a fresh offer lookup',async()=>{
+ const f=dialogFixture({purchase:async()=>{throw Object.assign(new Error('offline'),{code:'PLAY_2'});}});await settle();
+ await f.visibleOffers()[0].onclick();assert.equal(f.visibleOffers().length,0);
+ assert.equal(f.buttons().find(b=>b.textContent==='요금·혜택 다시 확인').hidden,false);
 });

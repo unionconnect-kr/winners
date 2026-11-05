@@ -47,8 +47,21 @@ public class ManeePlayBillingPlugin extends Plugin implements PurchasesUpdatedLi
     }
 
     private void fail(PluginCall call, BillingResult result) {
-        call.reject("Google Play 연결을 확인하지 못했어요. 다시 시도해 주세요.",
-            "PLAY_" + result.getResponseCode());
+        int code = result.getResponseCode();
+        String message;
+        switch (code) {
+            case BillingClient.BillingResponseCode.BILLING_UNAVAILABLE:
+                message = "Google Play 결제를 사용할 수 없어요. Play 스토어 로그인과 업데이트를 확인해 주세요."; break;
+            case BillingClient.BillingResponseCode.ITEM_UNAVAILABLE:
+                message = "이 Google Play 계정에서 구독 상품을 사용할 수 없어요. 설치 계정과 테스트 참여 상태를 확인해 주세요."; break;
+            case BillingClient.BillingResponseCode.DEVELOPER_ERROR:
+                message = "Google Play에서 이 앱의 결제 정보를 확인하지 못했어요. Play 스토어 테스트 버전으로 확인해 주세요."; break;
+            case BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED:
+                message = "이미 구매한 구독이 있어요. 기존 구독 복원을 눌러 주세요."; break;
+            default:
+                message = "Google Play 연결이 원활하지 않아요. 네트워크를 확인한 뒤 요금·혜택을 다시 확인해 주세요.";
+        }
+        call.reject(message + " (" + code + ")", "PLAY_" + code);
     }
     private boolean validProduct(String id) { return id != null && id.matches("[a-z0-9][a-z0-9._]{0,149}"); }
     private interface ProductCallback { void accept(ProductDetails product); }

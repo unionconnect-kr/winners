@@ -23,7 +23,9 @@ export async function uploadTestFlight(env, ipa, {
     env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile148-release.yml@refs/heads/codex/mobile-release-148-20261105';
   const release149 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/mobile-release-149-20261105' &&
     env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile149-release.yml@refs/heads/codex/mobile-release-149-20261105';
-  if ((!manual && !matched143 && !feedback144 && !release145 && !release146 && !release147 && !release148 && !release149) ||
+  const release150 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/mobile-release-150-20261105' &&
+    env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile150-release.yml@refs/heads/codex/mobile-release-150-20261105';
+  if ((!manual && !matched143 && !feedback144 && !release145 && !release146 && !release147 && !release148 && !release149 && !release150) ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');
   }

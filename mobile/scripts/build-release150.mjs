@@ -1,0 +1,11 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+const mobile=fileURLToPath(new URL('..',import.meta.url));
+const platform=process.argv[2];
+if(!['android','ios'].includes(platform)||process.argv[3]!=='production')throw Error('Specify android|ios production explicitly');
+execFileSync(process.execPath,['scripts/build-release149.mjs',platform,'production'],{cwd:mobile,stdio:'inherit'});
+const out=resolve(mobile,'www');
+const info=JSON.parse(readFileSync(resolve(out,'build-info.json'),'utf8'));
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.50',versionCode:51,releaseVersion:'1.50',sourceVersion:'1.49',subscriptionDesignEnabled:true,passwordGuidanceEnabled:true,passwordPrecheckEnabled:false},null,2)+'\n');
