@@ -1,0 +1,31 @@
+name: Connect exact iOS 150.1.1 internal QA
+on:
+  push:
+    branches: [codex/ios150-internal-20261105]
+    paths: ['.github/workflows/ios150-internal-group.yml', '.github/scripts/ios150-internal-group*']
+permissions:
+  contents: read
+concurrency:
+  group: manee-ios150-internal-connect
+  cancel-in-progress: false
+jobs:
+  connect:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios150-internal-20261105'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test exact build and group guards without credentials
+        run: node --test .github/scripts/ios150-internal-group.test.mjs
+      - name: Connect processed 150.1.1 only to the existing internal QA group
+        env:
+          MANEE_INTERNAL_BUILD: 'ios-20261105-150.1.1'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/ios150-internal-group.mjs
