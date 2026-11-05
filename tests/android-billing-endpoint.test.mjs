@@ -9,9 +9,9 @@ const checkoutId='33333333-3333-4333-8333-333333333333';
 const accountData=(productId=PRODUCT,billingStoreId=storeId)=>({productId,billingStoreId,restoreProductIds:productId?[productId]:[],otherPlatformActive:false});
 const product={packageName:'kr.co.manee.app',productId:PRODUCT,basePlans:[{basePlanId:'monthly',state:'ACTIVE',autoRenewingBasePlanType:{billingPeriodDuration:'P1M'},regionalConfigs:[{regionCode:'KR',newSubscriberAvailability:true}]}]};
 const req=(body={action:'status',storeId},headers={authorization:'Bearer test-token'})=>new Request('https://example.com',{method:'POST',headers,body:JSON.stringify(body)});
-function setup({auth=true,owner=true,resource=product}={}){
+function setup({auth=true,owner=true,resource=product,diagnostic}={}){
  let calls=0,checks=0;
- const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:auth?{id:'user'}:null}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:typeof owner==='function'?owner(++checks):owner})}),api:{product:async()=>{calls++;return resource;}}});
+ const handler=createHandler({client:()=>({auth:{getUser:async()=>({data:{user:auth?{id:'user'}:null}})},rpc:async name=>({data:name==='manee_android_billing_status'?{subscriptions:[]}:typeof owner==='function'?owner(++checks):owner})}),api:{product:async()=>{calls++;return resource;}},diagnostic});
  return {handler,calls:()=>calls};
 }
 test('anonymous, invalid sessions and nonowners cannot query Google',async()=>{
@@ -220,4 +220,122 @@ test('account checkout keeps original Google profile binding when selected store
  assert.equal(prepared.billingScope,'account');assert.equal(prepared.profileId,ids.profileId);
  assert.equal((await handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'owned'}))).status,200);assert.equal(savedStore,billingStore);
  owned=false;assert.equal((await handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'owned'}))).status,403);
+});
+
+function diagnosticFixture({diagnostic,rpc:override=async()=>undefined,get,receipt,
+ catalog,testAccess=async()=>true,productionAccess=async()=>false,save=true}={}){
+ const userId='11111111-1111-4111-8111-111111111111';
+ const ids=google.binding(userId,storeId);let saves=0,acks=0;
+ const resource=receipt??{testPurchase:{},subscriptionState:'SUBSCRIPTION_STATE_ACTIVE',
+  acknowledgementState:'ACKNOWLEDGEMENT_STATE_PENDING',
+  externalAccountIdentifiers:{obfuscatedExternalAccountId:ids.accountId,obfuscatedExternalProfileId:ids.profileId},
+  lineItems:[{productId:PRODUCT,offerDetails:{basePlanId:'monthly'},autoRenewingPlan:{},expiryTime:new Date(Date.now()+86400000).toISOString()}]};
+ const paidProduct=structuredClone(product);paidProduct.basePlans[0].regionalConfigs[0].price={currencyCode:'KRW',units:'9900'};
+ const handler=createHandler({diagnostic,testAccess,productionAccess,
+  client:()=>({auth:{getUser:async()=>({data:{user:{id:userId}}})},rpc:async(name,args)=>{
+   const result=await override(name,args);if(result!==undefined)return result;
+   return{data:name==='manee_android_account_context'?accountData():
+    name==='manee_android_billing_status'?{subscriptions:[]}:
+    name==='manee_android_billing_checkout_claim'?{status:'claimed'}:true};
+  }}),api:{get:get??(async()=>resource),product:catalog??(async()=>paidProduct),acknowledge:async()=>acks++},
+  service:{rpc:async()=>{saves++;return{data:save};}}});
+ return{handler,resource,saves:()=>saves,acks:()=>acks};
+}
+
+test('HTTP failures expose only fixed diagnostic fields and preserve guards and responses',async()=>{
+ const cases=[
+  {request:()=>req(undefined,{authorization:'Bearer secret-token',origin:'https://secret.example'}),status:403,error:'origin_denied',stage:'request',action:'unknown'},
+  {request:()=>new Request('https://example.com',{method:'GET'}),status:405,error:'method_not_allowed',stage:'request',action:'unknown'},
+  {request:()=>req(undefined,{}),status:401,error:'authentication_required',stage:'authentication',action:'unknown'},
+  {request:()=>req({action:'secret-action',storeId,purchaseToken:'secret-receipt'}),status:400,error:'invalid_request',stage:'request',action:'unknown'},
+  {request:()=>req(),options:{owner:false},status:403,error:'owner_access_denied',stage:'authorization',action:'status'},
+ ];
+ for(const c of cases){
+  const events=[];const s=setup({...c.options,diagnostic:event=>events.push(event)});
+  const response=await s.handler(c.request());
+  assert.equal(response.status,c.status);assert.deepEqual(await response.json(),{error:c.error});
+  assert.equal(response.headers.get('Cache-Control'),'no-store');
+  assert.deepEqual(events,[{action:c.action,stage:c.stage,status:c.status,error:c.error,reason:'unknown'}]);
+  assert.equal(Object.isFrozen(events[0]),true);assert.equal(s.calls(),0);
+ }
+ const events=[];const success=setup({diagnostic:event=>events.push(event)});
+ assert.equal((await success.handler(req())).status,200);assert.deepEqual(events,[]);
+});
+
+test('billing failure diagnostics distinguish lookup, allocation, receipt and checkout boundaries',async()=>{
+ const cases=[
+  {action:'status',stage:'allocation',error:'billing_allocation_unavailable',options:{rpc:async name=>name==='manee_android_account_context'?{error:{message:'private-db-details'}}:undefined}},
+  {action:'status',stage:'allocation',error:'billing_allocation_invalid',options:{rpc:async name=>name==='manee_android_account_context'?{data:accountData('private-product')}:undefined}},
+  {action:'verify',stage:'verify_product_lookup',error:'subscription_unavailable',options:{get:async()=>{throw Error('subscription_unavailable');}}},
+  {action:'verify',stage:'verify_allocation',error:'purchase_mismatch',options:{rpc:async(name,args)=>name==='manee_android_account_context'&&args.p_product_id?{data:accountData(PRODUCT,'private-store')}:undefined}},
+  {action:'verify',stage:'verify_receipt',error:'save_failed',options:{save:false}},
+  {action:'status',stage:'snapshot',error:'billing_status_unavailable',options:{rpc:async name=>name==='manee_android_billing_status'?{error:{message:'private-db-details'}}:undefined}},
+  {action:'status',stage:'catalog',error:'unexpected',options:{catalog:async()=>{throw Error('private-provider-details');}}},
+  {action:'prepare',stage:'checkout_gate',error:'billing_not_ready',options:{testAccess:async()=>false}},
+  {action:'prepare',stage:'checkout_claim',error:'billing_unavailable',options:{testAccess:async()=>false,productionAccess:async()=>true,rpc:async name=>name==='manee_android_billing_checkout_claim'?{error:{message:'private-lock-details'}}:undefined}},
+  {action:'prepare',stage:'checkout_claim',error:'checkout_in_progress',status:409,options:{testAccess:async()=>false,productionAccess:async()=>true,rpc:async name=>name==='manee_android_billing_checkout_claim'?{data:{status:'in_progress'}}:undefined}},
+  {action:'release',stage:'checkout_release',error:'billing_unavailable',options:{rpc:async name=>name==='manee_android_billing_checkout_release'?{error:{message:'private-lock-details'}}:undefined}},
+ ];
+ for(const c of cases){
+  const events=[];const fixture=diagnosticFixture({...c.options,diagnostic:event=>events.push(event)});
+  const response=await fixture.handler(req({action:c.action,storeId,checkoutId,purchaseToken:'private-purchase-token'}));
+  const status=c.status??503;
+  assert.equal(response.status,status,c.stage);
+  assert.deepEqual(await response.json(),{error:status===409?'checkout_in_progress':c.action==='prepare'&&c.error==='billing_not_ready'?'billing_not_ready':'billing_unavailable'},c.stage);
+  assert.deepEqual(events,[{action:c.action,stage:c.stage,status,error:c.error,reason:'unknown'}]);
+  assert.equal(fixture.acks(),0);assert.equal(fixture.saves(),c.error==='save_failed'?1:0);
+ }
+});
+
+test('receipt mismatch reasons are allowlisted without exposing binding or receipt data',async()=>{
+ const changes=[
+  ['account_binding_mismatch',r=>r.externalAccountIdentifiers.obfuscatedExternalAccountId='private-account-binding'],
+  ['profile_binding_mismatch',r=>r.externalAccountIdentifiers.obfuscatedExternalProfileId='private-profile-binding'],
+  ['subscription_shape_mismatch',r=>r.subscriptionState='private-state'],
+  ['product_plan_mismatch',r=>r.lineItems[0].productId='private-product'],
+  ['subscription_expiry_invalid',r=>r.lineItems[0].expiryTime='private-expiry'],
+  ['acknowledgement_state_invalid',r=>r.acknowledgementState='private-ack'],
+  ['linked_token_invalid',r=>r.linkedPurchaseToken='private-purchase-token'],
+ ];
+ for(const [reason,change]of changes){
+  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event)});change(f.resource);
+  const response=await f.handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'private-purchase-token'}));
+  assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'billing_unavailable'});
+  assert.deepEqual(events,[{action:'verify',stage:'verify_receipt',status:503,error:'purchase_mismatch',reason}]);
+  assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+  assert.doesNotMatch(JSON.stringify(events),/private-|11111111|22222222|manee\.store/);
+ }
+});
+
+test('untrusted errors, accessors and secret tokens never enter diagnostics or responses',async()=>{
+ const secret='PRIVATE_TOKEN_RECEIPT_UID_STORE_DB_HEADERS_BODY';
+ const hostile=Object.assign(Error(secret),{billingReason:secret,stack:secret,headers:{authorization:secret},body:secret});
+ let reads=0;
+ const changingReason={message:'purchase_mismatch',get billingReason(){return++reads===1?'account_binding_mismatch':secret;}};
+ const cases=[
+  {cause:hostile,error:'unexpected',reason:'unknown'},
+  {cause:{message:'purchase_mismatch',billingReason:secret},error:'purchase_mismatch',reason:'unknown'},
+  {cause:{get message(){throw Error(secret);},get billingReason(){throw Error(secret);}},error:'unexpected',reason:'unknown'},
+  {cause:changingReason,error:'purchase_mismatch',reason:'account_binding_mismatch'},
+ ];
+ for(const c of cases){
+  const events=[];const f=diagnosticFixture({get:async()=>{throw c.cause;},diagnostic:event=>events.push(event)});
+  const response=await f.handler(req({action:'verify',storeId,purchaseToken:secret},{authorization:'Bearer '+secret,'x-private-header':secret}));
+  const text=await response.text();assert.equal(response.status,503);assert.equal(text,'{"error":"billing_unavailable"}');
+  assert.deepEqual(events,[{action:'verify',stage:'verify_product_lookup',status:503,error:c.error,reason:c.reason}]);
+  assert.ok(!JSON.stringify(events).includes(secret));assert.ok(!text.includes(secret));assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+ }
+ assert.equal(reads,1);
+});
+
+test('throwing or rejecting diagnostic callbacks cannot change failure responses or checkout locks',async()=>{
+ for(const diagnostic of [()=>{throw Error('private-log-failure');},async()=>{throw Error('private-log-rejection');}]){
+  let claims=0;
+  const f=diagnosticFixture({diagnostic,testAccess:async()=>false,productionAccess:async()=>true,
+   rpc:async name=>name==='manee_android_billing_checkout_claim'?(claims++,{data:{status:'in_progress'}}):undefined});
+  const response=await f.handler(req({action:'prepare',storeId,checkoutId}));
+  assert.equal(response.status,409);assert.deepEqual(await response.json(),{error:'checkout_in_progress'});
+  assert.equal(claims,1);assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+ }
+ await new Promise(resolve=>setImmediate(resolve));
 });

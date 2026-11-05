@@ -71,6 +71,24 @@ test('account lease serializes iOS and Android checkout across different stores'
  assert.equal((await claim(store2,'android',id(902))).status,'claimed');
  await rpc('select public.manee_account_billing_checkout_release($1,$2,$3)',[store,'android',id(902)]);
 });
+test('a different checkout cannot extend a lease; expiry permits recovery and stale release cannot unlock it',async()=>{
+ await role(owner);
+ const claim=async key=>(await rpc('select public.manee_account_billing_checkout_claim($1,$2,$3,$4) r',[store,'android','manee.store1.monthly',key])).rows[0].r;
+ const lease=async()=>{
+  await db.exec('reset role');
+  return (await db.query('select checkout_id,expires_at from private.account_billing_checkouts where user_id=$1',[owner])).rows[0];
+ };
+ assert.equal((await claim(id(903))).status,'claimed');
+ const before=await lease();
+ await role(owner);assert.equal((await claim(id(904))).status,'in_progress');
+ const after=await lease();
+ assert.deepEqual(after,before,'a blocked retry must not renew the previous checkout');
+ await db.query("update private.account_billing_checkouts set expires_at=clock_timestamp()-interval '1 second' where user_id=$1",[owner]);
+ await role(owner);assert.equal((await claim(id(904))).status,'claimed');
+ assert.equal((await rpc('select public.manee_account_billing_checkout_release($1,$2,$3) r',[store,'android',id(903)])).rows[0].r,false);
+ const recovered=await lease();assert.equal(recovered.checkout_id,id(904));
+ await role(owner);assert.equal((await rpc('select public.manee_account_billing_checkout_release($1,$2,$3) r',[store,'android',id(904)])).rows[0].r,true);
+});
 test('one verified account receipt covers both stores; expired receipts and sandbox do not grant production access',async()=>{
  await db.exec(`reset role;insert into private.store_billing_enforcement values('${store}','Production'),('${store2}','Production');`);
  const access=async()=> (await rpc('select private.manee_store_write_entitled($1) a, private.manee_store_write_entitled($2) b',[store,store2])).rows[0];

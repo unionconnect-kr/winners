@@ -112,16 +112,46 @@ test('a pending or uncertain paid purchase keeps its lease for restoration',asyn
   assert.deepEqual(seen,['prepare']);
  }
 });
-test('Play item unavailable releases the checkout lease for a later attempt',async()=>{
+test('definitive Play item or configuration errors release the exact lease for a later attempt',async()=>{
+ for(const code of ['PLAY_4','PLAY_5']){
  const seen=[];
  const s=setup({request:async(_c,_n,b)=>{
   seen.push({action:b.action,checkoutId:b.checkoutId});
   return {ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,checkoutId:b.checkoutId};
- },playBilling:{purchase:async()=>{throw Object.assign(Error('구입하려는 항목을 찾을 수 없습니다.'),{code:'PLAY_4'});}}});
+ },playBilling:{purchase:async()=>{throw Object.assign(Error('구입하려는 항목을 찾을 수 없습니다.'),{code});}}});
  await assert.rejects(s.client.purchase(selection),/항목을 찾을 수/);
  assert.deepEqual(seen.map(x=>x.action),['prepare','release']);
  assert.equal(seen[0].checkoutId,seen[1].checkoutId);
  assert.equal(s.client.isBusy(),false);
+ }
+});
+test('an interrupted checkout keeps its lease while a restarted client can restore without starting another purchase',async()=>{
+ let lease=null,owned=[],launches=0,queries=0;
+ const request=async(_c,_n,b)=>{
+  if(b.action==='prepare'){
+   if(lease&&lease!==b.checkoutId)throw Object.assign(Error('checkout already in progress'),{code:'checkout_in_progress'});
+   lease=b.checkoutId;
+  }
+  if(b.action==='verify')return{verified:true,active:true};
+  if(b.action==='release'){
+   if(b.checkoutId===lease)lease=null;
+   return{released:lease===null};
+  }
+  return{ready:true,...selection,accountId:'a',profileId:'b',testOnly:false,...(b.action==='prepare'?{checkoutId:b.checkoutId}:{})};
+ };
+ const playBilling={purchases:async()=>{queries++;return{purchases:owned};},purchase:async()=>{launches++;throw Object.assign(Error('connection lost after launch'),{code:'PLAY_6'});}};
+ const beforeRestart=setup({request,playBilling});
+ await assert.rejects(beforeRestart.client.purchase(selection),/connection lost/);
+ const originalLease=lease;assert.ok(originalLease);assert.equal(launches,1);
+ // A new client has no in-memory checkout ID, as after process death/reinstall.
+ const restarted=setup({request,playBilling});
+ await assert.rejects(restarted.client.purchase(selection),/already in progress/);
+ assert.equal(queries,1,'a conflicting prepare stops the new checkout before querying Play');
+ assert.equal(launches,1);assert.equal(lease,originalLease);
+ owned=[paid];
+ assert.equal((await restarted.client.restore()).status,'restored');
+ assert.equal(launches,1,'restoration must not open another purchase');
+ assert.equal(lease,originalLease,'restoration must not blindly release another checkout');
 });
 test('paid purchase cannot start when the server has not issued a lease',async()=>{
  const s=setup({request:async()=>({ready:true,...selection,accountId:'a',profileId:'b',testOnly:false})});

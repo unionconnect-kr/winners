@@ -34,6 +34,7 @@ const productionAccess=createProductionAccess({url,
  pairs:Deno.env.get('MANEE_ANDROID_PAID_PAIRS'),
  publicEnabled:Deno.env.get('MANEE_ANDROID_PAID_PUBLIC_ENABLED')});
 Deno.serve(createHandler({api,service,productionAccess,
+ diagnostic:(event:unknown)=>console.error('billing_failure',JSON.stringify(event)),
  testAccess:async({user,storeId}:any)=>{
  const result=await user.rpc('manee_android_billing_test_access',{p_store_id:storeId});
  return !result.error && result.data===true;
