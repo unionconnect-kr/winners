@@ -374,7 +374,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
 <script src="/app-config.js"></script>
 <script src="/web-platform.js"></script>
 <script src="/social-auth.js"></script>
-</head>
+<link rel="stylesheet" href="/email-verification.css"></head>
 <body>
 
 <div id="environment-banner" class="environment-banner" hidden>테스트 환경 · 실제 매장 데이터와 분리되어 있어요</div>
@@ -579,6 +579,10 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   };
   const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
     {auth:Object.assign({storage:maneeAuthStorage,detectSessionInUrl:false}, MANEE_IS_STAGING ? {storageKey:"manee-"+MANEE_CONFIG.projectRef+"-auth"} : {})}) : null;
+  window.MANEE_EMAIL_BRIDGE=Object.freeze({
+    session:async()=>{const result=await db.auth.getSession();if(result.error)throw result.error;return result.data?.session||null;},
+    userId:()=>state.authProfile?.user_id||null
+  });
   // END MANEE_ENVIRONMENT
   const MANEE_WEB_SMS_ENABLED = MANEE_CONFIG.webSmsAuthEnabled === true;
   window.MANEE_WEB.configure(()=>({db,storeId:currentStoreId(),userId:state.authProfile?.user_id,storeName:state.store,role:state.role,ready:state.splashDone&&!state.loading}));
@@ -1750,6 +1754,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function staffAuthButton(action,label,extra){
     return '<button type="button" class="crew-code-btn" data-staff-auth-action="'+action+'" '+(extra||'')+'>'+label+'</button>';
   }
+  function maneeSignupEmail(role,value=''){
+    return '<div class="manee-email-signup" data-manee-email-signup="'+role+'"><label for="manee-email-'+role+'">이메일 (필수)</label><div class="mee-input-row"><input type="email" id="manee-email-'+role+'" '+(role==='owner'?'data-signup-field="recovery_email" ':'')+'autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" maxlength="254" value="'+escapeHtml(value||'')+'" placeholder="이메일 주소를 입력해 주세요"><button type="button" data-mee-check>중복확인</button></div><p data-mee-check-status role="status" aria-live="polite">가입 후 이메일을 인증해 주세요.</p></div>';
+  }
   function renderStaffSignup(){
     if(!MANEE_WEB_SMS_ENABLED)return renderWebStaffSignup();
     const check=state.staffSignupUsernameCheck;
@@ -1766,7 +1773,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       '<label for="staff-signup-password">비밀번호</label><input id="staff-signup-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="영문·숫자 포함 8자 이상" aria-describedby="staff-password-help">'+
       '<p id="staff-password-help" class="crew-code-hint">영문과 숫자를 모두 포함해 8자 이상으로 만들어 주세요. (72바이트 이하)</p>'+
       '<label for="staff-signup-confirm">비밀번호 확인</label><input id="staff-signup-confirm" type="password" maxlength="72" autocomplete="new-password">'+
-      renderSmsVerification('signup_staff')+'<p class="crew-code-hint">인증한 번호는 계정 복구에 사용하며, 매장 연결 승인 시 연락처로 전달돼요.</p>'+
+      maneeSignupEmail('staff')+renderSmsVerification('signup_staff')+'<p class="crew-code-hint">인증한 번호는 계정 복구에 사용하며, 매장 연결 승인 시 연락처로 전달돼요.</p>'+
       '<label class="signup-age-check" for="staff-signup-age-confirmed"><input id="staff-signup-age-confirmed" type="checkbox"><span>만 14세 이상입니다. (필수)</span></label>'+
       '<p class="crew-code-hint">만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p>'+
       staffAuthButton('signup','가입하기')+'</div>'+staffAuthButton('login-screen','로그인 화면으로');
@@ -1785,7 +1792,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       '<p id="staff-signup-username-status" class="crew-code-hint" style="margin:4px 0 0;color:'+statusColor+';">'+statusText+'</p>'+
       '<label for="staff-signup-password">비밀번호</label><input id="staff-signup-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="영문·숫자 포함 8자 이상">'+
       '<label for="staff-signup-confirm">비밀번호 확인</label><input id="staff-signup-confirm" type="password" maxlength="72" autocomplete="new-password">'+
-      '<div class="staff-personal-fields"><h3>매장에 전달할 내 정보</h3><p>연락처는 선택 입력이에요. 신규 직원으로 승인되면 매장에 전달돼요. 급여·근무조건은 사장님이 설정해요.</p>'+
+      maneeSignupEmail('staff')+'<div class="staff-personal-fields"><h3>매장에 전달할 내 정보</h3><p>연락처는 선택 입력이에요. 신규 직원으로 승인되면 매장에 전달돼요. 급여·근무조건은 사장님이 설정해요.</p>'+
       '<label for="staff-signup-phone">연락처 (선택)</label><input id="staff-signup-phone" type="tel" maxlength="24" autocomplete="tel" placeholder="010-0000-0000">'+
       '</div>'+
       '<label class="signup-age-check" for="staff-signup-age-confirmed"><input id="staff-signup-age-confirmed" type="checkbox"><span>만 14세 이상입니다. (필수)</span></label>'+
@@ -1827,6 +1834,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     for(const r of state.staffLinkRequests||[]) html+='<div class="day-panel">'+escapeHtml(r.store_name)+' · '+(statuses[r.status]||'확인 필요')+' '+
       (r.status==='pending'?staffAuthButton('cancel','요청 취소','data-request-id="'+escapeHtml(r.id)+'"'):'')+'</div>';
     html+='<div class="day-panel"><h3>계정 보안</h3><p>현재 비밀번호를 확인한 뒤 새 비밀번호로 변경할 수 있어요.</p>'+staffAuthButton('recovery-change','비밀번호 변경')+(MANEE_WEB_SMS_ENABLED?'<button type="button" class="crew-code-btn" data-sms-open>복구용 휴대폰 등록·변경</button>':'')+'</div>';
+    html+='<div class="day-panel" data-manee-email-account></div>';
     html+=staffAuthButton('refresh-account','연결 상태 새로 확인')+' '+staffAuthButton('logout','로그아웃');
     return html;
   }
@@ -1984,9 +1992,10 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
         const personal={phone:read('staff-signup-phone').trim()};
         if(personal.phone && (!/^[+0-9 ()-]{7,24}$/.test(personal.phone)||personal.phone.replace(/[^0-9]/g,'').length<7||personal.phone.replace(/[^0-9]/g,'').length>15)) throw new Error('연락처를 확인해 주세요.');
         if(document.getElementById('staff-signup-age-confirmed')?.checked!==true) throw new Error('만 14세 이상임을 확인해 주세요.');
-        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal,age_14_plus_confirmed:true,...(MANEE_WEB_SMS_ENABLED?smsProofPayload('signup_staff'):{})});
+        const recovery_email=window.MANEE_EMAIL_UI.signupValue('staff');
+        const data=await callManeeAuthApi('manee-staff-signup',{username,display_name,password,personal,recovery_email,age_14_plus_confirmed:true,...(MANEE_WEB_SMS_ENABLED?smsProofPayload('signup_staff'):{})});
         const session=data.session || (await callManeeAuthApi('manee-login',{username,password})).session;
-        await applyManeeAuthSession(session); state.smsAuth={}; await restoreManeeAuthIdentity(null,true); showToast('직원 계정을 만들었어요. 매장 연결코드를 입력해 주세요.');
+        await applyManeeAuthSession(session); state.smsAuth={}; await restoreManeeAuthIdentity(null,true); showToast('직원 계정을 만들었어요. 매장 연결코드를 입력해 주세요.'); void window.MANEE_EMAIL_UI?.afterSignup();
       }else if(action==='preview-link'){
         const code=((document.getElementById('staff-link-code')||{}).value||'').replace(/[\s-]+/g,'').toUpperCase();
         if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) throw new Error('8자리 매장 연결코드를 입력해 주세요.');
@@ -2713,12 +2722,14 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const usernameCheck = state.ownerRequestUsernameCheck;
     if(!usernameCheck || usernameCheck.username !== normalizedUsername || !usernameCheck.available){ showToast("아이디 중복확인을 먼저 해주세요."); return; }
     if(document.getElementById('owner-request-age-confirmed')?.checked!==true){showToast('만 14세 이상임을 확인해 주세요.');return;}
+    let recoveryEmail;
+    try{recoveryEmail=window.MANEE_EMAIL_UI.signupValue('owner');}catch(e){showToast(e.message);return;}
     state.ownerSignupBusy=true;
     const submitButton=document.getElementById("submit-owner-request-btn");
     if(submitButton){submitButton.disabled=true;submitButton.textContent="가입 처리 중…";}
     showToast("계정을 만드는 중이에요…");
     try{
-      const payload = { username, password:pw, display_name:name, store_name:storeName, age_14_plus_confirmed:true, ...(MANEE_WEB_SMS_ENABLED?smsProofPayload('signup_owner'):{}) };
+      const payload = { username, password:pw, display_name:name, store_name:storeName, age_14_plus_confirmed:true, recovery_email:recoveryEmail, ...(MANEE_WEB_SMS_ENABLED?smsProofPayload('signup_owner'):{}) };
       if(franchiseCode) payload.franchise_code = franchiseCode;
       const data = await callManeeAuthApi("manee-signup", payload);
       let session = data.session;
@@ -2730,6 +2741,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       state.ownerSignupDraft=null;state.smsAuth={};
       await enterAuthenticatedOwner(data.user.username, data.store.name);
       await offerSignupSubscription();
+      void window.MANEE_EMAIL_UI?.afterSignup();
       showToast(franchiseCode ? "가입이 완료됐어요. 프랜차이즈 요금제가 적용됩니다." : "가입이 완료됐어요");
     }catch(e){
       if(e && e.code==='invalid_franchise_code'){ showToast("프랜차이즈 코드를 확인해 주세요."); return; }
@@ -5987,7 +5999,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     return '<aside class="signup-offer" aria-label="매니 이용 안내"><span class="signup-offer-label">매장 관리의 시작</span><strong>매니와 함께 시작하세요</strong><p>일반 요금은 아이디당 월 9,900원(부가세 포함)이에요. 한 아이디로 소유한 모든 매장을 이용할 수 있어요.</p><p class="signup-offer-franchise">'+(hasFranchise?'프랜차이즈 코드가 확인되면 계약된 별도 요금이 적용돼요.':'프랜차이즈 계약 매장은 별도 요금이 적용될 수 있어요.')+'</p><p class="signup-offer-notice">회원가입만으로 결제되지 않아요. 구독은 매니 앱에서 신청할 수 있으며, 무료체험 대상 여부·기간·첫 결제일은 스토어 결제 화면에서 확인해 주세요.</p></aside>';
   }
   function ownerSignupDraft(){
-    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:'',ageConfirmed:false};
+    if(!state.ownerSignupDraft) state.ownerSignupDraft={step:0,name:'',username:'',password:'',confirm:'',store:'',franchise:'',recovery_email:'',ageConfirmed:false};
     return state.ownerSignupDraft;
   }
   function renderOwnerSignup(){
@@ -5996,9 +6008,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     let html='<div class="owner-setup signup-setup"><p class="setup-eyebrow">사장님 가입 · '+(d.step+1)+' / 5</p><progress max="5" value="'+(d.step+1)+'" aria-label="가입 진행"></progress><h2>'+titles[d.step]+'</h2>';
     html+='<section'+(d.step===0?'':' hidden')+'><p>계정을 만든 뒤 매장 위치, 거래처, 고정비를 하나씩 준비해요. 직원은 직접 가입하고 매장코드로 연결합니다.</p>'+renderOwnerSignupOffer()+'<div class="setup-note">계정 만들기 → 매장 준비 → 매니 시작</div></section>';
     html+='<section'+(d.step===1?'':' hidden')+'>'+input('name','owner-request-name-input','사장님 이름','text','autocomplete="name" maxlength="50"')+'</section>';
-    html+='<section'+(d.step===2?'':' hidden')+'>'+input('username','owner-request-username-input','아이디 · 6~30자','text','autocomplete="username" minlength="6" maxlength="30" autocapitalize="none"')+'<button type="button" class="crew-code-btn" id="check-owner-username-btn">아이디 중복확인</button><p id="owner-request-username-status" role="status">'+(state.ownerRequestUsernameCheck?.username===d.username.normalize('NFKC').trim().toLowerCase()?(state.ownerRequestUsernameCheck.available?'사용할 수 있는 아이디예요.':'이미 사용 중인 아이디예요.'):'')+'</p>'+input('password','owner-request-password-input','비밀번호 · 영문·숫자 포함 8자 이상','password','autocomplete="new-password" minlength="8" maxlength="72"')+input('confirm','owner-request-password-confirm-input','비밀번호 확인','password','autocomplete="new-password" maxlength="72"')+(MANEE_WEB_SMS_ENABLED?renderSmsVerification('signup_owner'):'')+'</section>';
+    html+='<section'+(d.step===2?'':' hidden')+'>'+input('username','owner-request-username-input','아이디 · 6~30자','text','autocomplete="username" minlength="6" maxlength="30" autocapitalize="none"')+'<button type="button" class="crew-code-btn" id="check-owner-username-btn">아이디 중복확인</button><p id="owner-request-username-status" role="status">'+(state.ownerRequestUsernameCheck?.username===d.username.normalize('NFKC').trim().toLowerCase()?(state.ownerRequestUsernameCheck.available?'사용할 수 있는 아이디예요.':'이미 사용 중인 아이디예요.'):'')+'</p>'+input('password','owner-request-password-input','비밀번호 · 영문·숫자 포함 8자 이상','password','autocomplete="new-password" minlength="8" maxlength="72"')+input('confirm','owner-request-password-confirm-input','비밀번호 확인','password','autocomplete="new-password" maxlength="72"')+maneeSignupEmail('owner',d.recovery_email)+(MANEE_WEB_SMS_ENABLED?renderSmsVerification('signup_owner'):'')+'</section>';
     html+='<section'+(d.step===3?'':' hidden')+'>'+input('store','owner-request-store-input','매장 이름','text','maxlength="80"')+input('franchise','owner-request-franchise-code-input','프랜차이즈 코드 · 선택','text','maxlength="40"')+'<p>코드가 있는 경우 프랜차이즈 요금제가 적용돼요.</p></section>';
-    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<label class="signup-age-check" for="owner-request-age-confirmed"><input id="owner-request-age-confirmed" data-signup-age type="checkbox"'+(d.ageConfirmed===true?' checked':'')+'><span>만 14세 이상입니다. (필수)</span></label><p>만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p><p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
+    html+='<section'+(d.step===4?'':' hidden')+'><div class="setup-note">사장님: '+escapeHtml(d.name)+'<br>아이디: '+escapeHtml(d.username)+'<br>이메일: '+escapeHtml(d.recovery_email||'')+'<br>매장: '+escapeHtml(d.store)+(d.franchise?'<br>프랜차이즈 코드: '+escapeHtml(d.franchise):'')+'</div>'+renderOwnerSignupOffer(!!d.franchise.trim())+'<label class="signup-age-check" for="owner-request-age-confirmed"><input id="owner-request-age-confirmed" data-signup-age type="checkbox"'+(d.ageConfirmed===true?' checked':'')+'><span>만 14세 이상입니다. (필수)</span></label><p>만 14세 미만은 가입할 수 없어요. 생년월일은 수집하지 않아요.</p><p>가입 후 위치·거래처·고정비 설정을 이어서 안내해 드려요.</p></section>';
     html+='<div class="setup-actions"><button type="button" data-signup-back>이전</button>'+(d.step===4?'<button type="button" id="submit-owner-request-btn" class="setup-primary">가입하고 시작하기</button>':'<button type="button" data-signup-next class="setup-primary">'+(d.step===0?'가입 시작':'다음')+'</button>')+'</div><button type="button" id="landing-back-btn" class="switch-link">로그인 화면으로</button></div>';
     return html;
   }
@@ -6007,6 +6019,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const d=ownerSignupDraft();
     if(d.step===1&&(!d.name.trim()||d.name.trim().length>50)){showToast('사장님 이름은 1~50자로 입력해 주세요.');return;}
     if(d.step===2){
+      try{window.MANEE_EMAIL_UI.signupValue('owner');}catch(e){showToast(e.message);return;}
       if(!/^[a-z0-9가-힣._-]{6,30}$/.test(d.username.normalize('NFKC').trim().toLowerCase())){showToast('아이디는 6~30자로 입력해 주세요.');return;}
       const normalized=d.username.normalize('NFKC').trim().toLowerCase(),check=state.ownerRequestUsernameCheck;
       if(!check || check.username!==normalized || !check.available){showToast('아이디 중복확인을 먼저 해주세요.');return;}
@@ -7294,7 +7307,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     const vf=document.getElementById('s3-vendor');if(vf){const t=u.stack.at(-1);vf.oninput=()=>{t.draft=Object.fromEntries(new FormData(vf));t.dirty=true;};vf.onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(vf));void s3Vendor('save',t.id,{p_name:d.name,p_category:d.category||null});};}
     const sheet=document.querySelector('.s3-sheet');document.body.classList.toggle('s3-sheet-open',!!sheet);if(sheet)sheet.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();s3Close();}if(e.key==='Tab'){const els=[...sheet.querySelectorAll('button,input,select,textarea,summary')].filter(el=>!el.disabled&&el.getClientRects().length);if(e.shiftKey&&document.activeElement===els[0]){e.preventDefault();els.at(-1)?.focus();}else if(!e.shiftKey&&document.activeElement===els.at(-1)){e.preventDefault();els[0]?.focus();}}};
   }
-  window.MANEE_HANDLE_BACK=()=>{if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(r136().sheet){r136Close();return true;}if(state.role==='staff'&&state.teamPage&&!r134().page&&!sector4().stack.length&&!sector3().stack.length){state.teamPage=state.teamPage==='password'?'account':null;render();return true;}if(state.r135AiOpen){r135CloseAi();return true;}if(state.role==='landing'&&state.landingMode==='phone-bind'){smsClose();return true;}if(state.role==='landing'&&state.landingMode==='account-recovery'&&!MANEE_ADMIN_AUTH_ENABLED){delete state.smsAuth?.reset;state.landingMode='default';render();return true;}if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(sector4().stack.length){s4Close();return true;}if(sector3().stack.length){s3Close();return true;}if(r134().page){r134Close();return true;}if(state.role!=='storeOwner')return false;if(state.r134GuideSelect){state.r134GuideSelect=false;render();return true;}if(r134().page){r134Close();return true;}if(['settings','alerts'].includes(state.section)){s4BackToMore();return true;}if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(sector3().stack.length){s3Close();return true;}if(state.showOwnerSalesForm){closeOwnerSalesForm();return true;}return false;};
+  window.MANEE_HANDLE_BACK=()=>{if(window.MANEE_EMAIL_UI?.close())return true;if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(r136().sheet){r136Close();return true;}if(state.role==='staff'&&state.teamPage&&!r134().page&&!sector4().stack.length&&!sector3().stack.length){state.teamPage=state.teamPage==='password'?'account':null;render();return true;}if(state.r135AiOpen){r135CloseAi();return true;}if(state.role==='landing'&&state.landingMode==='phone-bind'){smsClose();return true;}if(state.role==='landing'&&state.landingMode==='account-recovery'&&!MANEE_ADMIN_AUTH_ENABLED){delete state.smsAuth?.reset;state.landingMode='default';render();return true;}if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(sector4().stack.length){s4Close();return true;}if(sector3().stack.length){s3Close();return true;}if(r134().page){r134Close();return true;}if(state.role!=='storeOwner')return false;if(state.r134GuideSelect){state.r134GuideSelect=false;render();return true;}if(r134().page){r134Close();return true;}if(['settings','alerts'].includes(state.section)){s4BackToMore();return true;}if(state.pendingConfirm){state.pendingConfirm=null;render();return true;}if(sector3().stack.length){s3Close();return true;}if(state.showOwnerSalesForm){closeOwnerSalesForm();return true;}return false;};
   if(window.Capacitor?.isNativePlatform?.())window.Capacitor.Plugins.App?.addListener('backButton',({canGoBack})=>{if(window.MANEE_HANDLE_BACK())return;if(canGoBack)window.history.back();else askConfirm('매니를 종료할까요?',()=>window.Capacitor.Plugins.App.exitApp());});
 
   function renderOwnerSales(){
@@ -8690,7 +8703,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
   function r138Account(){
     const role=state.role==='storeOwner'?'사장님':state.crew.find(c=>c.id===state.myCrewId)?.isManager?'매니저':'직원';
-    return '<div class="r138-account"><section class="r138-account-card"><p class="r138-account-label">'+role+' 계정</p><h3>'+escapeHtml(state.myUsername||state.authProfile?.username||'로그인 계정')+'</h3></section><section class="r138-account-card"><h4>계정 보안</h4><p class="r138-account-note">일반 가입 계정의 보안 정보를 관리해요.</p><button type="button" class="r138-account-row" data-r138-account-password><span><strong>비밀번호 변경</strong><small>현재 비밀번호 확인 후 변경</small></span><span aria-hidden="true">›</span></button>'+(MANEE_WEB_SMS_ENABLED?'<button type="button" class="r138-account-row" data-sms-open><span><strong>복구용 휴대폰 등록·변경</strong><small>비밀번호 찾기에 사용할 번호 인증</small></span><span aria-hidden="true">›</span></button>':'')+'</section><section class="r138-account-card"><h4>간편계정 연결</h4><p class="r138-account-note">기존 매니 계정에 연결하면 같은 근무·매장 기록으로 로그인할 수 있어요.</p><div data-social-account-slot aria-live="polite"><p class="r138-account-note">연결 상태 확인 중…</p></div></section></div>';
+    return '<div class="r138-account"><section class="r138-account-card"><p class="r138-account-label">'+role+' 계정</p><h3>'+escapeHtml(state.myUsername||state.authProfile?.username||'로그인 계정')+'</h3></section><section class="r138-account-card"><h4>계정 보안</h4><p class="r138-account-note">일반 가입 계정의 보안 정보를 관리해요.</p><button type="button" class="r138-account-row" data-r138-account-password><span><strong>비밀번호 변경</strong><small>현재 비밀번호 확인 후 변경</small></span><span aria-hidden="true">›</span></button>'+(MANEE_WEB_SMS_ENABLED?'<button type="button" class="r138-account-row" data-sms-open><span><strong>복구용 휴대폰 등록·변경</strong><small>비밀번호 찾기에 사용할 번호 인증</small></span><span aria-hidden="true">›</span></button>':'')+'</section><section class="r138-account-card" data-manee-email-account></section><section class="r138-account-card"><h4>간편계정 연결</h4><p class="r138-account-note">기존 매니 계정에 연결하면 같은 근무·매장 기록으로 로그인할 수 있어요.</p><div data-social-account-slot aria-live="polite"><p class="r138-account-note">연결 상태 확인 중…</p></div></section></div>';
   }
   app.addEventListener('click',e=>{
     if(!e.target.closest('[data-r138-account-password]'))return;
@@ -12378,6 +12391,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     if(owner)html+='<aside class="ss-offer" aria-label="매니 이용 안내">'+renderOwnerSignupOffer(false,true)+'<p>회원가입만으로는 결제되지 않아요.</p></aside>';
     html+='<form><label class="ss-field">이름<input name="displayName" maxlength="50" autocomplete="name" placeholder="이름을 입력해 주세요" required></label>';
     if(owner)html+='<label class="ss-field">매장 이름<input name="storeName" maxlength="80" placeholder="매장 이름을 입력해 주세요" required></label><details class="ss-franchise"><summary>프랜차이즈 코드 입력 <span>선택</span></summary><label class="ss-field">프랜차이즈 코드<input name="franchiseCode" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="전달받은 코드를 입력해 주세요"></label></details>';
+    html+=maneeSignupEmail('social')+'<div class="manee-social-phone" data-mee-social-sms><label for="mee-social-phone">휴대폰 번호 (필수)</label><div class="mee-input-row"><input id="mee-social-phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="24" placeholder="01012345678"><button type="button" data-mee-sms-send>인증번호 받기</button></div><label for="mee-social-code">문자 인증번호</label><div class="mee-input-row"><input id="mee-social-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6자리 숫자"><button type="button" data-mee-sms-verify disabled>인증하기</button></div><p class="mee-note" data-mee-sms-status role="status" aria-live="polite">휴대폰 번호당 매니 계정은 1개만 만들 수 있어요.</p><p class="mee-note" data-mee-sms-clock></p></div>';
     html+='<fieldset class="ss-consents"><legend class="sr-only">가입 필수 동의</legend><label class="ss-consent-all"><input type="checkbox" data-consent-all>필수 항목 전체 동의</label>';
     html+='<div class="ss-consent-row"><label><input type="checkbox" name="ageConfirmed" required>[필수] 만 14세 이상입니다.</label></div>';
     html+='<div class="ss-consent-row"><label><input type="checkbox" name="termsAccepted" required>[필수] 이용약관 동의</label><a href="https://maeni-official.hi3890102.chatgpt.site/terms.html" target="_blank" rel="noopener noreferrer" aria-label="이용약관 보기">›</a></div>';
@@ -12395,12 +12409,13 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     document.body.append(dialog);dialog.showModal();
   }
   function bindSocialSignupDialog(dialog,context,provider,chosenRole){
-    const form=dialog.querySelector('form'),button=form.querySelector('[type=submit]'),status=form.querySelector('[role=status]');
+    const form=dialog.querySelector('form'),button=form.querySelector('[type=submit]'),status=form.querySelector('.ss-status');
     const back=dialog.querySelector('[data-cancel]'),login=form.querySelector('[data-existing-login]');
     const all=form.querySelector('[data-consent-all]');
     const consents=['ageConfirmed','termsAccepted','privacyAccepted'].map(name=>form.elements[name]);
+    const socialVerification=window.MANEE_EMAIL_UI.bindSocialSignup(dialog,context);
     let busy=false;
-    const setBusy=value=>{busy=value;button.disabled=value;back.disabled=value;login.disabled=value;dialog.setAttribute('aria-busy',String(value));};
+    const setBusy=value=>{busy=value;socialVerification.setBusy(value);button.disabled=value;back.disabled=value;login.disabled=value;dialog.setAttribute('aria-busy',String(value));};
     const showError=message=>{status.hidden=false;status.textContent=message;};
     const sync=()=>{const count=consents.filter(input=>input.checked).length;all.checked=count===consents.length;all.indeterminate=count>0&&count<consents.length;};
     all.onchange=()=>{consents.forEach(input=>{input.checked=all.checked;});sync();};consents.forEach(input=>{input.onchange=sync;});sync();
@@ -12412,8 +12427,9 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       setBusy(true);status.hidden=true;
       try{
         const session=await db.auth.getUser();if(session.error||session.data?.user?.id!==context.userId)throw Error('계정이 바뀌었어요. 다시 로그인해 주세요.');
-        await socialRequest({action:'signup',provider,role:chosenRole,displayName:form.elements.displayName.value.trim(),storeName:chosenRole==='owner'?form.elements.storeName.value.trim():'',franchiseCode:chosenRole==='owner'?form.elements.franchiseCode.value.trim():'',ageConfirmed:form.elements.ageConfirmed.checked,termsAccepted:form.elements.termsAccepted.checked,privacyAccepted:form.elements.privacyAccepted.checked,termsVersion:context.termsVersion,privacyVersion:context.termsVersion});
-        socialSignupChoice(context,provider,null);dialog.close();await resolveIdentity();if(chosenRole==='owner')await offerSignupSubscription();
+        const verifiedSignup=socialVerification.payload();
+        await socialRequest({action:'signup',...verifiedSignup,provider,role:chosenRole,displayName:form.elements.displayName.value.trim(),storeName:chosenRole==='owner'?form.elements.storeName.value.trim():'',franchiseCode:chosenRole==='owner'?form.elements.franchiseCode.value.trim():'',ageConfirmed:form.elements.ageConfirmed.checked,termsAccepted:form.elements.termsAccepted.checked,privacyAccepted:form.elements.privacyAccepted.checked,termsVersion:context.termsVersion,privacyVersion:context.termsVersion});
+        socialSignupChoice(context,provider,null);dialog.close();await resolveIdentity();if(chosenRole==='owner')await offerSignupSubscription();void window.MANEE_EMAIL_UI?.afterSignup();
       }catch(e){showError(e.message);}finally{setBusy(false);}
     };
     const leave=async view=>{
@@ -12499,5 +12515,5 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   }
 })();
 </script>
-</body>
+<script src="/email-verification.js"></script></body>
 </html>
