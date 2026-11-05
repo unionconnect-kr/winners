@@ -11,6 +11,16 @@
   [headers.values]
     Cache-Control = "no-store"
 
+[[headers]]
+  for = "/build-info.json"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
 [functions."notify-reservations-cron"]
   schedule = "0 15 * * *"
 
