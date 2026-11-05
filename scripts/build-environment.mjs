@@ -22,7 +22,10 @@ if (all.staging.projectRef === all.production.projectRef || all.staging.publisha
 const output = resolve(root,'dist');
 rmSync(output,{recursive:true,force:true});
 mkdirSync(output,{recursive:true});
-let html = readFileSync(resolve(root,'index.html'),'utf8');
+// Owner/staff web now uses the device-approved 1.45 screens. The root legacy
+// entry remains available to the separate administrator variant tooling.
+const web = resolve(root,'web');
+let html = readFileSync(resolve(web,'index.html'),'utf8');
 if (!html.includes('src="/app-config.js"') || html.includes(all.production.supabaseUrl) ||
     html.includes(all.production.publishableKey)) throw new Error('Canonical HTML still contains a production connection.');
 const staffAuthAnchor = 'const MANEE_STAFF_AUTH_ENABLED = MANEE_IS_STAGING;';
@@ -31,9 +34,19 @@ if (environment === 'production') html = html.replace(staffAuthAnchor,'const MAN
 writeFileSync(resolve(output,'index.html'),html);
 writeFileSync(resolve(output,'_headers'),securityHeaders(html+'\n'+readFileSync(resolve(root,'account-deletion.html'),'utf8'),config));
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
-cpSync(resolve(root,'owner-ui.css'),resolve(output,'owner-ui.css'));
+for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform.js','social-auth.js','launch-144.png']) {
+  cpSync(resolve(web,asset),resolve(output,asset),{recursive:true});
+}
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
-writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(config)+');\n');
+const webConfig = {...config,
+  // Production signup handlers still use the current non-SMS contract. Enable
+  // only after provider credentials and proof-requiring handlers cut over.
+  webSmsAuthEnabled: environment === 'staging',
+  socialProviders: {naver: environment === 'staging'},
+};
+writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(webConfig)+');\n');
+writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.45-web',environment,projectRef:config.projectRef,
+  commit:process.env.COMMIT_REF || null,uiSource:'mobile-1.45',smsAuthEnabled:webConfig.webSmsAuthEnabled},null,2)+'\n');
 const manifest = JSON.parse(readFileSync(resolve(root,'manifest.json'),'utf8'));
 if (environment === 'staging') { manifest.name = '매니 테스트'; manifest.short_name = '매니 테스트'; }
 writeFileSync(resolve(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
