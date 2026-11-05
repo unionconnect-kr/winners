@@ -17,8 +17,9 @@ export function verifyAndroidAssets({info, appConfig, environment, environments,
     assert.equal(info.releasePurpose, releasePurpose, 'Wrong Android release purpose.');
     assert.equal(info.billingEnabled, ['paid-pilot','store-update'].includes(releasePurpose), 'Billing flag does not match release purpose.');
     if (releasePurpose === 'store-update') {
-      assert.equal(info.versionName, '1.45');
-      assert.equal(info.versionCode, 46);
+      assert.ok(['1.45','1.46'].includes(info.versionName));
+      assert.equal(info.versionCode, info.versionName==='1.46'?47:46);
+      if(info.versionName==='1.46')assert.equal(info.usernameRecoveryEnabled,true);
       assert.equal(info.pushEnabled, true);
       assert.equal(info.signupCheckoutEnabled, true);
       assert.equal(info.nativeAuthStorage, 'keystore-v1');
