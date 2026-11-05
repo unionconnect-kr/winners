@@ -68,16 +68,16 @@
       const version = ++state.version;
       state.busy = true; state.challenge = null; code.value = ''; status.textContent=''; tick();
       try {
-        const data = await api({action:'request',phone:number});
+        const data = await api({action:'request',phone:number,resend_seconds:30});
         if (state.closed || state.version !== version) return;
-        if (typeof data.challenge_id !== 'string' || data.expires_in !== 180 || data.resend_after !== 60) throw Error('인증 요청을 확인하지 못했어요. 다시 시도해 주세요.');
+        if (typeof data.challenge_id !== 'string' || data.expires_in !== 180 || ![30,60].includes(data.resend_after)) throw Error('인증 요청을 확인하지 못했어요. 다시 시도해 주세요.');
         state.challenge = data.challenge_id;
-        state.expires = Date.now()+180000; state.resend = Date.now()+60000;
+        state.expires = Date.now()+180000; state.resend = Date.now()+data.resend_after*1000;
         status.textContent = data.message;
       } catch (e) {
         if (!state.closed && state.version === version) {
           status.textContent = e.message;
-          if (e.retryAfter) state.resend=Date.now()+Math.min(3600,Number(e.retryAfter)||60)*1000;
+          if (e.retryAfter) state.resend=Date.now()+Math.min(3600,Number(e.retryAfter)||30)*1000;
         }
       } finally {
         if (!state.closed && state.version === version) {state.busy=false;tick();if(state.challenge)code.focus();}
@@ -95,7 +95,11 @@
         state.challenge=null; code.value=''; form.hidden=true; results.hidden=false;
         const names=data.usernames.filter(name=>typeof name==='string'&&/^[a-z0-9가-힣._-]{4,30}$/.test(name)).slice(0,20);
         dialog.querySelector('#manee-id-title').textContent=names.length?'아이디를 찾았어요':'확인된 아이디가 없어요';
-        dialog.querySelector('[data-mir-intro]').textContent=names.length?'로그인할 아이디를 선택해 주세요.':'인증한 번호로 가입한 일반 계정을 찾지 못했어요.';
+        dialog.querySelector('[data-mir-intro]').textContent=names.length?'로그인할 아이디를 선택해 주세요.':'이 번호로 가입된 일반 계정이 없어요. 탈퇴·삭제한 계정은 신규가입해 주세요.';
+        if(!names.length){
+          const close=document.createElement('button');close.type='button';close.className='mir-account';close.textContent='로그인 화면으로 돌아가기';
+          close.addEventListener('click',()=>{dialog.close();cleanup();});results.append(close);
+        }
         for (const name of names) {
           const button=document.createElement('button'), strong=document.createElement('strong'), label=document.createElement('span');
           button.type='button'; button.className='mir-account'; strong.textContent=name; label.textContent='아이디로 로그인';
