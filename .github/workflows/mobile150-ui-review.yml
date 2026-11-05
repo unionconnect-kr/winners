@@ -1,0 +1,27 @@
+name: MANEE 1.50 subscription layout review
+on:
+  push:
+    branches: [codex/mobile150-ui-review-20261105]
+    paths: ['.github/workflows/mobile150-ui-review.yml', 'mobile/scripts/review-subscription150.mjs']
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix mobile
+      - run: node mobile/scripts/review-subscription150.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee150-subscription-layouts
+          path: /tmp/manee150-ui-review/*
+          retention-days: 7
+          if-no-files-found: error
