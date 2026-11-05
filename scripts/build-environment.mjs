@@ -36,7 +36,11 @@ html = html.replace('</head>','<link rel="stylesheet" href="/username-recovery.c
 writeFileSync(resolve(output,'index.html'),html);
 writeFileSync(resolve(output,'_headers'),securityHeaders(html+'\n'+readFileSync(resolve(root,'account-deletion.html'),'utf8'),config));
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
-for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform.js','social-auth.js','launch-144.png','username-recovery.js','username-recovery.css']) {
+// Email links carry one-time proofs only in a fragment; serve their completion
+// screen from the existing app origin rather than a plain-text Edge GET.
+cpSync(resolve(root,'email-confirmation.html'),resolve(output,'email-confirmation.html'));
+cpSync(resolve(root,'email-confirmation.js'),resolve(output,'email-confirmation.js'));
+for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform.js','social-auth.js','launch-144.png','username-recovery.js','username-recovery.css','email-verification.js','email-verification.css']) {
   cpSync(resolve(web,asset),resolve(output,asset),{recursive:true});
 }
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});

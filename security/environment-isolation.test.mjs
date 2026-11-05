@@ -76,7 +76,7 @@ test('Staging legacy identity storage neither reads nor overwrites production en
 
 function sandbox(){
   const temp=mkdtempSync(resolve(tmpdir(),'manee-build-'));
-  for(const path of ['scripts','config','web','index.html','account-deletion.html','owner-ui.css','report-assets','manifest.json','sw.js']) cpSync(resolve(root,path),resolve(temp,path),{recursive:true});
+  for(const path of ['scripts','config','web','index.html','account-deletion.html','email-confirmation.html','email-confirmation.js','owner-ui.css','report-assets','manifest.json','sw.js']) cpSync(resolve(root,path),resolve(temp,path),{recursive:true});
   mkdirSync(resolve(temp,'netlify/functions/lib'),{recursive:true});
   return temp;
 }
@@ -85,12 +85,15 @@ test('Preview publish output excludes production URL/key and disables old push s
   const temp=sandbox();
   try{
     const r=build(temp,'deploy-preview'); assert.equal(r.status,0,r.stderr);
-    for(const f of ['index.html','app-config.js','sw.js','manifest.json']){
+    for(const f of ['index.html','app-config.js','sw.js','manifest.json','email-confirmation.html','email-confirmation.js','email-verification.js','email-verification.css']){
       const s=readFileSync(resolve(temp,'dist',f),'utf8');
       assert.ok(!s.includes(configs.production.supabaseUrl),f);
       assert.ok(!s.includes(configs.production.publishableKey),f);
     }
     assert.ok(readFileSync(resolve(temp,'dist/app-config.js'),'utf8').includes(configs.staging.supabaseUrl));
+    assert.match(readFileSync(resolve(temp,'dist/index.html'),'utf8'),/src="\/email-verification\.js"/);
+    assert.match(readFileSync(resolve(temp,'dist/index.html'),'utf8'),/href="\/email-verification\.css"/);
+    assert.match(readFileSync(resolve(temp,'dist/email-confirmation.html'),'utf8'),/src="\/email-confirmation\.js"/);
     assert.ok(readFileSync(resolve(temp,'dist/account-deletion.html'),'utf8').includes('매니 계정 삭제 요청'));
     assert.equal(JSON.parse(readFileSync(resolve(temp,'netlify/functions/lib/manee-environment.json'),'utf8')).externalServicesEnabled,false);
     const handlers={};let shown=0;
@@ -103,6 +106,8 @@ test('Production build selects production configuration explicitly',()=>{
   const temp=sandbox();
   try{const r=build(temp,'production');assert.equal(r.status,0,r.stderr);
     assert.ok(readFileSync(resolve(temp,'dist/app-config.js'),'utf8').includes(configs.production.supabaseUrl));
+    for(const file of ['email-confirmation.html','email-confirmation.js','email-verification.js','email-verification.css'])assert.ok(readFileSync(resolve(temp,'dist',file),'utf8').trim(),file);
+    assert.match(readFileSync(resolve(temp,'dist/index.html'),'utf8'),/src="\/email-verification\.js"/);
     assert.ok(readFileSync(resolve(temp,'dist/account-deletion.html'),'utf8').includes('매니 계정 삭제 요청'));
     assert.equal(JSON.parse(readFileSync(resolve(temp,'netlify/functions/lib/manee-environment.json'),'utf8')).externalServicesEnabled,true);
   }finally{rmSync(temp,{recursive:true,force:true});}
