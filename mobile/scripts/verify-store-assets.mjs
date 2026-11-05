@@ -3,11 +3,12 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
+const release147=process.argv.includes('--release147');
 const release146=process.argv.includes('--release146');
-const root=resolve(process.argv.slice(2).find(x=>x!=='--release146')||fileURLToPath(new URL('../www',import.meta.url)));
+const root=resolve(process.argv.slice(2).find(x=>!['--release146','--release147'].includes(x))||fileURLToPath(new URL('../www',import.meta.url)));
 const info=JSON.parse(readFileSync(resolve(root,'build-info.json'),'utf8'));
 assert.equal(info.environment,'production');assert.equal(info.projectRef,'bhwuuxcrzxespkjlmqxr');
-assert.equal(info.versionName,release146?'1.46':'1.45');assert.equal(info.versionCode,release146?47:46);assert.equal(info.releasePurpose,'store-update');
+assert.equal(info.versionName,release147?'1.47':release146?'1.46':'1.45');assert.equal(info.versionCode,release147?48:release146?47:46);assert.equal(info.releasePurpose,'store-update');
 assert.equal(info.pushEnabled,true);assert.equal(info.billingEnabled,true);assert.equal(info.signupCheckoutEnabled,true);
 assert.ok(['ios','android'].includes(info.platform));
 const config=readFileSync(resolve(root,'app-config.js'),'utf8'),html=readFileSync(resolve(root,'index.html'),'utf8'),native=readFileSync(resolve(root,'native.js'),'utf8');
@@ -23,4 +24,5 @@ assert.match(readFileSync(resolve(root,`${info.platform}-ui.css`),'utf8'),new Re
 for(const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(match[1].trim())new vm.Script(match[1]);
 console.log('Verified complete production '+info.versionName+' assets: '+info.platform);
 
-if(release146){assert.equal(info.usernameRecoveryEnabled,true);assert.match(html,/src="\/username-recovery\.js"/);assert.match(html,/href="\/username-recovery\.css"/);new vm.Script(readFileSync(resolve(root,'username-recovery.js'),'utf8'));}
+if(release147)assert.equal(info.smsResendSeconds,30);
+if(release146||release147){assert.equal(info.usernameRecoveryEnabled,true);assert.match(html,/src="\/username-recovery\.js"/);assert.match(html,/href="\/username-recovery\.css"/);new vm.Script(readFileSync(resolve(root,'username-recovery.js'),'utf8'));}
