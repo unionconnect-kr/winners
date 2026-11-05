@@ -34,3 +34,21 @@ Run the offline checks with:
 ```sh
 node --experimental-strip-types --test security/production145/edge-handlers.test.mjs security/signup-age-edge.test.mjs security/staff-signup-edge.test.mjs
 ```
+
+## Production authentication checkpoint — 2026-11-05
+
+After the user completed dashboard sign-in, the staff production project was inspected through its administration UI:
+
+- SOLAPI_API_KEY, SOLAPI_API_SECRET and SOLAPI_SENDER_NUMBER are present in staging but absent from production. Supabase's secrets list exposes digests, not recoverable values; no secret values were extracted. Existing provider credentials must be entered through the supported configuration interface.
+- Production Kakao is disabled with empty REST API Key and Client Secret Code fields. Staging Kakao is enabled and permits users without email. Production should use the approved application and its production callback, preserving the app's nickname-only scope.
+- Staging has an enabled OAuth2 provider named custom:naver, with authorization URL https://nid.naver.com/oauth2.0/authorize and token URL https://nid.naver.com/oauth2.0/token. Its adapter is the staging manee-naver-userinfo function, scopes are empty, and users without email are allowed. The production equivalent must point to https://bhwuuxcrzxespkjlmqxr.supabase.co/functions/v1/manee-naver-userinfo and use the approved application's credentials.
+- Production manual identity linking was disabled and was not changed during this checkpoint. Existing-account linking requires enabling it when social providers are configured.
+- The production Site URL was changed from http://localhost:3000 to https://winners-staffapp.netlify.app. The dashboard explicitly reported successful save.
+- Production initially had no allowed redirect URLs. An attempt was made to save these two narrowly scoped callback patterns:
+  - kr.co.manee.app://auth/callback?manee_auth=callback&flow=*
+  - https://winners-staffapp.netlify.app/?manee_auth=callback&flow=*
+  The browser-control service timed out during this save and subsequent state recovery. **The save outcome is unknown. Inspect the list before retrying; do not assume either success or failure.**
+- The external Kakao/Naver application redirect registration must include https://bhwuuxcrzxespkjlmqxr.supabase.co/auth/v1/callback. Its registration has not been checked.
+- No provider was enabled, no credential was changed, and no SMS was sent during this checkpoint. The existing signup handlers, production web and store distribution remain unchanged.
+
+The signed iOS 1.45 / 145.5.2 archive completed in workflow run 41870950414, attempt 2, and its App Store Connect upload step succeeded. Apple processing, TestFlight availability and public release are separate unverified states.
