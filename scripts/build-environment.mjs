@@ -39,10 +39,10 @@ for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform
 }
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
 const webConfig = {...config,
-  // Production signup handlers still use the current non-SMS contract. Enable
-  // only after provider credentials and proof-requiring handlers cut over.
-  webSmsAuthEnabled: environment === 'staging',
-  socialProviders: {naver: environment === 'staging'},
+  // Deploy this cutover together with configured providers and signup handlers
+  // that consume the verified phone proof. Never fall back to unverified signup.
+  webSmsAuthEnabled: true,
+  socialProviders: {naver: true},
 };
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(webConfig)+');\n');
 writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.45-web',environment,projectRef:config.projectRef,

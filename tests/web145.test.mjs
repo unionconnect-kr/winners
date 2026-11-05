@@ -18,7 +18,7 @@ function application(environment='production', stored={}) {
   w.scrollTo=()=>{}; w.matchMedia=()=>({matches:false});
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
   w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
-  w.MANEE_CONFIG={...config[environment],webSmsAuthEnabled:environment==='staging',socialProviders:{naver:environment==='staging'}};
+  w.MANEE_CONFIG={...config[environment],webSmsAuthEnabled:true,socialProviders:{naver:true}};
   for(const [key,value] of Object.entries(stored))w.localStorage.setItem(key,value);
   const network=[];
   w.fetch=async(...args)=>{network.push(args);throw Error('Unexpected network request in offline web test');};
@@ -66,16 +66,32 @@ test('login without remember stores the new account only in sessionStorage',()=>
   }finally{app.close();}
 });
 
-test('production signup preserves deployed API contract while staged SMS fails closed',async()=>{
+test('owner and staff signup require verified phone proof in both environments',async()=>{
   for(const environment of ['production','staging']){
     const app=application(environment);try{
       for(const role of ['owner','staff']){
         await app.w.openCase(role==='owner'?{kind:'owner-signup',id:'2',name:'owner-signup'}:{kind:'staff-signup',id:'form',role,variant:'default',name:'staff-signup'});
-        assert.equal(!!app.w.document.querySelector('[data-sms-box]'),environment==='staging',role);
+        assert.ok(app.w.document.querySelector('[data-sms-box]'),role);
+        assert.throws(()=>app.q.smsProofPayload('signup_'+role),/문자 인증/);
       }
-      if(environment==='production')await assert.rejects(app.q.smsApi({action:'request',purpose:'signup_staff'}),/문자 인증 연결/);
-      else assert.throws(()=>app.q.smsProofPayload('signup_staff'),/문자 인증/);
       assert.equal(app.network.length,0);
+    }finally{app.close();}
+  }
+});
+
+test('SMS provider failure stays on the configured backend and cannot create a signup proof',async()=>{
+  for(const environment of ['production','staging']){
+    const app=application(environment);try{
+      const calls=[];
+      app.w.fetch=async(url,options)=>{
+        calls.push({url,options});
+        return {ok:false,json:async()=>({ok:false,error:'sms_unavailable',message:'문자 인증을 준비 중이에요.'})};
+      };
+      await assert.rejects(app.q.smsApi({action:'request',purpose:'signup_staff',username:'fixtureuser',phone:'01000000000'}),/문자 인증/);
+      assert.equal(calls.length,1);
+      assert.equal(calls[0].url,config[environment].supabaseUrl+'/functions/v1/manee-sms-auth');
+      assert.equal(calls[0].options.headers.apikey,config[environment].publishableKey);
+      assert.throws(()=>app.q.smsProofPayload('signup_staff'),/문자 인증/);
     }finally{app.close();}
   }
 });
