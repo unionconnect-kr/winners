@@ -1,3 +1,4 @@
+import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer} from './subscription-sheet.mjs';
 import { Geolocation } from '@capacitor/geolocation';
 
 import { createAndroidGeolocation as createNativeGeolocation } from './android-geolocation.js';
@@ -87,13 +88,11 @@ async function openSettings(){
  if(dialog)return;
  const c=getContext();if(!c?.userId||!c.storeId||c.role!=='storeOwner')return;
  closing=false;
- dialog=element('dialog',null,document.body);dialog.style.cssText='border:0;border-radius:20px;padding:24px;width:min(88vw,420px);max-height:85vh;color:#18352a;background:white;box-sizing:border-box';
- const sheet=dialog;
- element('h2','아이폰 구독·알림',sheet);element('p',c.storeName||'선택한 매장',sheet);
- const status=element('p','연결을 확인하고 있어요…',sheet);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const view=createSubscriptionSheet(document,{id:'manee-ios-billing',title:'매니 구독',storeName:c.storeName});dialog=view.sheet;
+ const sheet=dialog,status=view.status;
+ view.summary.textContent='사장님 아이디 하나로 연결된 모든 매장을 이용해요.';
  const buttons=[];let busy=false,hasActivePurchase=false;
- const button=(text,fn)=>{const b=element('button',text,sheet);b.type='button';b.style.cssText='display:block;width:100%;padding:13px;margin:10px 0;border:1px solid #ccd9d2;border-radius:10px;background:#f2f7f4;color:#174b37;font-size:16px';
-  b.onclick=async()=>{if(busy)return;busy=true;buttons.forEach(x=>x.disabled=true);try{if(!sameContext(c))throw Error('매장을 다시 선택해 주세요.');await fn();}catch(e){status.textContent=e.message||'다시 시도해 주세요.';}finally{busy=false;buttons.forEach(x=>x.disabled=false);}};buttons.push(b);return b;};
+ const button=(text,fn,kind='primary')=>{const b=subscriptionButton(view,text,async()=>{if(busy)return;busy=true;buttons.forEach(x=>x.disabled=true);try{if(!sameContext(c))throw Error('매장을 다시 선택해 주세요.');await fn();}catch(e){status.textContent=e.message||'다시 시도해 주세요.';}finally{busy=false;buttons.forEach(x=>x.disabled=false);}},kind);buttons.push(b);return b;};
  const resultText=result=>{
   if(result.otherPlatformActive)return '이 계정은 다른 스토어에서 구독 중이에요. 기존 이용권을 확인해 주세요.';
   if(result.status==='cancelled')return '구매를 취소했어요.';
@@ -105,23 +104,22 @@ async function openSettings(){
  };
  const displayResult=result=>{status.textContent=resultText(result);if(result.subscriptions?.some(s=>s.active||s.testActive)){hasActivePurchase=true;buy.hidden=true;buy.style.display='none';}};
  const buy=button('월 구독 시작',async()=>displayResult(await billing.purchase()));buy.hidden=true;buy.style.display='none';
- buy.style.background='#0F3D2E';buy.style.color='#ffffff';buy.style.fontWeight='700';
- button('구매 복원',async()=>displayResult(await billing.restore()));
- button('Apple 구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');});
- button('이 매장 알림 켜기',async()=>{status.textContent=(await notifications.action('enable')).message;});
- button('알림 테스트',async()=>{status.textContent=(await notifications.action('test')).message;});
- button('이 기기 알림 끄기',async()=>{status.textContent=(await notifications.action('disable')).message;});
- element('p','알림은 선택한 한 매장에 연결돼요. 다른 매장 알림을 받으려면 해당 매장에서 다시 켜 주세요.',sheet).style.fontSize='13px';
- element('p','구독은 매월 자동 갱신되며 Apple 계정으로 청구됩니다. 무료체험 대상인 경우 2개월 체험 종료 후 표시된 월 요금으로 전환됩니다. 국내 사용자는 Apple이 요청하는 유료 전환 동의를 완료해야 하며, 미동의 시 구독이 종료될 수 있습니다. 취소는 Apple 구독 관리에서 할 수 있어요.',sheet).style.fontSize='13px';
- const links=element('p',null,sheet);
+ button('기존 구독 복원',async()=>displayResult(await billing.restore()),'link');
+ button('구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');},'link');
+ const notificationDetails=element('details',null,view.details);element('summary','매장 알림 설정',notificationDetails);
+ for(const [label,action] of [['이 매장 알림 켜기','enable'],['알림 테스트','test'],['이 기기 알림 끄기','disable']])notificationDetails.append(button(label,async()=>{status.textContent=(await notifications.action(action)).message;},'secondary'));
+ element('p','알림은 선택한 한 매장에 연결돼요.',notificationDetails);
+ view.terms.textContent='구독은 매월 갱신되며 Apple 계정으로 청구돼요. 무료체험 기간과 이후 요금은 위에 표시된 상품 기준이며, 최종 청구일은 Apple 결제창에서 확인해 주세요. 국내 유료 전환에는 Apple 동의 절차가 적용돼요. 취소는 구독 관리에서 할 수 있어요. 이용 기간 종료 후 업무 입력·수정은 제한되지만 기존 기록 조회와 구독 복원은 가능해요.';
+ const links=element('p',null,view.details);
 
- button('닫기',()=>sheet.close());
+ button('닫기',()=>sheet.close(),'secondary');
  sheet.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
  sheet.addEventListener('close',()=>{sheet.remove();if(dialog===sheet)dialog=null;});showSheet(sheet);
  try{
   const info=await billing.status();
   if(!sameContext(c)||dialog!==sheet)return;
   status.textContent=info.appAccountToken?resultText(info):'구독 연결을 준비하고 있어요.';
+  if(info.subscriptions?.some(s=>s.active||s.testActive)){view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';}
   hasActivePurchase=hasActivePurchase||info.otherPlatformActive===true||info.subscriptions?.some(s=>s.active||s.testActive)===true;
   for(const [label,url] of [['이용약관',info.termsUrl],['개인정보 처리방침',info.privacyUrl]]){
    if(typeof url==='string'&&url.startsWith('https://')){const a=element('a',label,links);a.href=url;a.target='_blank';a.rel='noopener';a.style.marginRight='12px';}
@@ -130,7 +128,7 @@ async function openSettings(){
    const product=await billing.products(info.productId);if(!sameContext(c)||dialog!==sheet)return;
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요. 잠시 후 다시 시도해 주세요.');
    if(hasActivePurchase)return;
-   buy.textContent=product.twoMonthsFree?'2개월 무료 체험 시작 (이후 '+product.price+' / 월)':'월 '+product.price+'으로 구독하기';buy.hidden=false;buy.style.display='block';
+   buy.textContent=setSubscriptionOffer(view,{trialMonths:product.twoMonthsFree?2:0,price:product.price});buy.hidden=false;buy.style.display='block';
   }else if(info.otherStoreSubscribed)status.textContent=messages.other_store_subscribed;
  }catch(e){if(dialog===sheet)status.textContent=e.message;}
 }

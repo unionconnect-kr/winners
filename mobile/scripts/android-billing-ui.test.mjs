@@ -22,9 +22,9 @@ test('offers follow the server allocated store product',()=>{
 
 function fakeDocument() {
  class Element {
-  constructor(tag){this.tagName=tag;this.children=[];this.parent=null;this.style={};this.hidden=false;this.disabled=false;this.listeners={};}
+  constructor(tag){this.tagName=tag;this.children=[];this.parent=null;this.style={};this.hidden=false;this.disabled=false;this.listeners={};this.dataset={};}
   get isConnected(){return this===body||Boolean(this.parent?.isConnected);}
-  append(child){child.parent=this;this.children.push(child);}
+  append(child){if(child.parent)child.parent.children=child.parent.children.filter(c=>c!==child);child.parent=this;this.children.push(child);}
   setAttribute(){}
   addEventListener(name,fn){this.listeners[name]=fn;}
   showModal(){}
@@ -45,14 +45,15 @@ function dialogFixture(overrides={}){
   ...overrides
  };
  openAndroidBilling({billing,document,getContext:()=>({userId:'owner',storeId:'store',role:'storeOwner'})});
- const buttons=()=>document.body.children[0].children.filter(e=>e.tagName==='button');
- return {billing,document,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&/ · (테스트 구매|구독 시작)$/.test(e.textContent))};
+ const descendants=e=>e.children.flatMap(c=>[c,...descendants(c)]);
+ const buttons=()=>descendants(document.body.children[0]).filter(e=>e.tagName==='button');
+ return {billing,document,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&e.dataset.purchase==='true')};
 }
 test('successful checkout immediately hides all offers but keeps close and restore usable',async()=>{
  const f=dialogFixture();await settle();assert.equal(f.visibleOffers().length,1);
  await f.visibleOffers()[0].onclick();
  assert.equal(f.visibleOffers().length,0);
- for(const label of ['닫기','구매 복원'])assert.equal(f.buttons().find(b=>b.textContent===label).disabled,false);
+ for(const label of ['닫기','기존 구독 복원'])assert.equal(f.buttons().find(b=>b.textContent===label).disabled,false);
 });
 test('cancelled and pending checkout keep offers while server-confirmed existing subscription hides them',async()=>{
  const f=dialogFixture();await settle();
@@ -67,7 +68,7 @@ test('restoration before product loading finishes cannot reintroduce purchase bu
  let release;
  const f=dialogFixture({products:()=>new Promise(resolve=>release=resolve)});
  await settle();
- await f.buttons().find(b=>b.textContent==='구매 복원').onclick();
+ await f.buttons().find(b=>b.textContent==='기존 구독 복원').onclick();
  release({products:[product]});await settle();
  assert.equal(f.visibleOffers().length,0);
 });
@@ -75,7 +76,7 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
  const f=dialogFixture({status:async()=>({ready:true,testOnly:false,testActive:true,active:false,productId:product.productId}),
   purchase:async()=>({status:'purchased',results:[{verified:true,active:true}]})});
  await settle();
- const copy=f.document.body.children[0].children.map(e=>e.textContent||'').join(' ');
+ const content=e=>[e.textContent||'',...e.children.map(content)].join(' ');const copy=content(f.document.body.children[0]);
  assert.match(copy,/매장 이용권 구독/);
  assert.match(copy,/60일 무료체험/);
  assert.match(copy,/월 9,900원/);
@@ -83,7 +84,7 @@ test('paid dialog shows billing and cancellation terms only for a paid-ready sto
  assert.match(copy,/출퇴근을 포함한 업무 입력·수정이 제한/);
  assert.match(copy,/기존 기록 조회와 구독 복원은 가능/);
  assert.equal(f.visibleOffers().length,1);
- assert.match(f.visibleOffers()[0].textContent,/구독 시작$/);
+ assert.match(f.visibleOffers()[0].textContent,/60일 무료체험 후 월 9,900원 구독$/);
  await f.visibleOffers()[0].onclick();
  assert.equal(f.visibleOffers().length,0);
 });
@@ -93,4 +94,11 @@ test('paid checkout is absent unless the server explicitly reports readiness and
   const f=dialogFixture({status:async()=>response});await settle();
   assert.equal(f.visibleOffers().length,0);
  }
+});
+
+test('paid-only offer never claims a free trial and restore remains secondary',async()=>{
+ const f=dialogFixture({status:async()=>({ready:true,testOnly:false,billingScope:'account',productId:product.productId}),products:async()=>({products:[{...product,offers:[product.offers[0]]}]})});await settle();
+ assert.equal(f.visibleOffers()[0].textContent,'월 9,900원으로 구독하기');
+ assert.equal(f.buttons().find(b=>b.textContent==='기존 구독 복원').parent.tagName,'div');
+ assert.match(f.visibleOffers()[0].style.cssText,/#16774c/);
 });

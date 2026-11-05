@@ -7,8 +7,8 @@ android {
         applicationId "kr.co.manee.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode project.hasProperty('maneeRelease148') ? 49 : project.hasProperty('maneeRelease147') ? 48 : project.hasProperty('maneeRelease146') ? 47 : project.hasProperty('maneeRelease145') ? 46 : project.hasProperty('maneeQa144') ? 45 : project.hasProperty('maneeQa143') ? 44 : (project.hasProperty('maneeQa142') ? 43 : 23)
-        versionName project.hasProperty('maneeRelease148') ? '1.48' : project.hasProperty('maneeRelease147') ? '1.47' : project.hasProperty('maneeRelease146') ? '1.46' : project.hasProperty('maneeRelease145') ? '1.45' : project.hasProperty('maneeQa144') ? '1.44' : project.hasProperty('maneeQa143') ? '1.43' : (project.hasProperty('maneeQa142') ? '1.42-sector1-4-test' : '1.22')
+        versionCode project.hasProperty('maneeRelease149') ? 50 : project.hasProperty('maneeRelease148') ? 49 : project.hasProperty('maneeRelease147') ? 48 : project.hasProperty('maneeRelease146') ? 47 : project.hasProperty('maneeRelease145') ? 46 : project.hasProperty('maneeQa144') ? 45 : project.hasProperty('maneeQa143') ? 44 : (project.hasProperty('maneeQa142') ? 43 : 23)
+        versionName project.hasProperty('maneeRelease149') ? '1.49' : project.hasProperty('maneeRelease148') ? '1.48' : project.hasProperty('maneeRelease147') ? '1.47' : project.hasProperty('maneeRelease146') ? '1.46' : project.hasProperty('maneeRelease145') ? '1.45' : project.hasProperty('maneeQa144') ? '1.44' : project.hasProperty('maneeQa143') ? '1.43' : (project.hasProperty('maneeQa142') ? '1.42-sector1-4-test' : '1.22')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
