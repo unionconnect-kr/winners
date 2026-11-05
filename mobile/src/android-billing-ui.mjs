@@ -3,17 +3,21 @@ import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubsc
 export function testOffers(products,productId='manee.store1.monthly') {
  if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
  const product=products?.find(p=>p.productId===productId);
- const offers=(product?.offers||[]).filter(o=>o.basePlanId==='monthly' && o.offerToken &&
-  (o.offerId==='trial-60days' ? o.phases?.length===2 &&
-    Number(o.phases[0].amountMicros)===0 && o.phases[0].period==='P60D' &&
-    o.phases[0].cycles===1 && o.phases[0].recurrenceMode===2 :
-    !o.offerId && o.phases?.length===1) &&
-  o.phases.every(p=>p.currency==='KRW') &&
+ // Console IDs name offers; their actual pricing phases define the promise.
+ // An eligible 60-day offer may be renamed without changing its terms.
+ const isTrial=o=>o.phases?.length===2 &&
+  Number(o.phases[0]?.amountMicros)===0 && o.phases[0]?.period==='P60D' &&
+  o.phases[0].cycles===1 && o.phases[0].recurrenceMode===2;
+ // Keep the server-allocated base plan; receipt verification pins this ID.
+ const offers=(product?.offers||[]).filter(o=>o.basePlanId==='monthly' &&
+  typeof o.offerToken==='string' && o.offerToken && Array.isArray(o.phases) &&
+  (isTrial(o)||o.phases.length===1) && o.phases.every(p=>p?.currency==='KRW') &&
   o.phases.at(-1).period==='P1M' && o.phases.at(-1).recurrenceMode===1 &&
-  Number(o.phases.at(-1).amountMicros)===9900000000
- );
- const trial=offers.find(o=>o.offerId==='trial-60days');
- return (trial?[trial]:offers).map(o=>({productId:product.productId,offerToken:o.offerToken,trialDays:o.offerId==='trial-60days'?60:0,price:Number(o.phases.at(-1).amountMicros)/1000000===9900?'9,900원':o.phases.at(-1).price,
+  Number(o.phases.at(-1).amountMicros)===9900000000);
+ // Prefer the exact trial, otherwise the regular base plan. Do not create
+ // duplicate buttons when multiple eligible offers have identical terms.
+ const selected=offers.find(isTrial)||offers.find(o=>!o.offerId)||offers[0];
+ return (selected?[selected]:[]).map(o=>({productId:product.productId,offerToken:o.offerToken,trialDays:isTrial(o)?60:0,price:'9,900원',
   label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':p.period==='P60D'?'60일':p.period})`).join(' → ')}));
 }
 export function openAndroidBilling({billing,getContext,document,launchTrial=false}) {
@@ -35,7 +39,7 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
    view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';
   }
   status.textContent=r.status==='alreadyActive'?'이 매장에 이미 이용 중인 구독이 있어요.':r.status==='cancelled'?'구매를 취소했어요.':r.status==='pending'?'승인을 기다리고 있어요. 잠시 후 구매 복원을 눌러 주세요.':r.status==='empty'?'복원할 구매가 없어요.':r.results?.some(x=>testMode?x.testActive:x.active)?(testMode?'테스트 구매·서버 검증이 완료됐어요.':'Google Play 구매·서버 검증이 완료됐어요.'):(testMode?'구매 내역을 확인했어요. 현재 활성 테스트 구독은 없어요.':'구매 내역을 확인했어요. 현재 활성 구독은 없어요.');};
- const retry=button('요금·혜택 다시 확인',async()=>{closeSubscriptionSheet(sheet);openAndroidBilling({billing,getContext,document});});retry.hidden=true;
+ const retry=button('요금·혜택 다시 확인',async()=>{closeSubscriptionSheet(sheet);openAndroidBilling({billing,getContext,document});},'link');retry.hidden=true;
  const close=button('닫기',()=>closeSubscriptionSheet(sheet),'secondary');
  sheet.addEventListener('cancel',e=>{if(busy)e.preventDefault();});sheet.addEventListener('close',()=>sheet.remove(),{once:true});
  document.body.append(sheet);sheet.showModal();
@@ -62,16 +66,19 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
     const buy=button(testMode?label+' · 테스트 구매':label,startTrial);buy.dataset.purchase='true';purchaseButtons.push(buy);
    }else{
     // An absent eligible trial is not permission to silently charge immediately.
-    status.textContent='현재 Google Play 계정에는 무료체험 상품이 표시되지 않았어요. 대상 여부를 다시 확인하거나 무료체험 없는 구독 요금을 확인해 주세요.';
+    setSubscriptionOffer(view,offer);
+    view.label.textContent='현재 Google Play 계정에 제공된 요금';
+    view.after.textContent='무료체험 미적용 · 오늘 9,900원 결제 · 매월 갱신';
+    status.textContent='현재 Google Play 계정에는 60일 무료체험 상품이 제공되지 않았어요. 아래에서 무료체험 없는 구독 조건을 확인한 뒤 진행할 수 있어요.';
     retry.hidden=false;
     const paid=button('무료체험 없는 구독 요금 확인',()=>{
      if(subscriptionActive)return;
      paid.hidden=true;retry.hidden=true;setSubscriptionOffer(view,offer);
      view.after.textContent='무료체험 미적용 · 오늘 9,900원 결제 · 매월 갱신';
-     status.textContent='무료체험 없이 시작하는 구독이에요. Google Play 결제창에서 최종 요금을 확인해 주세요.';
-     const buy=button(testMode?'월 9,900원 테스트 구독':'월 9,900원으로 구독하기',async()=>show(await billing.purchase(offer)));
+     status.textContent='60일 무료체험 없이 오늘 9,900원을 결제하고 매월 갱신하는 조건이에요. 동의하시면 아래 버튼을 눌러 Google Play 결제창에서 최종 조건을 확인해 주세요.';
+     const buy=button(testMode?'9,900원 테스트 결제 진행':'오늘 9,900원 결제하고 구독하기',async()=>{status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));});
      buy.dataset.purchase='true';purchaseButtons.push(buy);view.actions.append(close);
-    },'link');purchaseButtons.push(paid);
+    });purchaseButtons.push(paid);
    }
   }
   // Keep the primary action before close, with restoration in a quiet footer.

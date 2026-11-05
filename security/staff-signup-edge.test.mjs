@@ -5,13 +5,19 @@ import {stripTypeScriptTypes} from 'node:module';
 import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const source=readFileSync(new URL('../supabase/functions/manee-staff-signup/index.ts',import.meta.url),'utf8');
-const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password1',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
+const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password1',recovery_email:'worker@example.com',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
 function harness(options={}){
   const calls=[];let handler;
   const ok=data=>({data,error:null});
   const admin={
     rpc:async(name,args)=>{calls.push({name,args});
       if(name==='consume_auth_rate_limit')return options.rateError?{error:{code:'offline'}}:ok(options.rateAllowed??true);
+      if(name==='manee_email_service'){
+        assert.equal(args.p_payload.email,defaults.recovery_email);
+        if(args.p_action==='check')return ok({ok:true,available:true});
+        assert.equal(args.p_action,'register');assert.equal(args.p_payload.user_id,'created-user');
+        return ok({ok:true});
+      }
       if(name==='manee_sms_service')return ok(args.p_action==='claim'?(options.smsDenied?{ok:false}:{ok:true,phone:'+821012345678',operation_id:'sms-operation'}):{ok:true});
    if(name==='is_manee_username_reserved')return options.lookupError?{error:{code:'offline'}}:ok(Object.hasOwn(options,'reserved')?options.reserved:false);
       if(name==='bootstrap_staff_account'||name==='bootstrap_staff_account_with_profile')return options.bootstrapError?{error:options.bootstrapError}:ok('created-user');

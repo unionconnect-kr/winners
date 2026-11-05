@@ -421,3 +421,8 @@ verify_jwt = false
 # Custom scheduler bearer verified against Vault by a service-only DB RPC.
 [functions.manee-android-delivery]
 verify_jwt = false
+
+# Public single-use email links have no login session. Request/status authenticate
+# with getUser plus a live-session check; the service RPC remains service-role only.
+[functions.manee-email-auth]
+verify_jwt = false

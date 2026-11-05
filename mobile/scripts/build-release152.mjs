@@ -1,0 +1,15 @@
+import {execFileSync} from 'node:child_process';
+import {copyFileSync,readFileSync,writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+import {installEmailVerification} from './email-verification-html.mjs';
+const mobile=fileURLToPath(new URL('..',import.meta.url));
+const platform=process.argv[2];
+if(!['android','ios'].includes(platform)||process.argv[3]!=='production')throw Error('Specify android|ios production explicitly');
+execFileSync(process.execPath,['scripts/build-release151.mjs',platform,'production'],{cwd:mobile,stdio:'inherit'});
+const out=resolve(mobile,'www');
+const html=resolve(out,'index.html');
+writeFileSync(html,installEmailVerification(readFileSync(html,'utf8')));
+for(const name of ['email-verification.js','email-verification.css'])copyFileSync(resolve(mobile,'src',name),resolve(out,name));
+const info=JSON.parse(readFileSync(resolve(out,'build-info.json'),'utf8'));
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.52',versionCode:53,releaseVersion:'1.52',sourceVersion:'1.51'},null,2)+'\n');

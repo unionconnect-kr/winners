@@ -1,4 +1,6 @@
 export const STAGING_URL='https://obpkzecgswnfuyhwvncd.supabase.co';
+export const PRODUCTION_URL='https://bhwuuxcrzxespkjlmqxr.supabase.co';
+export function isManeeProjectUrl(value:unknown){return value===STAGING_URL||value===PRODUCTION_URL;}
 export const enc=new TextEncoder();
 export function username(value:unknown){return String(value??'').normalize('NFKC').trim().toLowerCase();}
 export function phone(value:unknown){

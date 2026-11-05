@@ -4,14 +4,39 @@ const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M
 const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-60days',offerToken:'trial',phases:[{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2},phase]}]};
 test('only eligible fixed monthly offers use the actual Play price and free phase',()=>{
  const offers=testOffers([product]);assert.equal(offers.length,1);assert.equal(offers[0].label,'무료 (60일) → ₩9,900 (1개월)');assert.equal(offers[0].offerToken,'trial');
- for(const change of [p=>p.productId='wrong',p=>p.offers.forEach(o=>o.basePlanId='annual'),p=>p.offers.forEach(o=>o.phases.at(-1).currency='USD'),p=>p.offers.forEach(o=>o.phases.at(-1).amountMicros=19900000000)]){const p=structuredClone(product);change(p);assert.deepEqual(testOffers([p]),[]);}
+ for(const change of [p=>p.productId='wrong',p=>p.offers.forEach(o=>o.basePlanId='annual'),p=>p.offers.forEach(o=>o.phases.at(-1).period='P1Y'),p=>p.offers.forEach(o=>o.phases.at(-1).currency='USD'),p=>p.offers.forEach(o=>o.phases.at(-1).amountMicros=19900000000)]){const p=structuredClone(product);change(p);assert.deepEqual(testOffers([p]),[]);}
 });
 test('trial offer requires exactly sixty free days before the monthly price',()=>{
- for(const change of [p=>p.offers[1].phases[0].period='P1W',p=>p.offers[1].phases[0].period='P1M',p=>p.offers[1].phases[0].period='P2M',p=>p.offers[1].offerId='trial-1month',
+ for(const change of [p=>p.offers[1].phases[0].period='P1W',p=>p.offers[1].phases[0].period='P1M',p=>p.offers[1].phases[0].period='P2M',p=>p.offers[1].phases[0].recurrenceMode=1,
   p=>p.offers[1].phases[0].cycles=2,p=>p.offers[1].phases[0].amountMicros=1000000,
   p=>p.offers[1].phases.splice(1,0,{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2})]){
   const p=structuredClone(product);change(p);
   assert.deepEqual(testOffers([p]).map(o=>o.offerToken),['paid']);
+ }
+});
+test('renamed Console offer IDs preserve an eligible exact 60-day trial and duplicate offers create one choice',()=>{
+ const p=structuredClone(product);
+ p.offers[1].offerId='welcome-2026';p.offers.push({...p.offers[1],offerToken:'second-trial'});
+ assert.deepEqual(testOffers([p]).map(o=>({token:o.offerToken,days:o.trialDays})),[{token:'trial',days:60}]);
+ p.offers=p.offers.filter(o=>o.phases.length===1);
+ p.offers.push({...p.offers[0],offerId:'regular-price',offerToken:'same-price'});
+ assert.deepEqual(testOffers([p]).map(o=>o.offerToken),['paid']);
+});
+test('the live catalog can contain both old one-month and new sixty-day offers without selecting the old trial',()=>{
+ const p=structuredClone(product);
+ const oldTrial={...structuredClone(p.offers[1]),offerId:'trial-1month',offerToken:'old-trial'};
+ oldTrial.phases[0].period='P1M';p.offers.unshift(oldTrial);
+ assert.deepEqual(testOffers([p]).map(o=>[o.offerToken,o.trialDays]),[['trial',60]]);
+ // Play omits the sixty-day offer for an ineligible account. Never advertise
+ // the remaining one-month offer as sixty days or silently choose that token.
+ p.offers=p.offers.filter(o=>o.offerToken!=='trial');
+ assert.deepEqual(testOffers([p]).map(o=>[o.offerToken,o.trialDays]),[['paid',0]]);
+ p.offers=p.offers.filter(o=>o.offerToken!=='paid');assert.deepEqual(testOffers([p]),[]);
+});
+test('calendar-month or repeated free phases cannot be labeled as the exact sixty-day offer',()=>{
+ for(const [period,cycles] of [['P2M',1],['P1M',2],['P60D',2]]){
+  const p=structuredClone(product);p.offers[1].phases[0].period=period;p.offers[1].phases[0].cycles=cycles;
+  assert.deepEqual(testOffers([p]).map(o=>[o.offerToken,o.trialDays]),[['paid',0]]);
  }
 });
 test('offers follow the server allocated store product',()=>{
@@ -100,10 +125,22 @@ test('a paid-only offer requires reviewing immediate payment before a purchase b
  let purchased=0;
  const f=dialogFixture({status:async()=>({ready:true,testOnly:false,billingScope:'account',productId:product.productId}),products:async()=>({products:[{...product,offers:[product.offers[0]]}]}),purchase:async()=>{purchased++;return {status:'cancelled'};}});await settle();
  assert.equal(f.visibleOffers().length,0);
- await f.buttons().find(b=>b.textContent==='무료체험 없는 구독 요금 확인').onclick();
- assert.equal(purchased,0);assert.equal(f.visibleOffers()[0].textContent,'월 9,900원으로 구독하기');
+ const text=e=>[e.textContent||'',...e.children.map(text)].join(' ');
+ assert.match(text(f.document.body),/월 9,900원/);
+ assert.doesNotMatch(text(f.document.body),/60일 무료체험 후/);
+ const review=f.buttons().find(b=>b.textContent==='무료체험 없는 구독 요금 확인');
+ assert.match(review.style.cssText,/background:#16774c/,'paid review is the primary action');
+ assert.match(text(f.document.body),/무료체험 미적용 · 오늘 9,900원 결제/);
+ await review.onclick();
+ assert.equal(purchased,0);assert.equal(f.visibleOffers()[0].textContent,'오늘 9,900원 결제하고 구독하기');
  await f.visibleOffers()[0].onclick();assert.equal(purchased,1);
  assert.equal(f.buttons().find(b=>b.textContent==='기존 구독 복원').parent.tagName,'div');
+});
+test('paid cancellation keeps the confirmed price and repeating the purchase action never silently starts a trial',async()=>{
+ let calls=0;const f=dialogFixture({status:async()=>({ready:true,testOnly:false,productId:product.productId}),products:async()=>({products:[{...product,offers:[product.offers[0]]}]}),purchase:async selection=>{calls++;assert.equal(selection.trialDays,0);return {status:'cancelled'};}});await settle();
+ await f.buttons().find(b=>b.textContent==='무료체험 없는 구독 요금 확인').onclick();
+ await f.visibleOffers()[0].onclick();assert.equal(calls,1);
+ assert.equal(f.visibleOffers()[0].textContent,'오늘 9,900원 결제하고 구독하기');
 });
 test('a Play lookup failure keeps the trial promotion but offers only a retry, never a paid fallback',async()=>{
  const f=dialogFixture({products:async()=>{throw Object.assign(new Error('offline'),{code:'PLAY_2'});}});await settle();

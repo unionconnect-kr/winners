@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+import {createContext,Script} from 'node:vm';
+import {webcrypto} from 'node:crypto';
+const defaults={username:'synthetic152',display_name:'매니 QA',store_name:'매니 QA store',password:'Synthetic152Secret!a',age_14_plus_confirmed:true,recovery_email:' QA152@Example.COM ',sms_challenge_id:'15200000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
+function harness(slug,options={}){
+ const calls=[];let handler;const ok=data=>({data,error:null});
+ const admin={rpc:async(name,args)=>{calls.push({name,args});if(name==='consume_auth_rate_limit')return ok(true);if(name==='is_manee_username_reserved')return ok(false);
+  if(name==='manee_email_service')return args.p_action==='check'?(options.lookupError?{error:{code:'offline'}}:ok({ok:true,available:!options.emailTaken})):options.registerError?{error:{code:'offline'}}:ok(options.registerTaken?{ok:false,error:'email_taken'}:{ok:true});
+  if(name==='manee_sms_service')return ok(args.p_action==='claim'?(options.phoneTaken?{ok:false,error:'phone_taken'}:{ok:true,phone:'+821000000001',operation_id:'op'}):{ok:true});
+  if(name.startsWith('bootstrap_'))return options.bootstrapError?{error:{code:'offline'}}:ok('15200000-0000-4000-8000-000000000002');throw Error('unexpected RPC');},
+  from(){const q={select(){return q},eq(){return q},async maybeSingle(){return ok(options.committed?{user_id:'new-user'}:null)}};return q},
+  auth:{admin:{async createUser(args){calls.push({name:'createUser',args});return options.weakPassword?{error:{code:'weak_password'}}:ok({user:{id:'new-user'}})},async deleteUser(id){calls.push({name:'deleteUser',id});return options.cleanupError?{error:{code:'offline'}}:ok({})}}}};
+ const client={auth:{async signInWithPassword(args){calls.push({name:'signInWithPassword',args});return ok({session:null})}}};
+ const env={SUPABASE_URL:'https://bhwuuxcrzxespkjlmqxr.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
+ const src=readFileSync(new URL('../supabase/functions/'+slug+'/index.ts',import.meta.url),'utf8').replace(/^import \{ createClient \} from 'npm:@supabase\/supabase-js@2\.116\.0'\r?\n/,'');
+ new Script(stripTypeScriptTypes(src)).runInContext(createContext({Request,Response,TextEncoder,crypto:webcrypto,console:{error(){}},createClient:(_,key)=>key===env.SUPABASE_SERVICE_ROLE_KEY?admin:client,Deno:{env:{get:n=>env[n]},serve:fn=>handler=fn}}));
+ return {calls,async run(values=defaults){const r=await handler(new Request('https://synthetic.invalid',{method:'POST',headers:{apikey:env.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify(values)}));return {status:r.status,body:await r.json()}}};
+}
+for(const slug of ['manee-signup','manee-staff-signup']){
+ test(slug+': missing email asks for app update before privileged work',async()=>{const h=harness(slug),b={...defaults};delete b.recovery_email;const r=await h.run(b);assert.equal(r.status,426);assert.equal(r.body.error,'app_update_required');assert.equal(h.calls.length,0)});
+ test(slug+': invalid email rejects before proof consumption',async()=>{for(const email of ['', 'x@localhost','x..y@example.com','.xy@example.com','xy.@example.com','<script>@example.com','a'.repeat(65)+'@example.com']){const h=harness(slug);assert.equal((await h.run({...defaults,recovery_email:email})).status,400);assert.equal(h.calls.length,0)}});
+ test(slug+': duplicate email or lookup outage creates no account and consumes no proof',async()=>{for(const [options,status] of [[{emailTaken:true},409],[{lookupError:true},503]]){const h=harness(slug,options);assert.equal((await h.run()).status,status);assert.equal(h.calls.some(c=>c.name==='createUser'||c.name==='manee_sms_service'),false)}});
+ test(slug+': canonical email is checked and reserved before bootstrap while login email remains internal',async()=>{const h=harness(slug),r=await h.run();assert.equal(r.status,201);const emails=h.calls.filter(c=>c.name==='manee_email_service');assert.deepEqual(emails.map(c=>c.args.p_action),['check','register']);assert.equal(emails[0].args.p_payload.email,'qa152@example.com');assert.equal(emails[1].args.p_payload.user_id,'new-user');assert.ok(h.calls.findIndex(c=>c.name==='manee_email_service'&&c.args.p_action==='register')<h.calls.findIndex(c=>c.name.startsWith('bootstrap_')));assert.match(h.calls.find(c=>c.name==='createUser').args.email,/@auth\.manee\.local$/);assert.match(h.calls.find(c=>c.name==='signInWithPassword').args.email,/@auth\.manee\.local$/)});
+ test(slug+': phone already claimed by a different account prevents Auth creation',async()=>{const h=harness(slug,{phoneTaken:true}),r=await h.run();assert.equal(r.status,409);assert.equal(r.body.error,'phone_taken');assert.equal(h.calls.some(c=>c.name==='createUser'),false)});
+ test(slug+': concurrent email reservation conflict cleans only newly-created identity and releases proof',async()=>{const h=harness(slug,{registerTaken:true}),r=await h.run();assert.equal(r.status,409);assert.equal(r.body.error,'email_taken');assert.equal(r.body.phone_verification_retained,true);assert.deepEqual(h.calls.filter(c=>c.name==='deleteUser').map(c=>c.id),['new-user']);assert.equal(h.calls.some(c=>c.name.startsWith('bootstrap_')),false);const release=h.calls.find(c=>c.name==='manee_sms_service'&&c.args.p_action==='release_signup');assert.equal(release.args.p_payload.reason,'bootstrap_rolled_back')});
+ test(slug+': uncertain cleanup never releases a consumed phone proof',async()=>{const h=harness(slug,{registerError:true,cleanupError:true}),r=await h.run();assert.equal(r.status,503);assert.equal(r.body.error,'signup_cleanup_failed');assert.equal(h.calls.some(c=>c.name==='manee_sms_service'&&c.args.p_action==='release_signup'),false)});
+ test(slug+': deployed weak-password compensation remains intact',async()=>{const h=harness(slug,{weakPassword:true}),r=await h.run();assert.equal(r.status,400);assert.equal(r.body.error,'weak_password');assert.equal(r.body.phone_verification_retained,true);assert.equal(h.calls.some(c=>c.name==='manee_email_service'&&c.args.p_action==='register'),false)});
+}

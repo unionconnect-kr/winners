@@ -79,3 +79,11 @@ test('1.50 password guidance upload is restricted to the exact requested branch 
  const temp=mkdtempSync(join(tmpdir(),'manee150-upload-'));
  try{assert.equal((await uploadTestFlight({...approved,RUNNER_TEMP:temp},'/tmp/app.ipa',{platform:'darwin',check:async()=>{},run:()=>({status:0})})).uploaded,true);}finally{rmSync(temp,{recursive:true,force:true});}
 });
+
+test('1.52 final upload is restricted to the exact requested branch and workflow',async()=>{
+ const branch='refs/heads/codex/final-email-billing-152-20261106';
+ const approved={...base,GITHUB_EVENT_NAME:'push',GITHUB_REF:branch,GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/mobile152-release.yml@${branch}`};
+ for(const overrides of [{GITHUB_WORKFLOW_REF:'other'},{GITHUB_REF:'refs/heads/other'},{GITHUB_EVENT_NAME:'pull_request'},{MANEE_UPLOAD_TESTFLIGHT:'false'}])await assert.rejects(uploadTestFlight({...approved,...overrides},'/tmp/app.ipa',{platform:'darwin',check:()=>assert.fail('No Apple call')}),/UPLOAD_NOT_REQUESTED/);
+ const temp=mkdtempSync(join(tmpdir(),'manee152-upload-'));
+ try{assert.equal((await uploadTestFlight({...approved,RUNNER_TEMP:temp},'/tmp/app.ipa',{platform:'darwin',check:async()=>{},run:()=>({status:0})})).uploaded,true);}finally{rmSync(temp,{recursive:true,force:true});}
+});

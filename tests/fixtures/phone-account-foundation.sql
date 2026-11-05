@@ -1,0 +1,13 @@
+do $$begin if not exists(select 1 from pg_roles where rolname='anon') then create role anon nologin;end if; if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin;end if; if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls;end if;end$$;
+create schema private;create schema auth;grant usage on schema private,auth to service_role;
+create table auth.users(id uuid primary key,email text,banned_until timestamptz);
+create table auth.identities(user_id uuid references auth.users on delete cascade,provider text);
+create table public.platform_admins(user_id uuid,status text);
+create table auth.sessions(id uuid primary key,user_id uuid references auth.users on delete cascade,not_after timestamptz);
+create table public.profiles(user_id uuid primary key references auth.users on delete cascade,username text,status text default 'active',phone_e164 text,phone_verified_at timestamptz);
+create table private.manee_sms_bindings(user_id uuid primary key references auth.users on delete cascade,phone_e164 text not null,verified_at timestamptz not null default now());
+create table private.manee_sms_challenges(id uuid primary key,purpose text,username text,phone_e164 text,phone_hash text,target_user_id uuid,session_id uuid,code_hash text,proof_hash text,status text default 'sending',failed_attempts int default 0,created_at timestamptz default clock_timestamp(),expires_at timestamptz default clock_timestamp()+interval '3 minutes',proof_expires_at timestamptz,operation_id uuid,finished_at timestamptz);
+alter table private.manee_sms_bindings enable row level security;alter table private.manee_sms_challenges enable row level security;
+create function private.manee_sms_ordinary_user(u uuid) returns boolean language sql as $$select exists(select 1 from auth.users where id=u) and exists(select 1 from public.profiles where user_id=u)$$;
+create function public.is_manee_username_reserved(u text) returns boolean language sql as $$select exists(select 1 from public.profiles where username=u)$$;
+create function public.consume_auth_rate_limit(text,text,integer,integer) returns boolean language sql as $$select true$$;

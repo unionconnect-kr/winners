@@ -6,12 +6,18 @@ import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 
 const slugs=['manee-signup','manee-staff-signup','manee-franchise-signup'];
-const defaults={username:'synthetic_signup',password:'synthetic-password1',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
+const defaults={username:'synthetic_signup',password:'synthetic-password1',recovery_email:'signup@example.com',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-4000-8000-000000000001',sms_proof:'a'.repeat(64)};
 function harness(slug,options={}){
  const calls=[],logs=[];let handler;
  const ok=data=>({data,error:null});
  const admin={
   rpc:async(name,args)=>{calls.push({name,args});if(name==='consume_auth_rate_limit')return ok(true);
+   if(name==='manee_email_service'){
+    assert.equal(args.p_payload.email,defaults.recovery_email);
+    if(args.p_action==='check')return ok({ok:true,available:true});
+    assert.equal(args.p_action,'register');assert.equal(args.p_payload.user_id,'new-auth-id');
+    return ok({ok:true});
+   }
    if(name==='manee_sms_service')return ok(args.p_action==='claim'?(options.smsDenied?{ok:false}:{ok:true,phone:'+821012345678',operation_id:'sms-operation'}):{ok:true});
    if(name==='is_manee_username_reserved')return options.lookupError?{error:{message:'private-provider-detail'}}:ok(false);
    if(name.startsWith('bootstrap_'))return options.bootstrapError?{error:{code:'23505',message:'private-provider-detail'}}:ok('new-business-id');

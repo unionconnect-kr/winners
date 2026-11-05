@@ -15,7 +15,7 @@ export function createBillingClient({storeKit,request,getContext}) {
  return {
   async status(){const c=context();const status=await request(c,'ios-billing',{action:'status'});unchanged(c);return status;},
   async products(productId='manee.store1.monthly'){return storeKit.products({productId});},
-  purchase:()=>run(async c=>{
+  purchase:(selection)=>run(async c=>{
    const checkoutId=globalThis.crypto.randomUUID();
    const status=await request(c,'ios-billing',{action:'prepare',checkoutId});unchanged(c);
    const claimed=status.checkoutId===checkoutId;
@@ -37,6 +37,7 @@ export function createBillingClient({storeKit,request,getContext}) {
    if(pending.transactions?.some(t=>t.productId===(status.productId||'manee.store1.monthly')))throw Error('이 Apple 계정의 구독이 다른 매장에 연결되어 있어요. 처음 구독한 매장에서 구매 복원을 눌러 주세요.');
    const product=await storeKit.products({productId:status.productId||'manee.store1.monthly'});unchanged(c);
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요.');
+   if(selection?.twoMonthsFree===true&&product.twoMonthsFree!==true)throw Error('무료체험 대상이 변경됐어요. 구독 화면을 닫고 요금·혜택을 다시 확인해 주세요.');
    storeStarted=true;
    const result=await storeKit.purchase({appAccountToken:status.appAccountToken,productId:status.productId||'manee.store1.monthly'});unchanged(c);
    if(result.status==='cancelled')await release();

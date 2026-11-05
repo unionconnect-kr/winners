@@ -28,6 +28,16 @@ test('paid pilot assets have a distinct purpose and cannot pass the internal gua
 test('debug variant cannot package production assets',()=>{
   assert.throws(()=>verifyAndroidAssets({...production(),environment:'staging'}));
 });
+test('1.52 store update requires its exact version and all production services',()=>{
+  const input=production();input.releasePurpose='store-update';
+  Object.assign(input.info,{releasePurpose:'store-update',billingEnabled:true,versionName:'1.52',versionCode:53,
+    usernameRecoveryEnabled:true,smsResendSeconds:30,pushEnabled:true,signupCheckoutEnabled:true,nativeAuthStorage:'keystore-v1'});
+  verifyAndroidAssets(input);
+  for(const change of [{versionCode:52},{billingEnabled:false},{pushEnabled:false},{signupCheckoutEnabled:false},
+    {nativeAuthStorage:'localstorage'},{usernameRecoveryEnabled:false},{smsResendSeconds:60}]) {
+    assert.throws(()=>verifyAndroidAssets({...input,info:{...input.info,...change}}));
+  }
+});
 test('upload signing requires every input, an existing file, and a non-debug identity',()=>{
   const env={MANEE_ANDROID_UPLOAD_KEYSTORE:'/private/upload.jks',MANEE_ANDROID_UPLOAD_STORE_PASSWORD:'fixture',
     MANEE_ANDROID_UPLOAD_KEY_ALIAS:'upload',MANEE_ANDROID_UPLOAD_KEY_PASSWORD:'fixture'};

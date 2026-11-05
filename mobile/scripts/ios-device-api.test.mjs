@@ -27,10 +27,10 @@ for(const [role,roles,status] of [['staff',['owner'],403],['owner',['staff'],403
 }
 test('wrong password does not reveal account role',async()=>{const r=await endpoint('manee-login',{roles:['owner'],badPassword:true}).request({username:'manee01',password:'wrong',role:'staff'});assert.equal(r.status,401);assert.equal(r.body.error,'invalid_credentials');assert.ok(!r.body.session);});
 for(const slug of ['manee-signup','manee-staff-signup','manee-check-username']){
-  test(slug+' rejects five-character username before account creation',async()=>{const e=endpoint(slug),r=await e.request({username:'abc12',password:'qwer1234',age_14_plus_confirmed:true,store_name:'테스트점',display_name:'테스트'});assert.equal(r.status,400);assert.equal(r.body.error,'invalid_username');assert.equal(e.created,0);});
+  test(slug+' rejects five-character username before account creation',async()=>{const e=endpoint(slug),r=await e.request({username:'abc12',password:'qwer1234',recovery_email:'test@example.com',age_14_plus_confirmed:true,store_name:'테스트점',display_name:'테스트'});assert.equal(r.status,400);assert.equal(r.body.error,'invalid_username');assert.equal(e.created,0);});
 }
 for(const slug of ['manee-signup','manee-staff-signup'])for(const password of ['12345678','abcdefgh']){
-  test(slug+' rejects '+password+' before SMS proof consumption',async()=>{const e=endpoint(slug),r=await e.request({username:'newqa12',password,age_14_plus_confirmed:true,store_name:'테스트점',display_name:'테스트'});assert.equal(r.body.error,'invalid_password');assert.equal(e.created,0);assert.ok(!e.calls.some(([n,a])=>n==='manee_sms_service'&&a.p_action==='claim'));});
+  test(slug+' rejects '+password+' before SMS proof consumption',async()=>{const e=endpoint(slug),r=await e.request({username:'newqa12',password,recovery_email:'test@example.com',age_14_plus_confirmed:true,store_name:'테스트점',display_name:'테스트'});assert.equal(r.body.error,'invalid_password');assert.equal(e.created,0);assert.ok(!e.calls.some(([n,a])=>n==='manee_sms_service'&&a.p_action==='claim'));});
 }
 for(const action of ['reset','change_password'])test('recovery '+action+' rejects a weak new password',async()=>{const e=endpoint('manee-account-recovery'),r=await e.request({action,username:'manee01',current_password:'legacy',new_password:'abcdefgh',reset_code:'123456'});assert.equal(r.body.error,'invalid_password');assert.ok(!e.calls.some(([n,a])=>n==='manee_support_recovery_service'&&a.p_action==='consume'));});
 test('SMS signup requires six characters but existing short-username recovery still works',async()=>{

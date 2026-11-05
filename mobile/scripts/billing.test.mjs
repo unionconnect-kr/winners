@@ -35,3 +35,8 @@ test('another product does not block this store and sync ignores foreign binding
  await h.client.sync();assert.deepEqual(h.finished,[]);
  await h.client.purchase();assert.equal(h.purchases(),1);assert.deepEqual(h.finished,['1']);
 });
+test('an iOS trial shown to the user cannot silently become an immediate paid checkout',async()=>{
+ const h=setup();
+ await assert.rejects(()=>h.client.purchase({twoMonthsFree:true}),/무료체험 대상이 변경/);
+ assert.equal(h.purchases(),0);assert.deepEqual(h.finished,[]);
+});

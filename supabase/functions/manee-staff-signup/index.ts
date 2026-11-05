@@ -60,12 +60,20 @@ Deno.serve(async (req) => {
     const admin = createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const userClient = createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-    if (url !== 'https://obpkzecgswnfuyhwvncd.supabase.co') return json({error:'staging_only'},503)
+    if (!['https://obpkzecgswnfuyhwvncd.supabase.co','https://bhwuuxcrzxespkjlmqxr.supabase.co'].includes(url)) return json({error:'server_not_configured'},503)
     const raw=await req.text(); if(raw.length>8192)return json({error:'request_too_large'},413)
     const body = JSON.parse(raw)
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid_request', message: '가입 정보를 확인해주세요.' }, 400)
     if (body.age_14_plus_confirmed !== true) {
       return json({ error: 'age_confirmation_required', message: '만 14세 이상임을 확인해 주세요. 확인 항목이 없으면 앱 업데이트 또는 화면 새로고침 후 가입해 주세요.' }, 400)
+    }
+    if (!Object.hasOwn(body, 'recovery_email')) {
+      return json({error:'app_update_required',message:'이메일 등록 기능이 추가됐어요. 최신 앱으로 업데이트한 뒤 가입해 주세요.'},426)
+    }
+    const recoveryEmail = String(body.recovery_email ?? '').trim().toLowerCase()
+    if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(recoveryEmail)
+      || recoveryEmail.length>254 || recoveryEmail.split('@')[0].length>64 || recoveryEmail.includes('..') || recoveryEmail.split('@')[0].startsWith('.') || recoveryEmail.split('@')[0].endsWith('.')) {
+      return json({error:'invalid_email',message:'이메일 주소를 정확히 입력해 주세요.'},400)
     }
     const username = normalizeUsername(body.username)
     const password = String(body.password ?? '')
@@ -118,12 +126,18 @@ Deno.serve(async (req) => {
     }
     if (usernameReserved) return json({ error: 'username_taken', message: '이미 사용 중인 아이디입니다. 기존 계정은 로그인해주세요.' }, 409)
 
+    // Availability is rechecked on the server even after the form's duplicate check.
+    const {data:emailCheck,error:emailCheckError}=await admin.rpc('manee_email_service',{p_action:'check',p_payload:{email:recoveryEmail}})
+    if(emailCheckError || !emailCheck?.ok)return json({error:'email_lookup_failed',message:'이메일 중복 여부를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'},503)
+    if(emailCheck.available!==true)return json({error:'email_taken',message:'이미 사용 중인 이메일 주소예요. 다른 이메일을 입력하거나 기존 계정으로 로그인해 주세요.'},409)
+
     if (!/^[0-9a-f-]{36}$/.test(String(body.sms_challenge_id||'')) || !/^[0-9a-f]{64}$/.test(String(body.sms_proof||''))) {
       return json({error:'phone_verification_required',message:'최신 앱에서 휴대폰 문자 인증을 완료해 주세요.'},400)
     }
     const {data:smsClaim,error:smsClaimError}=await admin.rpc('manee_sms_service',{p_action:'claim',p_payload:{
       id:body.sms_challenge_id,purpose:'signup_staff',username,proof_hash:await sha256(body.sms_proof)
     }})
+    if(!smsClaimError && smsClaim?.error==='phone_taken')return json({error:'phone_taken',message:'이 휴대폰 번호로 가입된 아이디가 있어요. 기존 계정으로 로그인하거나 아이디·비밀번호 찾기를 이용해 주세요.'},409)
     if(smsClaimError || !smsClaim?.ok)return json({error:'phone_verification_required',message:'휴대폰 인증이 만료됐거나 이미 사용됐어요. 다시 인증해 주세요.'},400)
     personal={phone:'0'+smsClaim.phone.slice(3)}
     const internalEmail = `u-${crypto.randomUUID().replaceAll('-', '')}@auth.manee.local`
@@ -131,7 +145,37 @@ Deno.serve(async (req) => {
       app_metadata: { manee_age_14_plus_confirmed: true, manee_age_confirmation_at: new Date().toISOString(),
         manee_age_confirmation_version: '14plus-2026-10-16', manee_age_confirmation_source: 'self-attestation' },
     })
-    if (createError || !created.user) return json({ error: 'auth_create_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500)
+    // A definitive weak-password rejection creates no identity. Restore only
+    // this claimed signup proof so the user can correct the password in place.
+    if (createError?.code === 'weak_password' && !created?.user) {
+      const { data: released, error: releaseError } = await admin.rpc('manee_sms_service', {p_action:'release_signup',p_payload:{
+        id:body.sms_challenge_id,operation_id:smsClaim.operation_id,purpose:'signup_staff',username,
+        proof_hash:await sha256(body.sms_proof),reason:'weak_password'
+      }})
+      const retryable = !releaseError && released?.ok === true
+      return json({ error:'weak_password', phone_verification_retained:retryable,
+        message:'보안상 사용할 수 없는 비밀번호예요. 흔한 단어나 반복 숫자를 피하고 다른 비밀번호를 입력해 주세요. '+
+          (retryable?'휴대폰 인증은 유효시간 안에 그대로 사용할 수 있어요.':'비밀번호를 변경한 뒤 휴대폰 문자 인증을 다시 해 주세요.') },400)
+    }
+    if (createError || !created?.user) return json({ error: 'auth_create_failed', message: '계정을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, 500)
+
+    // Reserve against concurrent signups before any store/staff bootstrap. Auth
+    // cleanup cascades only this new account's pending-email reservation.
+    const {data:emailRegistered,error:emailRegisterError}=await admin.rpc('manee_email_service',{p_action:'register',p_payload:{user_id:created.user.id,email:recoveryEmail}})
+    if(emailRegisterError || !emailRegistered?.ok){
+      const {error:cleanupError}=await admin.auth.admin.deleteUser(created.user.id)
+      if(cleanupError)return json({error:'signup_cleanup_failed',message:'가입 상태를 확인하지 못했어요. 고객지원에 문의해 주세요.'},503)
+      const {data:released,error:releaseError}=await admin.rpc('manee_sms_service',{p_action:'release_signup',p_payload:{
+        id:body.sms_challenge_id,operation_id:smsClaim.operation_id,purpose:'signup_staff',username,
+        proof_hash:await sha256(body.sms_proof),reason:'bootstrap_rolled_back',cleaned_user_id:created.user.id
+      }})
+      const retryable=!releaseError && released?.ok===true
+      const taken=!emailRegisterError && emailRegistered?.error==='email_taken'
+      return json({error:taken?'email_taken':'email_registration_failed',phone_verification_retained:retryable,
+        message:(taken?'이미 사용 중인 이메일 주소예요. 다른 이메일을 입력해 주세요.':'이메일 등록 결과를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.')+
+          (retryable?' 휴대폰 인증은 유효시간 안에 그대로 사용할 수 있어요.':' 휴대폰 문자 인증을 다시 해 주세요.')},taken?409:503)
+    }
+
 
     const bootstrapArgs = { p_user_id: created.user.id, p_username: username, p_display_name: displayName }
     const { data: staffId, error: bootstrapError } = personal

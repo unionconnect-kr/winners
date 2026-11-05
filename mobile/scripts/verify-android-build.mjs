@@ -17,10 +17,10 @@ export function verifyAndroidAssets({info, appConfig, environment, environments,
     assert.equal(info.releasePurpose, releasePurpose, 'Wrong Android release purpose.');
     assert.equal(info.billingEnabled, ['paid-pilot','store-update'].includes(releasePurpose), 'Billing flag does not match release purpose.');
     if (releasePurpose === 'store-update') {
-      assert.ok(['1.45','1.46','1.47','1.48','1.49','1.50','1.51'].includes(info.versionName));
-      assert.equal(info.versionCode, info.versionName==='1.51'?52:info.versionName==='1.50'?51:info.versionName==='1.49'?50:info.versionName==='1.48'?49:info.versionName==='1.47'?48:info.versionName==='1.46'?47:46);
-      if(['1.46','1.47','1.48','1.49','1.50','1.51'].includes(info.versionName))assert.equal(info.usernameRecoveryEnabled,true);
-      if(['1.47','1.48','1.49','1.50','1.51'].includes(info.versionName))assert.equal(info.smsResendSeconds,30);
+      assert.ok(['1.45','1.46','1.47','1.48','1.49','1.50','1.51','1.52'].includes(info.versionName));
+      assert.equal(info.versionCode, info.versionName==='1.52'?53:info.versionName==='1.51'?52:info.versionName==='1.50'?51:info.versionName==='1.49'?50:info.versionName==='1.48'?49:info.versionName==='1.47'?48:info.versionName==='1.46'?47:46);
+      if(['1.46','1.47','1.48','1.49','1.50','1.51','1.52'].includes(info.versionName))assert.equal(info.usernameRecoveryEnabled,true);
+      if(['1.47','1.48','1.49','1.50','1.51','1.52'].includes(info.versionName))assert.equal(info.smsResendSeconds,30);
       assert.equal(info.pushEnabled, true);
       assert.equal(info.signupCheckoutEnabled, true);
       assert.equal(info.nativeAuthStorage, 'keystore-v1');

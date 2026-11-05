@@ -31,6 +31,8 @@ if (environment === 'production') html = html.replace(staffAuthAnchor,'const MAN
 writeFileSync(resolve(output,'index.html'),html);
 writeFileSync(resolve(output,'_headers'),securityHeaders(html+'\n'+readFileSync(resolve(root,'account-deletion.html'),'utf8'),config));
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
+cpSync(resolve(root,'email-confirmation.html'),resolve(output,'email-confirmation.html'));
+cpSync(resolve(root,'email-confirmation.js'),resolve(output,'email-confirmation.js'));
 cpSync(resolve(root,'owner-ui.css'),resolve(output,'owner-ui.css'));
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(config)+');\n');
