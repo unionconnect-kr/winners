@@ -1,0 +1,16 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve} from 'node:path';
+import {installPasswordFeedback} from '../../scripts/password-feedback.mjs';
+const mobile=fileURLToPath(new URL('..',import.meta.url));
+const platform=process.argv[2];
+if(!['android','ios'].includes(platform)||process.argv[3]!=='production')throw Error('Specify android|ios production explicitly');
+execFileSync(process.execPath,['scripts/build-release147.mjs',platform,'production'],{cwd:mobile,stdio:'inherit'});
+const out=resolve(mobile,'www');
+let html=installPasswordFeedback(readFileSync(resolve(out,'index.html'),'utf8'));
+html=html.replace('</head>','<link rel="stylesheet" href="/password-validation.css"></head>').replace('</body>','<script src="/password-validation.js"></script></body>');
+writeFileSync(resolve(out,'index.html'),html);
+for(const asset of ['password-validation.js','password-validation.css'])copyFileSync(resolve(mobile,'src',asset),resolve(out,asset));
+const info=JSON.parse(readFileSync(resolve(out,'build-info.json'),'utf8'));
+writeFileSync(resolve(out,'build-info.json'),JSON.stringify({...info,versionName:'1.48',versionCode:49,releaseVersion:'1.48',sourceVersion:'1.47',passwordGuidanceEnabled:true,passwordPrecheckEnabled:false},null,2)+'\n');
