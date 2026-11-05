@@ -31,10 +31,12 @@ if (!html.includes('src="/app-config.js"') || html.includes(all.production.supab
 const staffAuthAnchor = 'const MANEE_STAFF_AUTH_ENABLED = MANEE_IS_STAGING;';
 if (html.split(staffAuthAnchor).length !== 2) throw new Error('Review staff Auth activation anchor before building.');
 if (environment === 'production') html = html.replace(staffAuthAnchor,'const MANEE_STAFF_AUTH_ENABLED = true; // security-v2 production cutover');
+html = html.replace('</head>','<link rel="stylesheet" href="/username-recovery.css"></head>')
+  .replace('</body>','<script src="/username-recovery.js"></script></body>');
 writeFileSync(resolve(output,'index.html'),html);
 writeFileSync(resolve(output,'_headers'),securityHeaders(html+'\n'+readFileSync(resolve(root,'account-deletion.html'),'utf8'),config));
 cpSync(resolve(root,'account-deletion.html'),resolve(output,'account-deletion.html'));
-for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform.js','social-auth.js','launch-144.png']) {
+for (const asset of ['owner-ui.css','web-ui.css','feedback144.css','web-platform.js','social-auth.js','launch-144.png','username-recovery.js','username-recovery.css']) {
   cpSync(resolve(web,asset),resolve(output,asset),{recursive:true});
 }
 cpSync(resolve(root,'report-assets'),resolve(output,'report-assets'),{recursive:true});
@@ -45,8 +47,8 @@ const webConfig = {...config,
   socialProviders: {naver: true},
 };
 writeFileSync(resolve(output,'app-config.js'),'window.MANEE_CONFIG = Object.freeze('+JSON.stringify(webConfig)+');\n');
-writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.45-web',environment,projectRef:config.projectRef,
-  commit:process.env.COMMIT_REF || null,uiSource:'mobile-1.45',smsAuthEnabled:webConfig.webSmsAuthEnabled},null,2)+'\n');
+writeFileSync(resolve(output,'build-info.json'),JSON.stringify({version:'1.46-web',environment,projectRef:config.projectRef,
+  commit:process.env.COMMIT_REF || null,uiSource:'mobile-1.46',usernameRecoveryEnabled:true,smsAuthEnabled:webConfig.webSmsAuthEnabled},null,2)+'\n');
 const manifest = JSON.parse(readFileSync(resolve(root,'manifest.json'),'utf8'));
 if (environment === 'staging') { manifest.name = '매니 테스트'; manifest.short_name = '매니 테스트'; }
 writeFileSync(resolve(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
