@@ -165,6 +165,15 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       return reply(200, {ready, catalogReady:!!catalogReady, productId, basePlanId:BASE_PLAN,...entitlement,
         ...(eligible?{billingScope:'account',restoreProductIds:accountContext.restoreProductIds,otherPlatformActive:accountContext.otherPlatformActive===true}:{}),
         ...checkout,...(ready?{testOnly:readySandbox,...(body.action==='prepare'?binding(auth.data.user.id,billingStoreId):{})}:{})});
-    } catch (cause) { return reply(503, {error:'billing_unavailable'},cause); }
+    } catch (cause) {
+      // Read untrusted fields once so response classification and diagnostics
+      // use the same fixed categories, without retaining receipt/binding data.
+      const failure={message:diagnosticError(cause),billingReason:diagnosticReason(cause)};
+      const bindingMismatch=action==='verify' && failure.message==='purchase_mismatch' &&
+        (failure.billingReason==='account_binding_mismatch' || failure.billingReason==='profile_binding_mismatch');
+      return bindingMismatch
+        ? reply(422, {error:'purchase_binding_mismatch'},failure)
+        : reply(503, {error:'billing_unavailable'},failure);
+    }
   };
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script,createContext} from 'node:vm';
 import {openAndroidBilling} from '../src/android-billing-ui.mjs';
+import {requestAndroidBilling} from '../src/android-billing-request.mjs';
 import {createSubscriptionStatusSheet,subscriptionButton,closeSubscriptionSheet,reuseSubscriptionSheet} from '../src/subscription-sheet.mjs';
 import {subscriptionView} from '../src/store-subscription.mjs';
 
@@ -34,7 +35,7 @@ function fixture(overrides={}){
  let context={userId:'owner',storeId:'store',role:'storeOwner',storeName:'테스트 매장',db:{rpc:async()=>({data:{enforced:true,canWrite:false},error:null})}};
  const window={};
  const vm=createContext({window,document,localStorage:{},ANDROID_PAID_BILLING:true,ANDROID_PRODUCTION:true,ANDROID_FIREBASE_PROJECT:'',
-  registerPlugin:()=>({}),PushNotifications:{},Geolocation:{},createAndroidBillingClient:()=>billing,
+  registerPlugin:()=>({}),PushNotifications:{},Geolocation:{},createAndroidBillingClient:()=>billing,requestAndroidBilling,
   createAndroidPush:()=>({}),createAndroidGeolocation:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>async()=>{},
   openAndroidBilling,createSubscriptionStatusSheet,subscriptionButton,closeSubscriptionSheet,reuseSubscriptionSheet,subscriptionView,
  });

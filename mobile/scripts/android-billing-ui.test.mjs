@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {testOffers,openAndroidBilling} from '../src/android-billing-ui.mjs';
+import {PURCHASE_BINDING_MISMATCH_MESSAGE} from '../src/android-billing-request.mjs';
 const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M',recurrenceMode:1};
 const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-60days',offerToken:'trial',phases:[{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2},phase]}]};
 test('only eligible fixed monthly offers use the actual Play price and free phase',()=>{
@@ -151,4 +152,45 @@ test('a Play checkout error invalidates old purchase options and requires a fres
  const f=dialogFixture({purchase:async()=>{throw Object.assign(new Error('offline'),{code:'PLAY_2'});}});await settle();
  await f.visibleOffers()[0].onclick();assert.equal(f.visibleOffers().length,0);
  assert.equal(f.buttons().find(b=>b.textContent==='요금·혜택 다시 확인').hidden,false);
+});
+
+const bindingMismatch=()=>Object.assign(Error(PURCHASE_BINDING_MISMATCH_MESSAGE),{code:'PURCHASE_BINDING_MISMATCH'});
+test('a binding rejection hides purchase actions while keeping close and explicit restoration usable',async()=>{
+ let purchases=0,restores=0;
+ const f=dialogFixture({purchase:async()=>{purchases++;throw bindingMismatch();},restore:async()=>{restores++;throw bindingMismatch();}});await settle();
+ const buy=f.visibleOffers()[0];await buy.onclick();
+ assert.equal(purchases,1);assert.equal(f.visibleOffers().length,0);
+ assert.equal(f.buttons().find(b=>b.textContent==='요금·혜택 다시 확인').hidden,true);
+ for(const label of ['닫기','기존 구독 복원']){
+  const button=f.buttons().find(b=>b.textContent===label);assert.equal(button.hidden,false);assert.equal(button.disabled,false);
+ }
+ await buy.onclick();assert.equal(purchases,1,'a stale hidden action cannot retry purchasing');
+ await f.buttons().find(b=>b.textContent==='기존 구독 복원').onclick();assert.equal(restores,1);
+ assert.equal(f.visibleOffers().length,0);
+ const content=e=>[e.textContent||'',...e.children.map(content)].join(' ');
+ assert.match(content(f.document.body),/기존 Google Play 구독을 현재 매니 아이디와 연결하지 못했어요/);
+});
+test('a binding rejection during product loading cannot introduce offers or start a trial later',async()=>{
+ let release,purchases=0;
+ const document=fakeDocument();
+ const billing={status:async()=>({ready:true,testOnly:true,productId:product.productId}),products:()=>new Promise(resolve=>release=resolve),
+  purchase:async()=>{purchases++;return{status:'cancelled'};},restore:async()=>{throw bindingMismatch();}};
+ openAndroidBilling({billing,document,getContext:()=>({userId:'owner',storeId:'store',role:'storeOwner'}),launchTrial:true});await settle();
+ const descendants=e=>e.children.flatMap(c=>[c,...descendants(c)]);
+ const buttons=()=>descendants(document.body).filter(e=>e.tagName==='button');
+ await buttons().find(b=>b.textContent==='기존 구독 복원').onclick();
+ release({products:[product]});await settle();
+ assert.equal(buttons().filter(b=>b.dataset.purchase==='true').length,0);assert.equal(purchases,0);
+ assert.equal(buttons().find(b=>b.textContent==='닫기').disabled,false);
+ assert.equal(buttons().find(b=>b.textContent==='기존 구독 복원').disabled,false);
+});
+test('binding rejection also blocks a paid review action already displayed in the current sheet',async()=>{
+ let purchases=0;
+ const f=dialogFixture({status:async()=>({ready:true,testOnly:false,productId:product.productId}),
+  products:async()=>({products:[{...product,offers:[product.offers[0]]}]}),restore:async()=>{throw bindingMismatch();},
+  purchase:async()=>{purchases++;return{status:'cancelled'};}});await settle();
+ const review=f.buttons().find(b=>b.textContent==='무료체험 없는 구독 요금 확인');
+ await f.buttons().find(b=>b.textContent==='기존 구독 복원').onclick();
+ assert.equal(review.hidden,true);await review.onclick();
+ assert.equal(f.visibleOffers().length,0);assert.equal(purchases,0);
 });

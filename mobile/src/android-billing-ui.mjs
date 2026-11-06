@@ -27,10 +27,10 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
  const view=createSubscriptionSheet(document,{id:'manee-android-billing',title:'매니 구독',storeName:c.storeName});const sheet=view.sheet;
  const same=()=>{const n=getContext();return sheet.isConnected&&n?.userId===c.userId&&n?.storeId===c.storeId;};
  const {heading,status}=view;setSubscriptionPromotion(view);
- let busy=false,subscriptionActive=false;const buttons=[],purchaseButtons=[];
+ let busy=false,subscriptionActive=false,purchaseBlocked=false;const buttons=[],purchaseButtons=[];
  const execute=async fn=>{if(busy)return;busy=true;buttons.forEach(b=>b.disabled=true);try{
   if(!same())throw Error('계정 또는 매장을 다시 선택해 주세요.');await fn();
- }catch(e){if(sheet.isConnected){status.textContent=e.message||'연결을 확인해 주세요.';if(/^PLAY_|PRODUCT_UNAVAILABLE|OFFER_CHANGED/.test(e.code||'')){purchaseButtons.forEach(b=>b.hidden=true);retry.hidden=false;}}}finally{busy=false;buttons.forEach(b=>b.disabled=false);}};
+ }catch(e){if(sheet.isConnected){status.textContent=e.message||'연결을 확인해 주세요.';if(e.code==='PURCHASE_BINDING_MISMATCH'){purchaseBlocked=true;purchaseButtons.forEach(b=>b.hidden=true);retry.hidden=true;}else if(!purchaseBlocked&&/^PLAY_|PRODUCT_UNAVAILABLE|OFFER_CHANGED/.test(e.code||'')){purchaseButtons.forEach(b=>b.hidden=true);retry.hidden=false;}}}finally{busy=false;buttons.forEach(b=>b.disabled=false);}};
  const button=(label,fn,kind='primary')=>{const el=subscriptionButton(view,label,()=>execute(fn),kind);buttons.push(el);return el;};
  let testMode=true;
  const show=r=>{if(!same())return;
@@ -53,16 +53,16 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
   subscriptionActive=info.active===true||(testMode&&info.testActive===true);
   if(subscriptionActive){view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';}
   button('기존 구독 복원',async()=>show(await billing.restore()),'link');
-  const data=await billing.products();if(!same())return;
+  const data=await billing.products();if(!same()||purchaseBlocked)return;
   const offers=testOffers(data.products,info.productId);
   status.textContent=subscriptionActive?(testMode?'이 매장의 테스트 구독을 이용 중이에요.':'이 매장의 구독을 이용 중이에요.'):offers.length?'다음 화면에서 Google Play 결제 조건을 확인해 주세요.':(testMode?'현재 구매 가능한 상품이 없어요. Play 설치 계정과 내부 테스트 참여 상태를 확인해 주세요.':'현재 구매 가능한 상품이 없어요. Google Play 계정을 확인해 주세요.');
   if(subscriptionActive){view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';}
   else if(!offers.length){retry.hidden=false;}
   let startTrial=null;
-  if(!subscriptionActive)for(const offer of offers){
+  if(!subscriptionActive&&!purchaseBlocked)for(const offer of offers){
    if(offer.trialDays===60){
     const label=setSubscriptionOffer(view,offer);
-    startTrial=async()=>{status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));};
+    startTrial=async()=>{if(purchaseBlocked)return;status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));};
     const buy=button(testMode?label+' · 테스트 구매':label,startTrial);buy.dataset.purchase='true';purchaseButtons.push(buy);
    }else{
     // An absent eligible trial is not permission to silently charge immediately.
@@ -72,11 +72,11 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
     status.textContent='현재 Google Play 계정에는 60일 무료체험 상품이 제공되지 않았어요. 아래에서 무료체험 없는 구독 조건을 확인한 뒤 진행할 수 있어요.';
     retry.hidden=false;
     const paid=button('무료체험 없는 구독 요금 확인',()=>{
-     if(subscriptionActive)return;
+     if(subscriptionActive||purchaseBlocked)return;
      paid.hidden=true;retry.hidden=true;setSubscriptionOffer(view,offer);
      view.after.textContent='무료체험 미적용 · 오늘 9,900원 결제 · 매월 갱신';
      status.textContent='60일 무료체험 없이 오늘 9,900원을 결제하고 매월 갱신하는 조건이에요. 동의하시면 아래 버튼을 눌러 Google Play 결제창에서 최종 조건을 확인해 주세요.';
-     const buy=button(testMode?'9,900원 테스트 결제 진행':'오늘 9,900원 결제하고 구독하기',async()=>{status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));});
+     const buy=button(testMode?'9,900원 테스트 결제 진행':'오늘 9,900원 결제하고 구독하기',async()=>{if(purchaseBlocked)return;status.textContent='Google Play 결제창을 열고 있어요…';show(await billing.purchase(offer));});
      buy.dataset.purchase='true';purchaseButtons.push(buy);view.actions.append(close);
     });purchaseButtons.push(paid);
    }
@@ -87,5 +87,5 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
   // the eligible 60-day offer returned by Play. Paid-only offers require review.
   if(launchTrial&&startTrial)await execute(startTrial);
 
- }catch(e){if(same()){status.textContent=e.message||'상품 연결을 확인하지 못했어요.';retry.hidden=false;}}})();
+ }catch(e){if(same()&&!purchaseBlocked){status.textContent=e.message||'상품 연결을 확인하지 못했어요.';retry.hidden=false;}}})();
 }

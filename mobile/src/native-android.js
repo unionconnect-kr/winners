@@ -7,19 +7,13 @@ import { createAndroidGeolocation } from './android-geolocation.js';
 import { createNotificationNavigation } from './android-notification-navigation.js';
 
 import {createAndroidBillingClient} from './android-billing.mjs';
+import {requestAndroidBilling} from './android-billing-request.mjs';
 import {openAndroidBilling} from './android-billing-ui.mjs';
 import {createSubscriptionStatusSheet,subscriptionButton,closeSubscriptionSheet,reuseSubscriptionSheet} from './subscription-sheet.mjs';
 import {subscriptionView} from './store-subscription.mjs';
 import {createSignupCheckout} from './signup-checkout.mjs';
 const playBilling=registerPlugin('ManeePlayBilling');
-const billing=createAndroidBillingClient({playBilling,allowPaid:ANDROID_PAID_BILLING,getContext:()=>getContext(),request:async(c,_name,body)=>{
- const {data:auth,error:authError}=await c.db.auth.getSession();
- if(authError||auth?.session?.user?.id!==c.userId)throw Error('다시 로그인해 주세요.');
- const {data,error}=await c.db.functions.invoke('manee-android-billing',{body:{...body,storeId:c.storeId},signal:AbortSignal.timeout(30000)});
- if(error?.context?.status===409)throw Error('다른 기기에서 이 매장의 결제를 진행 중이에요. 잠시 후 구매 복원을 눌러 확인해 주세요.');
- if(error)throw Error('결제 서버 연결 또는 이용 권한을 확인하지 못했어요.');
- return data;
-}});
+const billing=createAndroidBillingClient({playBilling,allowPaid:ANDROID_PAID_BILLING,getContext:()=>getContext(),request:requestAndroidBilling});
 
 const ReportFiles = registerPlugin('ManeeReportFiles');
 

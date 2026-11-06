@@ -300,11 +300,58 @@ test('receipt mismatch reasons are allowlisted without exposing binding or recei
  for(const [reason,change]of changes){
   const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event)});change(f.resource);
   const response=await f.handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'private-purchase-token'}));
-  assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'billing_unavailable'});
-  assert.deepEqual(events,[{action:'verify',stage:'verify_receipt',status:503,error:'purchase_mismatch',reason}]);
+  const status=['account_binding_mismatch','profile_binding_mismatch'].includes(reason)?422:503;
+  assert.equal(response.status,status);assert.deepEqual(await response.json(),{error:status===422?'purchase_binding_mismatch':'billing_unavailable'});
+  assert.deepEqual(events,[{action:'verify',stage:'verify_receipt',status,error:'purchase_mismatch',reason}]);
   assert.equal(f.saves(),0);assert.equal(f.acks(),0);
   assert.doesNotMatch(JSON.stringify(events),/private-|11111111|22222222|manee\.store/);
  }
+});
+
+test('missing binding data is rejected without saving or acknowledging; matching bindings still verify',async()=>{
+ for(const missing of ['account','profile']){
+  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event)});
+  if(missing==='account')delete f.resource.externalAccountIdentifiers;
+  else delete f.resource.externalAccountIdentifiers.obfuscatedExternalProfileId;
+  const response=await f.handler(req({action:'verify',storeId,purchaseToken:'private-purchase-token'}));
+  assert.equal(response.status,422);assert.deepEqual(await response.json(),{error:'purchase_binding_mismatch'});
+  assert.deepEqual(events,[{action:'verify',stage:'verify_receipt',status:422,error:'purchase_mismatch',reason:missing+'_binding_mismatch'}]);
+  assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+ }
+ const events=[];const valid=diagnosticFixture({diagnostic:event=>events.push(event)});
+ valid.resource.billingReason='account_binding_mismatch'; // Upstream fields cannot override real validation.
+ const response=await valid.handler(req({action:'verify',storeId,purchaseToken:'private-purchase-token'}));
+ assert.equal(response.status,200);
+ const result=await response.json();assert.equal(result.verified,true);assert.equal(result.testActive,true);assert.equal(result.active,false);
+ assert.equal(result.error,undefined);assert.equal(result.billingReason,undefined);
+ assert.equal(valid.saves(),1);assert.equal(valid.acks(),1);assert.deepEqual(events,[]);
+});
+
+test('only verify with the exact mismatch message and binding reason receives the new response',async()=>{
+ const cases=[
+  {action:'verify',message:'save_failed',reason:'account_binding_mismatch'},
+  {action:'verify',message:'purchase_mismatch',reason:'subscription_shape_mismatch'},
+  {action:'verify',message:'purchase_mismatch',reason:'private-reason'},
+  {action:'status',message:'purchase_mismatch',reason:'account_binding_mismatch'},
+  {action:'prepare',message:'purchase_mismatch',reason:'profile_binding_mismatch'},
+  {action:'release',message:'purchase_mismatch',reason:'account_binding_mismatch'},
+ ];
+ for(const c of cases){
+  const cause=Object.assign(Error(c.message),{billingReason:c.reason});
+  const fail=async()=>{throw cause;};
+  const f=diagnosticFixture(c.action==='release'
+   ? {rpc:async name=>name==='manee_android_billing_checkout_release'?fail():undefined}
+   : c.action==='verify'?{get:fail}:{catalog:fail});
+  const response=await f.handler(req({action:c.action,storeId,checkoutId,purchaseToken:'private-purchase-token'}));
+  assert.equal(response.status,503,c.action+':'+c.message+':'+c.reason);
+  assert.deepEqual(await response.json(),{error:'billing_unavailable'});
+  assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+ }
+ const denied=diagnosticFixture({rpc:async name=>name==='manee_android_push_context'?{data:false}:undefined});
+ delete denied.resource.externalAccountIdentifiers;
+ const response=await denied.handler(req({action:'verify',storeId,purchaseToken:'private-purchase-token'}));
+ assert.equal(response.status,403);assert.deepEqual(await response.json(),{error:'owner_access_denied'});
+ assert.equal(denied.saves(),0);assert.equal(denied.acks(),0);
 });
 
 test('untrusted errors, accessors and secret tokens never enter diagnostics or responses',async()=>{
@@ -316,13 +363,14 @@ test('untrusted errors, accessors and secret tokens never enter diagnostics or r
   {cause:hostile,error:'unexpected',reason:'unknown'},
   {cause:{message:'purchase_mismatch',billingReason:secret},error:'purchase_mismatch',reason:'unknown'},
   {cause:{get message(){throw Error(secret);},get billingReason(){throw Error(secret);}},error:'unexpected',reason:'unknown'},
-  {cause:changingReason,error:'purchase_mismatch',reason:'account_binding_mismatch'},
+  {cause:changingReason,error:'purchase_mismatch',reason:'account_binding_mismatch',status:422},
  ];
  for(const c of cases){
   const events=[];const f=diagnosticFixture({get:async()=>{throw c.cause;},diagnostic:event=>events.push(event)});
   const response=await f.handler(req({action:'verify',storeId,purchaseToken:secret},{authorization:'Bearer '+secret,'x-private-header':secret}));
-  const text=await response.text();assert.equal(response.status,503);assert.equal(text,'{"error":"billing_unavailable"}');
-  assert.deepEqual(events,[{action:'verify',stage:'verify_product_lookup',status:503,error:c.error,reason:c.reason}]);
+  const status=c.status??503;
+  const text=await response.text();assert.equal(response.status,status);assert.equal(text,JSON.stringify({error:status===422?'purchase_binding_mismatch':'billing_unavailable'}));
+  assert.deepEqual(events,[{action:'verify',stage:'verify_product_lookup',status,error:c.error,reason:c.reason}]);
   assert.ok(!JSON.stringify(events).includes(secret));assert.ok(!text.includes(secret));assert.equal(f.saves(),0);assert.equal(f.acks(),0);
  }
  assert.equal(reads,1);
