@@ -15,6 +15,9 @@ const DIAGNOSTIC_ERRORS = new Set(['origin_denied','method_not_allowed','authent
 const DIAGNOSTIC_REASONS = new Set(['account_binding_mismatch','profile_binding_mismatch',
   'subscription_shape_mismatch','product_plan_mismatch','subscription_expiry_invalid',
   'acknowledgement_state_invalid','linked_token_invalid']);
+const RECEIPT_STATES = new Set(['unknown','SUBSCRIPTION_STATE_PENDING','SUBSCRIPTION_STATE_ACTIVE',
+  'SUBSCRIPTION_STATE_PAUSED','SUBSCRIPTION_STATE_IN_GRACE_PERIOD','SUBSCRIPTION_STATE_ON_HOLD',
+  'SUBSCRIPTION_STATE_CANCELED','SUBSCRIPTION_STATE_EXPIRED','SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED']);
 function diagnosticError(cause) {
   try {
     const code = typeof cause === 'string' ? cause : cause?.message;
@@ -28,21 +31,38 @@ function diagnosticReason(cause) {
   }
   catch { return 'unknown'; }
 }
+function diagnosticReceiptFacts(cause) {
+  try {
+    // Snapshot each untrusted property once. Copy literal primitives only;
+    // never pass through the provider/error object, getters or extra fields.
+    const facts=cause?.receiptFacts;
+    if(!facts || typeof facts!=='object')return null;
+    const {accountBinding,profileBinding,environment,state,expiry,outOfAppResubscription,orderReference}=facts;
+    if(!['missing','present'].includes(accountBinding)||!['missing','present'].includes(profileBinding)||
+      !['Sandbox','Production'].includes(environment)||!RECEIPT_STATES.has(state)||
+      !['past','future','missing','invalid'].includes(expiry)||!['present','absent'].includes(outOfAppResubscription)||
+      typeof orderReference!=='string'||!(orderReference==='unknown'||
+        (orderReference.length===16&&/^[a-f0-9]{16}$/.test(orderReference))))return null;
+    return Object.freeze({accountBinding,profileBinding,environment,state,expiry,outOfAppResubscription,orderReference});
+  } catch { return null; }
+}
 // Environment-specific eligibility is checked again after the Google lookup.
 // Production eligibility defaults to false, independent of sandbox access.
 export function createHandler({client, api, service=null, testAccess=async()=>false,
   productionAccess=async()=>false, diagnostic=()=>{}}) {
   return async req => {
-    let action='unknown', stage='request';
+    let action='unknown', stage='request', receiptDiagnosticsAllowed=false;
     const origin = req.headers.get('origin');
     const allowed = !origin || origin === 'https://localhost';
-    const reply = (status, data, cause=data?.error) => {
+    const reply = (status, data, cause=data?.error, receiptFacts=null) => {
       if(status>=400 && typeof diagnostic==='function') {
         // Only literal enum values leave this handler. Never pass the request,
         // identity, receipt, provider/DB error object, message or stack to logs.
+        const error=diagnosticError(cause);
         const event=Object.freeze({action:ACTIONS.has(action)?action:'unknown',
-          stage:DIAGNOSTIC_STAGES.has(stage)?stage:'request',status,error:diagnosticError(cause),
-          reason:diagnosticReason(cause)});
+          stage:DIAGNOSTIC_STAGES.has(stage)?stage:'request',status,error,
+          reason:diagnosticReason(cause),
+          ...(receiptDiagnosticsAllowed && action==='verify' && error==='purchase_mismatch' && receiptFacts?{receiptFacts}:{})});
         try { Promise.resolve(diagnostic(event)).catch(()=>{}); } catch { /* Diagnostics cannot alter billing. */ }
       }
       return new Response(JSON.stringify(data), {status, headers: {
@@ -90,6 +110,7 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       stage='eligibility';
       const sandboxEligible=!!api && !!service && await permitted('Sandbox');
       const paidEligible=!!api && !!service && await permitted('Production');
+      receiptDiagnosticsAllowed=sandboxEligible;
       const eligible=sandboxEligible||paidEligible;
       let productId=PRODUCT, billingStoreId=body.storeId, accountContext={};
       if(eligible){
@@ -169,11 +190,13 @@ export function createHandler({client, api, service=null, testAccess=async()=>fa
       // Read untrusted fields once so response classification and diagnostics
       // use the same fixed categories, without retaining receipt/binding data.
       const failure={message:diagnosticError(cause),billingReason:diagnosticReason(cause)};
+      const receiptFacts=receiptDiagnosticsAllowed && action==='verify' && failure.message==='purchase_mismatch'
+        ? diagnosticReceiptFacts(cause) : null;
       const bindingMismatch=action==='verify' && failure.message==='purchase_mismatch' &&
         (failure.billingReason==='account_binding_mismatch' || failure.billingReason==='profile_binding_mismatch');
       return bindingMismatch
-        ? reply(422, {error:'purchase_binding_mismatch'},failure)
-        : reply(503, {error:'billing_unavailable'},failure);
+        ? reply(422, {error:'purchase_binding_mismatch'},failure,receiptFacts)
+        : reply(503, {error:'billing_unavailable'},failure,receiptFacts);
     }
   };
 }

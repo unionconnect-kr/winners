@@ -15,8 +15,38 @@ function binding(userId,storeId) {
  return {accountId:hash('user:'+userId.toLowerCase()),profileId:hash('store:'+userId.toLowerCase()+':'+storeId.toLowerCase())};
 }
 function validToken(token){return typeof token==='string'&&token.length>0&&token.length<=4096&&!/[\s\x00-\x1f\x7f]/.test(token);}
-// Internal diagnostics contain a fixed category, never receipt or binding data.
-function purchaseMismatch(billingReason){return Object.assign(Error('purchase_mismatch'),{billingReason});}
+// Take each diagnostic value once, without coercing provider objects or retaining
+// raw identifiers. These facts never participate in receipt validation.
+function receiptFacts(resource,now) {
+ const read=(object,key)=>{try{return object?.[key];}catch{return undefined;}};
+ const identifiers=read(resource,'externalAccountIdentifiers'),lines=read(resource,'lineItems');
+ let line;try{if(Array.isArray(lines))line=read(lines,0);}catch{/* Revoked/untrusted proxy. */}
+ const account=read(identifiers,'obfuscatedExternalAccountId'),profile=read(identifiers,'obfuscatedExternalProfileId');
+ const state=read(resource,'subscriptionState'),expiry=read(line,'expiryTime');
+ const outOfApp=read(resource,'outOfAppPurchaseContext');
+ const expires=typeof expiry==='string'&&expiry.length>0?Date.parse(expiry):NaN;
+ const reference=value=>{
+  if(typeof value!=='string'||value.length>128)return 'unknown';
+  const order=/^(GPA\.\d{4}-\d{4}-\d{4}-\d{5})(?:\.\.\d+)?$/.exec(value);
+  return order&&order[0].length===value.length?createHash('sha256').update(PACKAGE+':order:'+order[1]).digest('hex').slice(0,16):'unknown';
+ };
+ // subscriptionsv2 supplies the latest successful order on the line item.
+ // Accept the legacy top-level field only as a fallback for older responses.
+ const latest=reference(read(line,'latestSuccessfulOrderId'));
+ const orderReference=latest==='unknown'?reference(read(resource,'latestOrderId')):latest;
+ let test=false;try{test=Object.hasOwn(resource,'testPurchase');}catch{/* Missing/malformed resource. */}
+ return Object.freeze({accountBinding:typeof account==='string'&&account.length>0?'present':'missing',
+  profileBinding:typeof profile==='string'&&profile.length>0?'present':'missing',
+  environment:test?'Sandbox':'Production',state:STATES.has(state)?state:'unknown',
+  expiry:expiry===undefined||expiry===null||expiry===''?'missing':!Number.isFinite(expires)?'invalid':expires>now?'future':'past',
+  outOfAppResubscription:outOfApp!==null&&typeof outOfApp==='object'?'present':'absent',
+  orderReference});
+}
+// Only billingReason is enumerable, preserving existing JSON/error behavior.
+function purchaseMismatch(billingReason,resource,now){
+ return Object.defineProperty(Object.assign(Error('purchase_mismatch'),{billingReason}),
+  'receiptFacts',{value:receiptFacts(resource,now)});
+}
 function createGooglePlayApi({credentials,fetcher=fetch,now=Date.now}) {
  if(!credentials?.client_email?.endsWith('.iam.gserviceaccount.com')||!credentials.private_key)throw Error('billing_not_ready');
  const key=createPrivateKey(credentials.private_key);
@@ -61,17 +91,18 @@ function createGooglePlayApi({credentials,fetcher=fetch,now=Date.now}) {
 }
 function verifiedRecord(resource,{purchaseToken,accountId,profileId,productId,basePlanId},now=Date.now()) {
  if(!validToken(purchaseToken)||!productId||!basePlanId||!Number.isFinite(now))throw Error('invalid_request');
- if(!/^[a-f0-9]{64}$/.test(accountId||''))throw purchaseMismatch('account_binding_mismatch');
- if(!/^[a-f0-9]{64}$/.test(profileId||''))throw purchaseMismatch('profile_binding_mismatch');
- if(resource?.externalAccountIdentifiers?.obfuscatedExternalAccountId!==accountId)throw purchaseMismatch('account_binding_mismatch');
- if(resource?.externalAccountIdentifiers?.obfuscatedExternalProfileId!==profileId)throw purchaseMismatch('profile_binding_mismatch');
- if(!STATES.has(resource.subscriptionState)||!Array.isArray(resource.lineItems)||resource.lineItems.length!==1)throw purchaseMismatch('subscription_shape_mismatch');
+ const mismatch=reason=>purchaseMismatch(reason,resource,now);
+ if(!/^[a-f0-9]{64}$/.test(accountId||''))throw mismatch('account_binding_mismatch');
+ if(!/^[a-f0-9]{64}$/.test(profileId||''))throw mismatch('profile_binding_mismatch');
+ if(resource?.externalAccountIdentifiers?.obfuscatedExternalAccountId!==accountId)throw mismatch('account_binding_mismatch');
+ if(resource?.externalAccountIdentifiers?.obfuscatedExternalProfileId!==profileId)throw mismatch('profile_binding_mismatch');
+ if(!STATES.has(resource.subscriptionState)||!Array.isArray(resource.lineItems)||resource.lineItems.length!==1)throw mismatch('subscription_shape_mismatch');
  const line=resource.lineItems[0];
- if(line.productId!==productId||line.offerDetails?.basePlanId!==basePlanId||!line.autoRenewingPlan)throw purchaseMismatch('product_plan_mismatch');
+ if(line.productId!==productId||line.offerDetails?.basePlanId!==basePlanId||!line.autoRenewingPlan)throw mismatch('product_plan_mismatch');
  const state=resource.subscriptionState,pending=state==='SUBSCRIPTION_STATE_PENDING'||state==='SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED';
  const expiry=Date.parse(line.expiryTime);
- if(!pending&&!Number.isFinite(expiry))throw purchaseMismatch('subscription_expiry_invalid');
- if(!['ACKNOWLEDGEMENT_STATE_PENDING','ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED'].includes(resource.acknowledgementState))throw purchaseMismatch('acknowledgement_state_invalid');
+ if(!pending&&!Number.isFinite(expiry))throw mismatch('subscription_expiry_invalid');
+ if(!['ACKNOWLEDGEMENT_STATE_PENDING','ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED'].includes(resource.acknowledgementState))throw mismatch('acknowledgement_state_invalid');
  const test=Object.hasOwn(resource,'testPurchase');
  const eligible=!pending&&ACCESS.has(state)&&expiry>now;
  return {purchaseToken,accountId,profileId,productId,basePlanId,environment:test?'Sandbox':'Production',state,
@@ -85,12 +116,13 @@ function verifiedRecord(resource,{purchaseToken,accountId,profileId,productId,ba
 async function verifyAndPersist({api,context,purchaseToken,persist,now=Date.now}) {
  const started=now();
  const resource=await api.get(purchaseToken);
- const record=verifiedRecord(resource,{...context,purchaseToken},now());
+ const checked=now();
+ const record=verifiedRecord(resource,{...context,purchaseToken},checked);
  // Order competing observations by request START, not network completion time.
  // A slow earlier request must not overwrite a newer cancellation/hold lookup.
  record.checkedAt=new Date(started).toISOString();
  if(resource.linkedPurchaseToken){
-  if(!validToken(resource.linkedPurchaseToken)||resource.linkedPurchaseToken===purchaseToken)throw purchaseMismatch('linked_token_invalid');
+  if(!validToken(resource.linkedPurchaseToken)||resource.linkedPurchaseToken===purchaseToken)throw purchaseMismatch('linked_token_invalid',resource,checked);
   record.linkedPurchaseToken=resource.linkedPurchaseToken;
  }
  if(await persist(record)!==true)throw Error('save_failed');

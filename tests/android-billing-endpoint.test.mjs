@@ -287,7 +287,7 @@ test('billing failure diagnostics distinguish lookup, allocation, receipt and ch
  }
 });
 
-test('receipt mismatch reasons are allowlisted without exposing binding or receipt data',async()=>{
+test('ordinary customer receipt mismatch logs keep exactly five fields without receipt data',async()=>{
  const changes=[
   ['account_binding_mismatch',r=>r.externalAccountIdentifiers.obfuscatedExternalAccountId='private-account-binding'],
   ['profile_binding_mismatch',r=>r.externalAccountIdentifiers.obfuscatedExternalProfileId='private-profile-binding'],
@@ -298,7 +298,7 @@ test('receipt mismatch reasons are allowlisted without exposing binding or recei
   ['linked_token_invalid',r=>r.linkedPurchaseToken='private-purchase-token'],
  ];
  for(const [reason,change]of changes){
-  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event)});change(f.resource);
+  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event),testAccess:async()=>false,productionAccess:async()=>true});change(f.resource);
   const response=await f.handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:'private-purchase-token'}));
   const status=['account_binding_mismatch','profile_binding_mismatch'].includes(reason)?422:503;
   assert.equal(response.status,status);assert.deepEqual(await response.json(),{error:status===422?'purchase_binding_mismatch':'billing_unavailable'});
@@ -310,7 +310,7 @@ test('receipt mismatch reasons are allowlisted without exposing binding or recei
 
 test('missing binding data is rejected without saving or acknowledging; matching bindings still verify',async()=>{
  for(const missing of ['account','profile']){
-  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event)});
+  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event),testAccess:async()=>false,productionAccess:async()=>true});
   if(missing==='account')delete f.resource.externalAccountIdentifiers;
   else delete f.resource.externalAccountIdentifiers.obfuscatedExternalProfileId;
   const response=await f.handler(req({action:'verify',storeId,purchaseToken:'private-purchase-token'}));
@@ -386,4 +386,76 @@ test('throwing or rejecting diagnostic callbacks cannot change failure responses
   assert.equal(claims,1);assert.equal(f.saves(),0);assert.equal(f.acks(),0);
  }
  await new Promise(resolve=>setImmediate(resolve));
+});
+
+const fixedReceiptFacts=()=>({accountBinding:'missing',profileBinding:'missing',environment:'Sandbox',
+ state:'SUBSCRIPTION_STATE_ACTIVE',expiry:'future',outOfAppResubscription:'present',orderReference:'fa4c0a43cbffdc5a'});
+test('only approved test owners get sanitized receipt facts; HTTP replies and receipt guards stay unchanged',async()=>{
+ const base='GPA.1234-1234-1234-12345',privateValue='PRIVATE_PROVIDER_TOKEN_EMAIL_BINDING';
+ for(const access of [true,false,undefined,'true',1]){
+  const events=[];const f=diagnosticFixture({diagnostic:event=>events.push(event),testAccess:async()=>access,productionAccess:async()=>true});
+  delete f.resource.externalAccountIdentifiers;
+  f.resource.outOfAppPurchaseContext={expiredPurchaseToken:privateValue,obfuscatedExternalAccountId:privateValue};
+  f.resource.lineItems[0].latestSuccessfulOrderId=base+'..1';
+  f.resource.latestOrderId='GPA.9999-9999-9999-99999..2';
+  const response=await f.handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:privateValue}));
+  const body=await response.text();assert.equal(response.status,422);assert.equal(body,'{"error":"purchase_binding_mismatch"}');
+  const basic={action:'verify',stage:'verify_receipt',status:422,error:'purchase_mismatch',reason:'account_binding_mismatch'};
+  assert.deepEqual(events,[{...basic,...(access===true?{receiptFacts:fixedReceiptFacts()}:{})}]);
+  if(access===true)assert.equal(Object.isFrozen(events[0].receiptFacts),true);
+  for(const sensitive of [privateValue,base,f.resource.latestOrderId,storeId,'11111111-1111-4111-8111-111111111111']){
+   assert.equal(body.includes(sensitive),false);assert.equal(JSON.stringify(events).includes(sensitive),false);
+  }
+  assert.equal(f.saves(),0);assert.equal(f.acks(),0);
+ }
+ const events=[];const shape=diagnosticFixture({diagnostic:event=>events.push(event)});
+ shape.resource.subscriptionState='PRIVATE_STATE';
+ const response=await shape.handler(req({action:'verify',storeId,productId:PRODUCT,purchaseToken:privateValue}));
+ assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'billing_unavailable'});
+ assert.equal(events[0].receiptFacts.state,'unknown');assert.equal(events[0].receiptFacts.outOfAppResubscription,'absent');
+ assert.equal(shape.saves(),0);assert.equal(shape.acks(),0);
+});
+test('receipt fact allowlist snapshots hostile properties once and omits invalid or unrelated facts',async()=>{
+ const secret='PRIVATE_RECEIPT_ORDER_UID_DB_VALUE';const counts={};
+ const changing={};for(const [key,value]of Object.entries(fixedReceiptFacts()))
+  Object.defineProperty(changing,key,{get(){counts[key]=(counts[key]??0)+1;return counts[key]===1?value:secret;}});
+ changing.privateReceipt=secret;changing.toJSON=()=>secret;
+ let factReads=0,messageReads=0,reasonReads=0;
+ const cause={get message(){messageReads++;return messageReads===1?'purchase_mismatch':secret;},
+  get billingReason(){reasonReads++;return reasonReads===1?'account_binding_mismatch':secret;},
+  get receiptFacts(){factReads++;return factReads===1?changing:{privateReceipt:secret};}};
+ const events=[];const f=diagnosticFixture({get:async()=>{throw cause;},diagnostic:event=>events.push(event)});
+ const response=await f.handler(req({action:'verify',storeId,purchaseToken:secret}));
+ assert.equal(response.status,422);assert.equal(await response.text(),'{"error":"purchase_binding_mismatch"}');
+ assert.deepEqual(events,[{action:'verify',stage:'verify_product_lookup',status:422,error:'purchase_mismatch',
+  reason:'account_binding_mismatch',receiptFacts:fixedReceiptFacts()}]);
+ assert.deepEqual(Object.values(counts),[1,1,1,1,1,1,1]);
+ assert.equal(factReads,1);assert.equal(messageReads,1);assert.equal(reasonReads,1);
+ assert.equal(JSON.stringify(events).includes(secret),false);
+ const invalid=[null,secret,new Proxy({},{get(){throw Error(secret);}})];
+ for(const key of Object.keys(fixedReceiptFacts()))invalid.push({...fixedReceiptFacts(),[key]:secret});
+ invalid.push({...fixedReceiptFacts(),orderReference:'fa4c0a43cbffdc5a\n'},
+  {...fixedReceiptFacts(),orderReference:{toString(){throw Error(secret);}}});
+ for(const facts of invalid){
+  const logs=[];const fixture=diagnosticFixture({get:async()=>{throw{message:'purchase_mismatch',billingReason:'account_binding_mismatch',receiptFacts:facts};},diagnostic:event=>logs.push(event)});
+  const failed=await fixture.handler(req({action:'verify',storeId,purchaseToken:secret}));
+  assert.equal(failed.status,422);assert.equal(await failed.text(),'{"error":"purchase_binding_mismatch"}');
+  assert.deepEqual(logs,[{action:'verify',stage:'verify_product_lookup',status:422,error:'purchase_mismatch',reason:'account_binding_mismatch'}]);
+ }
+ for(const access of [false,undefined,'true']){
+  let reads=0;const logs=[];
+  const fixture=diagnosticFixture({testAccess:async()=>access,productionAccess:async()=>true,diagnostic:event=>logs.push(event),
+   get:async()=>{throw{message:'purchase_mismatch',billingReason:'account_binding_mismatch',get receiptFacts(){reads++;throw Error(secret);}};}});
+  const failed=await fixture.handler(req({action:'verify',storeId,purchaseToken:secret}));
+  assert.equal(failed.status,422);assert.equal(reads,0);assert.equal(Object.keys(logs[0]).length,5);
+ }
+ for(const [action,error]of [['status','purchase_mismatch'],['prepare','purchase_mismatch'],['release','purchase_mismatch'],['verify','save_failed']]){
+  let reads=0;const failure={message:error,billingReason:'account_binding_mismatch',get receiptFacts(){reads++;return fixedReceiptFacts();}};
+  const fail=async()=>{throw failure;};const logs=[];
+  const fixture=diagnosticFixture({diagnostic:event=>logs.push(event),
+   ...(action==='release'?{rpc:async name=>name==='manee_android_billing_checkout_release'?fail():undefined}:
+    action==='verify'?{get:fail}:{catalog:fail})});
+  const failed=await fixture.handler(req({action,storeId,checkoutId,purchaseToken:secret}));
+  assert.equal(failed.status,503);assert.equal(reads,0);assert.equal(Object.keys(logs[0]).length,5);
+ }
 });
