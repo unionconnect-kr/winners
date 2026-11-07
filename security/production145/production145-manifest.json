@@ -1,0 +1,631 @@
+{
+  "functions": [
+    {
+      "schema": "private",
+      "name": "assert_cost_access",
+      "args": "p_store uuid, p_month text",
+      "expectedHash": "6c19f690da8715e092e524d9b11bfaa2",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "can_delete_financials",
+      "args": "target_store_id uuid",
+      "expectedHash": "f0323fb81454bd2d61d8e6cdde5e46b2",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "can_manage_store",
+      "args": "target_store_id uuid",
+      "expectedHash": "1ab157dd26179b31011cbef5cdfbc4a6",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "can_view_financials",
+      "args": "target_store_id uuid",
+      "expectedHash": "bb604b8fed999efa3e8047c0f306193b",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "can_write_financials",
+      "args": "target_store_id uuid",
+      "expectedHash": "591a8a73c76fe830563a3d5827d5e78a",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "claim_android_deliveries",
+      "args": "p_dispatch_token text",
+      "expectedHash": "32b575e0292a484802fceb27c506f5b8",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "claim_ios_deliveries",
+      "args": "p_dispatch_token text",
+      "expectedHash": "e516bb57ab5286a7152620ebc0911605",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "has_sales_access",
+      "args": "target_store_id uuid",
+      "expectedHash": "45b087193fece2ca925561db9ff0a4f5",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_checklist",
+      "args": "p_action text, p_store_id uuid, p_date date, p_payload jsonb",
+      "expectedHash": "c08e6ad510668b633f354874efa15559",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_checklist_due",
+      "args": "p_item jsonb, p_date date",
+      "expectedHash": "883e2064dfb519e835331e02f5d2c288",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_close_month",
+      "args": "p_store_id uuid, p_month_key text, p_request_id uuid, p_amendment_reason text",
+      "expectedHash": "554ab79903bc4129ccbad361921aaedc",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_cost_review",
+      "args": "p_store_id uuid, p_month_key text, p_action text, p_payload jsonb",
+      "expectedHash": "62bac6f887e4fda5b1155e569fc4e3e0",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_expense_author",
+      "args": "",
+      "expectedHash": "54ae096b62a168af33d9e6ce63af7110",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_financial_report",
+      "args": "p_store_id uuid, p_month_key text",
+      "expectedHash": "8d96f01ae9e72bb7d0c1286475aebbad",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_ios_claim_scheduled_deliveries",
+      "args": "",
+      "expectedHash": "aab9c7353be09a6d5bccd7ea9a5fb778",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_cap",
+      "args": "p_store uuid, p_cap text",
+      "expectedHash": "5004bf1ad18e18c3b36f258dd18dd3f6",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_normalize",
+      "args": "p jsonb",
+      "expectedHash": "2a1662dd4790db41a635896e45fb2e96",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_permissions",
+      "args": "p_crew_id uuid, p_action text, p_permissions jsonb, p_revision bigint",
+      "expectedHash": "861f610f0cc1b6a6d2e5bf52292fb1f1",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_portal",
+      "args": "p_store_id uuid, p_month_key text",
+      "expectedHash": "a7df3097488775d3f37319cd36f20ce3",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_review",
+      "args": "p_store_id uuid, p_month_key text, p_action text",
+      "expectedHash": "3146520396540cef8cd13903b5446bd9",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_manager_write",
+      "args": "p_store_id uuid, p_month_key text, p_action text, p_crew_id uuid, p_payload jsonb, p_previous jsonb",
+      "expectedHash": "e82c7767494307926f3fe2faf28a1b5f",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_notice_revision_guard",
+      "args": "",
+      "expectedHash": "60100a4df69be2012ee53df8c6174f34",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_notice_visible",
+      "args": "p_store uuid, p_audience text, p_archived boolean",
+      "expectedHash": "6d504b1c060ae827db706eec54a0c772",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_prepare_fixed_costs",
+      "args": "p_store_id uuid, p_month_key text",
+      "expectedHash": "d7075fdcfe0adf95a653068b97914bf6",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "manee_purge_expired_sms_challenges",
+      "args": "p_limit integer",
+      "expectedHash": "9c5e1b5f1966ae6f998d3297cfc5c57a",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_sales_read",
+      "args": "p_store uuid, p_crew uuid",
+      "expectedHash": "aab905c7248bd2245cf85f5f48b60a7c",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_sales_write",
+      "args": "p_store uuid, p_crew uuid, p_date date",
+      "expectedHash": "8472e15cf6f19cd13d03da43062337d2",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_save_contract",
+      "args": "p_store_id uuid, p_crew_id uuid, p_document jsonb, p_previous integer, p_attachment jsonb",
+      "expectedHash": "f18ee066a32c79a1fa7e02180d1a8599",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_schedule_access",
+      "args": "p_store uuid",
+      "expectedHash": "100c9057e97376ab7e78bae12a5c1616",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_sector3_save",
+      "args": "p_store_id uuid, p_date date, p_request_id uuid, p_sales jsonb, p_expenses jsonb, p_previous timestamp with time zone",
+      "expectedHash": "ed01b74e5641df5cabc5a7f0140c46f6",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_sms_ordinary_user",
+      "args": "p_uid uuid",
+      "expectedHash": "414be747fb5ded5fc1388feb7b7a8b8d",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_sms_service",
+      "args": "p_action text, p_payload jsonb",
+      "expectedHash": "4b015868b42c76cbb339c90effc2002b",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_social_signup",
+      "args": "p_user_id uuid, p_payload jsonb",
+      "expectedHash": "7dc99c4232e9136e38fc85be47f6f0a3",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_staff_expenses",
+      "args": "p_store_id uuid, p_action text, p_payload jsonb",
+      "expectedHash": "40f5ee6411d7571f64aa4668fd3387fa",
+      "new": true
+    },
+    {
+      "schema": "private",
+      "name": "manee_staff_portal",
+      "args": "p_action text, p_payload jsonb",
+      "expectedHash": "e4d7fd6899b8860e35817fabe1f402fc",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "queue_android_business_event",
+      "args": "",
+      "expectedHash": "fd07daaa78b185a3d353edab66e1fac1",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "queue_ios_business_event",
+      "args": "",
+      "expectedHash": "48f9780405a4f022f20414957d38a2ff",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "seed_android_reminders",
+      "args": "p_now timestamp with time zone",
+      "expectedHash": "f297c362ff306a43f7ae9b007bf99aa2",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "seed_ios_reminders",
+      "args": "p_now timestamp with time zone",
+      "expectedHash": "ad8065f323a118a43bf10453a20cba50",
+      "new": false
+    },
+    {
+      "schema": "private",
+      "name": "set_crew_manager_flag",
+      "args": "target_crew_id uuid, is_manager boolean",
+      "expectedHash": "44c972928090886a313d358a331cd313",
+      "new": false
+    },
+    {
+      "schema": "public",
+      "name": "manee_manager_permissions",
+      "args": "p_crew_id uuid, p_action text, p_permissions jsonb, p_revision bigint",
+      "expectedHash": "fd1b8a13ddc5c6a109294a0738a3e60a",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_manager_portal",
+      "args": "p_store_id uuid, p_month_key text",
+      "expectedHash": "7b54b83e0a95cd4d7226281887e35c15",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_manager_review",
+      "args": "p_store_id uuid, p_month_key text, p_action text",
+      "expectedHash": "be55e634c760ffd7fbc9599e5271da9e",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_manager_write",
+      "args": "p_store_id uuid, p_month_key text, p_action text, p_crew_id uuid, p_payload jsonb, p_previous jsonb",
+      "expectedHash": "06c9372f8f1c49e22cc606a3031261cd",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_save_contract",
+      "args": "p_store_id uuid, p_crew_id uuid, p_document jsonb, p_previous integer, p_attachment jsonb",
+      "expectedHash": "0e6c10a87f6f36f1292c8e28d98fa9a4",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sector3_review",
+      "args": "p_store_id uuid, p_month_key text, p_action text",
+      "expectedHash": "932d2ac02a7c770773f8f468030cc3b4",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sector3_save",
+      "args": "p_store_id uuid, p_date date, p_request_id uuid, p_sales jsonb, p_expenses jsonb, p_previous timestamp with time zone",
+      "expectedHash": "77492ec84c5f9084c6df343e7775803e",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sector3_vendor",
+      "args": "p_store_id uuid, p_id uuid, p_action text, p_name text, p_category text, p_count bigint, p_total bigint",
+      "expectedHash": "098075c880123fb587ee03bbf061f56b",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sector4_notice",
+      "args": "p_store_id uuid, p_id uuid, p_payload jsonb, p_version integer, p_request_id uuid",
+      "expectedHash": "0d28e2dc2a62d943b93a0c59a2824bda",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sector4_reservation",
+      "args": "p_store_id uuid, p_id bigint, p_payload jsonb, p_version integer, p_request_id uuid",
+      "expectedHash": "d694a5f35e688d3f8f6db9ed402c647b",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_sms_service",
+      "args": "p_action text, p_payload jsonb",
+      "expectedHash": "c0a614438b589af84462be0d934d60ef",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_social_signup",
+      "args": "p_user_id uuid, p_payload jsonb",
+      "expectedHash": "ac311b2f90c14f7c19cdf529be7d2244",
+      "new": true
+    },
+    {
+      "schema": "public",
+      "name": "manee_staff_expenses",
+      "args": "p_store_id uuid, p_action text, p_payload jsonb",
+      "expectedHash": "4e7d244068f1f9d173c698f8d407546c",
+      "new": true
+    }
+  ],
+  "newTables": [
+    [
+      "private",
+      "manee_expense_receipts"
+    ],
+    [
+      "private",
+      "manee_manager_permissions"
+    ],
+    [
+      "private",
+      "manee_sms_bindings"
+    ],
+    [
+      "private",
+      "manee_sms_challenges"
+    ],
+    [
+      "private",
+      "social_signup_consents"
+    ],
+    [
+      "public",
+      "checklist_history"
+    ],
+    [
+      "public",
+      "manee_contract_documents"
+    ],
+    [
+      "public",
+      "sector3_requests"
+    ],
+    [
+      "public",
+      "sector3_reviews"
+    ]
+  ],
+  "addedColumns": [
+    [
+      "public",
+      "announcement_reads",
+      "revision"
+    ],
+    [
+      "public",
+      "announcements",
+      "important"
+    ],
+    [
+      "public",
+      "announcements",
+      "audience"
+    ],
+    [
+      "public",
+      "announcements",
+      "archived"
+    ],
+    [
+      "public",
+      "announcements",
+      "revision"
+    ],
+    [
+      "public",
+      "announcements",
+      "version"
+    ],
+    [
+      "public",
+      "announcements",
+      "updated_at"
+    ],
+    [
+      "public",
+      "announcements",
+      "request_id"
+    ],
+    [
+      "public",
+      "checklist_checks",
+      "checked_at"
+    ],
+    [
+      "public",
+      "checklist_checks",
+      "checked_by"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "vendor_id"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "payment_method"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "payment_status"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "created_by_user_id"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "created_by_name"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "staff_request_id"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "staff_revision"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "owner_confirmed_at"
+    ],
+    [
+      "public",
+      "expense_entries",
+      "owner_confirmed_by"
+    ],
+    [
+      "public",
+      "reservations",
+      "status"
+    ],
+    [
+      "public",
+      "reservations",
+      "cancel_reason"
+    ],
+    [
+      "public",
+      "reservations",
+      "version"
+    ],
+    [
+      "public",
+      "reservations",
+      "updated_at"
+    ],
+    [
+      "public",
+      "reservations",
+      "request_id"
+    ],
+    [
+      "public",
+      "vendors",
+      "archived_at"
+    ]
+  ],
+  "policies": [
+    [
+      "announcements",
+      "announcement_audience_guard"
+    ],
+    [
+      "attendance",
+      "manee_delegated_attendance_read"
+    ],
+    [
+      "checklist_history",
+      "checklist_history_read"
+    ],
+    [
+      "crew_pay_adjustments",
+      "manee_delegated_adjustments_read"
+    ],
+    [
+      "expense_entries",
+      "expense_entries_insert_v2"
+    ],
+    [
+      "expense_entries",
+      "expense_entries_select_v2"
+    ],
+    [
+      "fixed_schedules",
+      "manager_write"
+    ],
+    [
+      "fixed_schedules",
+      "manee_fixed_schedule_boundary"
+    ],
+    [
+      "manee_contract_documents",
+      "contract_owner_or_employee_read"
+    ],
+    [
+      "monthly_net_payroll",
+      "manee_delegated_payroll_read"
+    ],
+    [
+      "monthly_report_closings",
+      "closing_financial_read"
+    ],
+    [
+      "sales_reports",
+      "sales_reports_insert_v2"
+    ],
+    [
+      "sales_reports",
+      "sales_reports_select_v2"
+    ],
+    [
+      "sales_reports",
+      "sales_reports_update_v2"
+    ],
+    [
+      "sector3_requests",
+      "s3_requests_owner"
+    ],
+    [
+      "sector3_reviews",
+      "s3_reviews_owner"
+    ],
+    [
+      "shifts",
+      "manager_write"
+    ],
+    [
+      "shifts",
+      "manee_staff_schedule_delete_boundary"
+    ],
+    [
+      "shifts",
+      "manee_staff_schedule_insert_boundary"
+    ],
+    [
+      "shifts",
+      "manee_staff_schedule_read_boundary"
+    ],
+    [
+      "shifts",
+      "manee_staff_schedule_update_boundary"
+    ]
+  ],
+  "productionOnlyPreserved": [
+    "dispatch_android_notifications",
+    "staff_clock"
+  ],
+  "legacyReservationDeletePreserved": true
+}
