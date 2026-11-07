@@ -6,12 +6,13 @@ import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 
 const slugs=['manee-signup','manee-staff-signup','manee-franchise-signup'];
-const defaults={username:'synthetic_signup',password:'synthetic-password',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true};
+const defaults={username:'synthetic_signup',password:'synthetic-password-1',display_name:'Synthetic',store_name:'Synthetic store',franchise_name:'Synthetic franchise',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-0000-0000-000000000001',sms_proof:'a'.repeat(64)};
 function harness(slug,options={}){
  const calls=[],logs=[];let handler;
  const ok=data=>({data,error:null});
  const admin={
   rpc:async(name,args)=>{calls.push({name,args});if(name==='consume_auth_rate_limit')return ok(true);
+   if(name==='manee_sms_service')return ok({ok:true,phone:'+821012345678',operation_id:'synthetic-operation'});
    if(name==='is_manee_username_reserved')return options.lookupError?{error:{message:'private-provider-detail'}}:ok(false);
    if(name.startsWith('bootstrap_'))return options.bootstrapError?{error:{code:'23505',message:'private-provider-detail'}}:ok('new-business-id');
    throw Error('Unexpected RPC');},
@@ -25,7 +26,7 @@ function harness(slug,options={}){
   }},
  };
  const client={from:table=>{calls.push({name:'userScopedAdminQuery'});return admin.from(table);},auth:{signInWithPassword:async()=>ok({session:null})}};
- const env={SUPABASE_URL:'https://offline.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
+ const env={SUPABASE_URL:'https://bhwuuxcrzxespkjlmqxr.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic-secret',SUPABASE_ANON_KEY:'synthetic-public'};
  const context=createContext({Request,Response,TextEncoder,atob,crypto:webcrypto,Date,console:{error:(...a)=>logs.push(a),log:(...a)=>logs.push(a)},
   createClient:(_,key,opts)=>{if(key===env.SUPABASE_SERVICE_ROLE_KEY)return admin;if(slug==='manee-franchise-signup')assert.match(opts.global.headers.Authorization,/^Bearer /);return client;},
   Deno:{env:{get:name=>env[name]},serve:fn=>handler=fn}});

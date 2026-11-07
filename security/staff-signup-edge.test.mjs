@@ -5,13 +5,14 @@ import {stripTypeScriptTypes} from 'node:module';
 import {Script,createContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const source=readFileSync(new URL('../supabase/functions/manee-staff-signup/index.ts',import.meta.url),'utf8');
-const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password',age_14_plus_confirmed:true};
+const defaults={username:'worker_test',display_name:'Synthetic Worker',password:'synthetic-test-password-1',age_14_plus_confirmed:true,sms_challenge_id:'00000000-0000-0000-0000-000000000001',sms_proof:'a'.repeat(64)};
 function harness(options={}){
   const calls=[];let handler;
   const ok=data=>({data,error:null});
   const admin={
     rpc:async(name,args)=>{calls.push({name,args});
       if(name==='consume_auth_rate_limit')return options.rateError?{error:{code:'offline'}}:ok(options.rateAllowed??true);
+      if(name==='manee_sms_service')return ok({ok:args.p_action==='claim'?!options.smsClaimRejected:!options.smsCompleteRejected,phone:'+821012345678',operation_id:'synthetic-operation'});
       if(name==='is_manee_username_reserved')return options.lookupError?{error:{code:'offline'}}:ok(Object.hasOwn(options,'reserved')?options.reserved:false);
       if(name==='bootstrap_staff_account'||name==='bootstrap_staff_account_with_profile')return options.bootstrapError?{error:options.bootstrapError}:ok('created-user');
       throw new Error('Unexpected privileged RPC '+name);
@@ -23,7 +24,7 @@ function harness(options={}){
     }}
   };
   const client={auth:{async signInWithPassword(args){calls.push({name:'signInWithPassword',args});return ok({session:options.session||null});}}};
-  const env={SUPABASE_URL:'https://offline.invalid',SUPABASE_SERVICE_ROLE_KEY:'test-secret',SUPABASE_ANON_KEY:'test-public'};
+  const env={SUPABASE_URL:'https://bhwuuxcrzxespkjlmqxr.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'test-secret',SUPABASE_ANON_KEY:'test-public'};
   const context=createContext({Request,Response,TextEncoder,crypto:webcrypto,console:{error(...args){calls.push({log:args});}},
     createClient:(url,key)=>key===env.SUPABASE_SERVICE_ROLE_KEY?admin:client,
     Deno:{env:{get:name=>env[name]},serve:fn=>{handler=fn;}}
@@ -36,7 +37,7 @@ function harness(options={}){
 test('Employee signup never calls owner bootstrap or returns an owner store',async()=>{
   const h=harness();const r=await h.run({...defaults,role:'owner',store_name:'Injected store',user_id:'injected'});
   assert.equal(r.status,201);assert.equal(Object.hasOwn(r.body,'store'),false);assert.equal(r.cache,'no-store');
-  const bootstrap=h.calls.find(c=>c.name==='bootstrap_staff_account');assert.equal(bootstrap.args.p_user_id,'created-user');assert.equal(Object.hasOwn(bootstrap.args,'p_store_name'),false);
+  const bootstrap=h.calls.find(c=>c.name==='bootstrap_staff_account_with_profile');assert.equal(bootstrap.args.p_user_id,'created-user');assert.equal(Object.hasOwn(bootstrap.args,'p_store_name'),false);
   assert.equal(h.calls.some(c=>c.name==='bootstrap_owner_account'),false);assert.equal(JSON.stringify(r.body).includes(defaults.password),false);
 });
 test('Pre-auth signup rejects a different application key before privileged work',async()=>{
@@ -45,7 +46,7 @@ test('Pre-auth signup rejects a different application key before privileged work
 test('Username normalization runs before reservation and profile bootstrap',async()=>{
   const h=harness();await h.run({...defaults,username:'  ＷＯＲＫＥＲ＿ＴＥＳＴ  '});
   assert.equal(h.calls.find(c=>c.name==='is_manee_username_reserved').args.p_username,'worker_test');
-  assert.equal(h.calls.find(c=>c.name==='bootstrap_staff_account').args.p_username,'worker_test');
+  assert.equal(h.calls.find(c=>c.name==='bootstrap_staff_account_with_profile').args.p_username,'worker_test');
 });
 for(const [name,options,expected] of [
   ['reserved owner/staff username',{reserved:true},409],
@@ -86,10 +87,20 @@ test('Invalid personal fields are rejected before creating an Auth identity',asy
  }
 });
 
-test('Phone is optional and obsolete bank input never reaches persistence',async()=>{
+test('Verified SMS phone replaces client phone and obsolete bank input never reaches persistence',async()=>{
  for(const personal of [{},{phone:''},{phone:'',bank_account:'<script>',bank_name:'ignored',account_holder:'ignored'}]){
   const h=harness();assert.equal((await h.run({...defaults,personal})).status,201);
   const call=h.calls.find(c=>c.name==='bootstrap_staff_account_with_profile');
-  assert.deepEqual(JSON.parse(JSON.stringify(call.args.p_personal)),{phone:''});
+  assert.deepEqual(JSON.parse(JSON.stringify(call.args.p_personal)),{phone:'01012345678'});
  }
+});
+
+test('Missing or consumed SMS proof never creates an account',async()=>{
+ for(const options of [{smsClaimRejected:true},{}]){
+  const h=harness(options);const body=options.smsClaimRejected?defaults:{...defaults,sms_proof:undefined};
+  const r=await h.run(body);assert.equal(r.status,400);assert.equal(r.body.error,'phone_verification_required');assert.equal(h.calls.some(c=>c.name==='createUser'),false);
+ }
+});
+test('Uncertain phone binding preserves the newly created account for recovery',async()=>{
+ const h=harness({smsCompleteRejected:true});const r=await h.run();assert.equal(r.status,503);assert.equal(r.body.error,'phone_binding_uncertain');assert.equal(h.calls.some(c=>c.name==='deleteUser'),false);
 });
