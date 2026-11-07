@@ -1,11 +1,12 @@
-# Android public checkout preparation — 2026-10-16
+# Android public checkout and review submission — 2026-10-16
 
 This narrow source change records the already deployed billing handler, Google
 verification and purchase-normalization modules together with the separately
 gated public eligibility policy. It does not merge the cumulative mobile/iOS
-branch, enable billing, launch store restrictions or submit Google review.
+branch. The source preparation was followed by the explicitly approved operating
+actions recorded below.
 
-Production `manee-android-billing` was independently read back as ACTIVE v10 with
+Before this change, Production `manee-android-billing` was read back as ACTIVE v10 with
 JWT verification enabled. Its handler, Google module and purchase adapter match
 the Android 1.22 review source. The proposed differences are the index wiring and
 the explicit `MANEE_ANDROID_PAID_PUBLIC_ENABLED=yes-2026-public-launch` condition.
@@ -37,7 +38,7 @@ do not independently prove a cold restart, expired UI or employee-session refusa
 Existing normal subscription/restore checks must not be requested again.
 
 The exact code-23 binary is already offered on the internal track and saved as
-the Production candidate. The Play Console still reports not sent for review.
+the Production candidate. At the preparation checkpoint, Play Console reported not sent for review.
 Managed publishing was off at the prior verified checkpoint; recheck it before
 submission and make the release consequence clear to the operator. Google
 approval/publication time cannot be promised. Backup/processor policies and
@@ -48,3 +49,31 @@ Narrow main-based source verification: 803 root checks, 793 passed, zero failed,
 10 environment-dependent skips. The cumulative installed-Android source was
 also checked separately (980 total / 969 passed / zero failed / 11 skipped,
 plus 64 mobile checks). No mobile file or installed binary is changed here.
+
+## Approved production activation and submission
+
+The operator explicitly approved public checkout/new-store-only enforcement and
+30-day completed-support-case disposal at 02:12 KST on 2026-10-16.
+
+- Production billing Edge Function v11 is ACTIVE with JWT verification enabled.
+  All five deployed files were independently read back and matched the reviewed
+  bundle. Three unauthenticated rejection probes returned 401.
+- The exact public switch was saved at 02:13 KST. Its displayed SHA-256 digest
+  matched the expected exact value; existing checkout and project gates remain.
+  Supabase documents immediate secret availability without redeployment.
+- New-store enrollment launched at 02:19:29.841 KST
+  (`2026-10-15T17:19:29.841181Z`). Guarded activation verified the enabled catalog,
+  active billing-refresh cron, unchanged 31-store inventory and zero existing
+  stores enrolled. No existing store was backfilled. Stores created after this
+  boundary are enrolled in Production by the installed insert trigger.
+- Google Play code 23 / version 1.22, Korea production rollout and nine other
+  pending changes were sent for review. At 02:21 KST, the automatic quick check
+  had finished and publishing overview displayed **changes in review**. Managed
+  publishing remains OFF, so approval can lead directly to publication.
+
+This is submission, not Google approval or a claim of public availability. No
+new customer purchase was initiated. General authenticated nonpilot checkout
+and handset cold-start/expired/staff-refusal flows were not independently
+exercised in this operating window; existing integration tests and prior genuine
+pilot purchase/restore evidence remain the available coverage. Do not describe
+the normal-subscription screenshots as expiry or employee-refusal evidence.
