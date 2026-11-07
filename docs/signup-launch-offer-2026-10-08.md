@@ -1,5 +1,7 @@
 # One-month launch offer
 
+Historical release record. The signup presentation and per-account pricing were superseded by [the 2026-10-27 update](owner-home-trial-2026-10-27.md). Store subscription offers are managed separately from the signup announcement.
+
 The owner approved the same one-calendar-month free trial for Google Play and
 Apple, followed by KRW 9,900 per store per month, VAT included. Each additional
 general-plan store costs another KRW 9,900. "30 days" must not replace "1 month".
