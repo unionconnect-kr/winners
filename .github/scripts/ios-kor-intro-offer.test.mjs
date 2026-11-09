@@ -35,7 +35,7 @@ function fixture({offers=[old],price='9900',after=[ended,desired],bundle='kr.co.
       patches.push(endDate);
       const updated={...old,attributes:{...old.attributes,endDate}};
       offers=offers.map(x=>x.id===old.id?updated:x);
-      result={data:updated};
+      return {ok:true,status:204,json:async()=>{throw SyntaxError('empty body');}};
     }else if(options.method==='POST'){
       assert.equal(route.pathname,'/v1/subscriptionIntroductoryOffers');
       posts.push(JSON.parse(options.body));
@@ -107,4 +107,10 @@ test('definite creation rejection restores the previous indefinite offer',async(
   await assert.rejects(alignIntroOffer(env,f.options),/HTTP_409_STATE_ERROR/);
   assert.equal(f.posts.length,1);
   assert.deepEqual(f.patches,['2026-11-09',null]);
+});
+test('resumes from a verified end date without patching it again',async()=>{
+  const f=fixture({offers:[ended]});
+  assert.equal((await alignIntroOffer(env,f.options)).changed,true);
+  assert.equal(f.posts.length,1);
+  assert.equal(f.patches.length,0);
 });

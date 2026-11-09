@@ -25,6 +25,12 @@ export async function alignIntroOffer(env, {
       method, redirect: 'error', signal: AbortSignal.timeout(20000),
       headers: {Authorization: 'Bearer ' + token(), Accept: 'application/json', ...(body && {'Content-Type':'application/json'})},
       ...(body && {body: JSON.stringify(body)}),
+    }).catch(error => {
+      const cause = error.cause?.code ?? error.cause?.name ?? error.name;
+      if (typeof cause === 'string' && /^[A-Z0-9_]{1,48}$/i.test(cause)) {
+        console.error('App Store Connect request error:',method,cause);
+      }
+      throw Error('KOR_OFFER_TRANSPORT_' + method);
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -36,7 +42,8 @@ export async function alignIntroOffer(env, {
       }
       throw Error('KOR_OFFER_HTTP_' + response.status + safeCode);
     }
-    return response.json();
+    // A successful write can have an empty body. Verify via the live catalog.
+    if (method === 'GET') return response.json().catch(() => { throw Error('KOR_OFFER_INVALID_JSON'); });
   }
 
   const identity = await api('/v1/apps/' + app + '?fields%5Bapps%5D=bundleId');
@@ -73,10 +80,11 @@ export async function alignIntroOffer(env, {
       a.numberOfPeriods === 1 && a.startDate === '2026-10-09' && (a.endDate ?? null) === end;
   }
   async function endPrevious(endDate) {
-    const {data} = await api('/v1/subscriptionIntroductoryOffers/' + previousOffer, {
+    await api('/v1/subscriptionIntroductoryOffers/' + previousOffer, {
       data:{type:'subscriptionIntroductoryOffers',id:previousOffer,attributes:{endDate}},
     }, 'PATCH');
-    requireState(isPrevious(data,endDate),'END_DATE_NOT_VERIFIED');
+    const offers = await readOffers();
+    requireState(offers.some(offer => isPrevious(offer,endDate)),'END_DATE_NOT_VERIFIED');
   }
   const before = await readOffers();
   let changed = false;
