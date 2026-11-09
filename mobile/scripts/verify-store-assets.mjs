@@ -81,6 +81,12 @@ if (iosRelease156) {
   assert.match(html, /native-subscription-btn"\)\?\.addEventListener\("click",\(\)=>window\.MANEE_NATIVE\.openSubscriptionStatus\(\)\)/);
   assert.match(native, /manee-ios-info/);
   assert.match(native, /ios-info-version/);
+  assert.doesNotMatch(html, /native-staff-push-test|테스트 알림 보내기/);
+  assert.match(html, /id="push-toggle-btn"/);
+  const readableNative = native.replace(/\\u([\da-f]{4})/gi, (_, code) => String.fromCharCode(parseInt(code,16)));
+  assert.doesNotMatch(readableNative, /알림 테스트/);
+  assert.match(readableNative, /이 매장 알림 켜기/);
+  assert.match(readableNative, /이 기기 알림 끄기/);
   assert.doesNotMatch(config+html, /accountVerificationEnabled|manee_account_verification_status/);
 }
 console.log('Verified complete production '+info.versionName+' assets: '+info.platform);

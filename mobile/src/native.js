@@ -150,7 +150,10 @@ async function openSettings(){
  button('기존 구독 복원',async()=>displayResult(await billing.restore()),'link');
  button('구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');},'link');
  const notificationDetails=element('details',null,view.details);element('summary','매장 알림 설정',notificationDetails);
- for(const [label,action] of [['이 매장 알림 켜기','enable'],['알림 테스트','test'],['이 기기 알림 끄기','disable']])notificationDetails.append(button(label,async()=>{status.textContent=(await notifications.action(action)).message;},'secondary'));
+ const notificationActions=[['이 매장 알림 켜기','enable']];
+ if(typeof IOS_PUBLIC_RELEASE==='undefined'||!IOS_PUBLIC_RELEASE)notificationActions.push(['알림 테스트','test']);
+ notificationActions.push(['이 기기 알림 끄기','disable']);
+ for(const [label,action] of notificationActions)notificationDetails.append(button(label,async()=>{status.textContent=(await notifications.action(action)).message;},'secondary'));
  element('p','알림은 선택한 한 매장에 연결돼요.',notificationDetails);
  view.terms.textContent='구독은 매월 갱신되며 Apple 계정으로 청구돼요. 무료체험 기간과 이후 요금은 위에 표시된 상품 기준이며, 최종 청구일은 Apple 결제창에서 확인해 주세요. 국내 유료 전환에는 Apple 동의 절차가 적용돼요. 취소는 구독 관리에서 할 수 있어요. 이용 기간 종료 후 업무 입력·수정은 제한되지만 기존 기록 조회와 구독 복원은 가능해요.';
  const links=element('p',null,view.details);

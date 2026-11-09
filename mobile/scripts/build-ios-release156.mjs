@@ -10,6 +10,7 @@ if (process.argv.length !== 4 || process.argv[2] !== 'ios' || process.argv[3] !=
 const mobile = fileURLToPath(new URL('..', import.meta.url));
 execFileSync(process.execPath, ['scripts/build-release152.mjs', 'ios', 'production'], {
   cwd: mobile,
+  env: {...process.env, MANEE_IOS_PUBLIC_RELEASE: 'true'},
   stdio: 'inherit',
 });
 
@@ -17,13 +18,21 @@ const output = resolve(mobile, 'www');
 const htmlPath = resolve(output, 'index.html');
 let html = readFileSync(htmlPath, 'utf8');
 function replaceOnce(before, after) {
-  if (html.split(before).length !== 2) throw Error('iOS app info anchor changed: ' + before);
+  if (html.split(before).length !== 2) throw Error('iOS 1.56 release anchor changed: ' + before);
   html = html.replace(before, () => after);
 }
 replaceOnce("+s4Hint('매니 1.45')+", '+');
 replaceOnce(
   'document.getElementById("native-settings-btn")?.addEventListener("click",()=>window.MANEE_NATIVE.openSettings());',
   'document.getElementById("native-settings-btn")?.addEventListener("click",()=>void window.MANEE_NATIVE.openAppInfo());',
+);
+replaceOnce(
+  `+(state.pushSubscribed?'<button type="button" class="owner-primary" id="native-staff-push-test">테스트 알림 보내기</button>':'')`,
+  '',
+);
+replaceOnce(
+  "    document.getElementById('native-staff-push-test')?.addEventListener('click',()=>nativeAndroidPushAction('test'));\n",
+  '',
 );
 writeFileSync(htmlPath, html);
 

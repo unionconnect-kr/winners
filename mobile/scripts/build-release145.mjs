@@ -19,7 +19,7 @@ writeFileSync(resolve(out,'app-config.js'),'window.MANEE_CONFIG = Object.freeze(
 const css=resolve(out,`${platform}-ui.css`);
 writeFileSync(css,readFileSync(css,'utf8').replace(`--${platform}-banner-height:28px`,`--${platform}-banner-height:0px`));
 await build({entryPoints:[resolve(mobile,platform==='android'?'src/native-android-launch.js':'src/native-ios-release.js')],bundle:true,format:'iife',target:platform==='android'?'chrome100':'safari15',minify:true,
- define:{ANDROID_PAID_BILLING:'true',ANDROID_PRODUCTION:'true',ANDROID_FIREBASE_PROJECT:JSON.stringify(firebase),NATIVE_SERVICES_ORIGIN:JSON.stringify(publicOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},outfile:resolve(out,'native.js')});
+ define:{ANDROID_PAID_BILLING:'true',ANDROID_PRODUCTION:'true',ANDROID_FIREBASE_PROJECT:JSON.stringify(firebase),IOS_PUBLIC_RELEASE:JSON.stringify(platform==='ios'&&process.env.MANEE_IOS_PUBLIC_RELEASE==='true'),NATIVE_SERVICES_ORIGIN:JSON.stringify(publicOrigin),NATIVE_PUBLIC_ORIGIN:JSON.stringify(publicOrigin)},outfile:resolve(out,'native.js')});
 const info={environment:'production',platform,projectRef:config.projectRef,versionName:'1.45',versionCode:46,releaseVersion:'1.45',deviceFeedback:true,sourceVersion:'1.44',releasePurpose:'store-update',pushEnabled:true,billingEnabled:true,signupCheckoutEnabled:true,servicesOrigin:publicOrigin,nativeAuthStorage:platform==='android'?'keystore-v1':'keychain-v1',...(platform==='android'?{androidPushProjectId:firebase}:{})};
 writeFileSync(resolve(out,'build-info.json'),JSON.stringify(info,null,2)+'\n');
 console.log(`Prepared production ${platform} 1.45 store-update assets; external service rollout remains independently verified.`);
