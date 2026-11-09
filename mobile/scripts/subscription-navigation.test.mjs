@@ -54,6 +54,32 @@ test('the actual account-status button opens the offer sheet',async()=>{
  assert.equal(f.document.getElementById('manee-subscription-status'),undefined);
  assert.equal(f.purchases(),1,'explicit eligible-trial action reaches native checkout');
 });
+test('the existing-subscription path can restore without launching a new trial',async()=>{
+ let restores=0;
+ const f=fixture({restore:async()=>{restores++;return {status:'empty'};}});
+ f.native.subscriptionDenied();await settle();
+ const entry=f.button('manee-subscription-status','구독 복원 화면 열기');
+ assert.equal(entry.hidden,false);
+ await entry.onclick();await settle();
+ await f.button('manee-android-billing','기존 구독 복원').onclick();
+ assert.equal(f.purchases(),0);
+ assert.equal(restores,1);
+});
+test('the sandbox restore entry only opens the offer sheet',async()=>{
+ const f=fixture({status:async()=>({ready:true,testOnly:true,billingScope:'account',productId:product.productId})});
+ f.native.subscriptionDenied();await settle();
+ await f.button('manee-subscription-status','Google Play 테스트·구독 복원').onclick();await settle();
+ assert.ok(f.button('manee-android-billing','기존 구독 복원'));
+ assert.equal(f.purchases(),0);
+});
+test('the paid manage-and-restore entry only opens the offer sheet',async()=>{
+ const f=fixture();
+ f.setContext({...f.getContext(),db:{rpc:async()=>({data:{enforced:true,canWrite:true},error:null})}});
+ f.native.subscriptionDenied();await settle();
+ await f.button('manee-subscription-status','구독 관리·복원').onclick();await settle();
+ assert.ok(f.button('manee-android-billing','기존 구독 복원'));
+ assert.equal(f.purchases(),0);
+});
 test('a delayed write denial cannot cover checkout with the same account-status prompt',async()=>{
  const f=fixture();f.native.subscriptionDenied();await settle();
  await f.button('manee-subscription-status','무료체험·구독 확인').onclick();await settle();

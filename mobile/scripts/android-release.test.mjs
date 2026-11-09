@@ -30,17 +30,17 @@ test('paid pilot assets have a distinct purpose and cannot pass the internal gua
 test('debug variant cannot package production assets',()=>{
   assert.throws(()=>verifyAndroidAssets({...production(),environment:'staging'}));
 });
-for(const [versionName,versionCode] of [['1.52',53],['1.53',54],['1.54',55],['1.55',56]])test(`${versionName} store update requires its exact version and all production services`,()=>{
+for(const [versionName,versionCode] of [['1.52',53],['1.53',54],['1.54',55],['1.55',56],['1.56',57]])test(`${versionName} store update requires its exact version and all production services`,()=>{
   const input=production();input.releasePurpose='store-update';
   Object.assign(input.info,{releasePurpose:'store-update',billingEnabled:true,versionName,versionCode,
     usernameRecoveryEnabled:true,smsResendSeconds:30,pushEnabled:true,signupCheckoutEnabled:true,nativeAuthStorage:'keystore-v1'});
   verifyAndroidAssets(input);
-  for(const change of [{versionCode:versionCode-1},{versionCode:versionCode+1},{versionName:'1.56'},{billingEnabled:false},{pushEnabled:false},{signupCheckoutEnabled:false},
+  for(const change of [{versionCode:versionCode-1},{versionCode:versionCode+1},{versionName:'1.57'},{billingEnabled:false},{pushEnabled:false},{signupCheckoutEnabled:false},
     {nativeAuthStorage:'localstorage'},{usernameRecoveryEnabled:false},{smsResendSeconds:60}]) {
     assert.throws(()=>verifyAndroidAssets({...input,info:{...input.info,...change}}));
   }
 });
-for(const release of [153,154,155])test(`${release} builder refuses iOS, staging and implicit release inputs before building assets`,()=>{
+for(const release of [153,154,155,156])test(`${release} builder refuses iOS, staging and implicit release inputs before building assets`,()=>{
   const builder=fileURLToPath(new URL(`./build-release${release}.mjs`,import.meta.url));
   for(const args of [[],['android'],['ios','production'],['android','staging']]) {
     const result=spawnSync(process.execPath,[builder,...args],{encoding:'utf8'});
