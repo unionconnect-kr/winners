@@ -5,6 +5,7 @@ const app = '6820833544';
 const subscription = '6820834755';
 const product = 'manee.store1.monthly';
 const date = '2026-11-09';
+const starts = '2026-11-10';
 const branch = 'refs/heads/codex/ios-korea-intro-2m-20261109';
 const workflow = 'unionconnect-kr/winners/.github/workflows/ios-kor-intro-offer.yml@' + branch;
 const offerPath = '/v1/subscriptions/' + subscription + '/introductoryOffers?filter%5Bterritory%5D=KOR&include=territory&limit=200';
@@ -19,9 +20,9 @@ export async function alignIntroOffer(env, {
   requireState(env.GITHUB_REPOSITORY === 'unionconnect-kr/winners' && env.GITHUB_REF === branch &&
     env.GITHUB_WORKFLOW_REF === workflow && env.GITHUB_EVENT_NAME === 'push' &&
     env.MANEE_KOR_INTRO_OFFER === '20261109-free-trial-two-months', 'UNAUTHORIZED_CONTEXT');
-  async function api(path, body) {
+  async function api(path, body, method = body ? 'POST' : 'GET') {
     const response = await request('https://api.appstoreconnect.apple.com' + path, {
-      method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(20000),
+      method, redirect: 'error', signal: AbortSignal.timeout(20000),
       headers: {Authorization: 'Bearer ' + token(), Accept: 'application/json', ...(body && {'Content-Type':'application/json'})},
       ...(body && {body: JSON.stringify(body)}),
     });
@@ -60,32 +61,54 @@ export async function alignIntroOffer(env, {
   }
   function isDesired(offer) {
     const a = offer.attributes;
-    return a?.offerMode === 'FREE_TRIAL' && a.duration === 'TWO_MONTHS' && a.numberOfPeriods === 1 && a.startDate === date && !a.endDate;
+    return a?.offerMode === 'FREE_TRIAL' && a.duration === 'TWO_MONTHS' && a.numberOfPeriods === 1 && a.startDate === starts && !a.endDate;
   }
   function settled(offers) {
-    const currentOrFuture = offers.filter(x => !x.attributes?.endDate || x.attributes.endDate > date || x.attributes.startDate === date);
-    return currentOrFuture.length === 1 && isDesired(currentOrFuture[0]);
+    const fromStart = offers.filter(x => !x.attributes?.endDate || x.attributes.endDate >= starts);
+    return fromStart.length === 1 && isDesired(fromStart[0]);
+  }
+  function isPrevious(offer, end) {
+    const a = offer?.attributes;
+    return offer?.id === previousOffer && a?.offerMode === 'FREE_TRIAL' && a.duration === 'ONE_MONTH' &&
+      a.numberOfPeriods === 1 && a.startDate === '2026-10-09' && (a.endDate ?? null) === end;
+  }
+  async function endPrevious(endDate) {
+    const {data} = await api('/v1/subscriptionIntroductoryOffers/' + previousOffer, {
+      data:{type:'subscriptionIntroductoryOffers',id:previousOffer,attributes:{endDate}},
+    }, 'PATCH');
+    requireState(isPrevious(data,endDate),'END_DATE_NOT_VERIFIED');
   }
   const before = await readOffers();
   let changed = false;
   if (!settled(before)) {
     const beforeActive = before.filter(x => !x.attributes?.endDate || x.attributes.endDate >= date);
     requireState(now.toISOString().slice(0,10) === date, 'OUTSIDE_CHANGE_DATE');
-    requireState(beforeActive.length === 1 && beforeActive[0].id === previousOffer &&
-      beforeActive[0].attributes?.offerMode === 'FREE_TRIAL' &&
-      beforeActive[0].attributes.duration === 'ONE_MONTH' && beforeActive[0].attributes.numberOfPeriods === 1 &&
-      beforeActive[0].attributes.startDate === '2026-10-09' && !beforeActive[0].attributes.endDate, 'UNEXPECTED_CURRENT_OFFER');
+    requireState(beforeActive.length === 1 && (isPrevious(beforeActive[0],null) || isPrevious(beforeActive[0],date)), 'UNEXPECTED_CURRENT_OFFER');
+    if (isPrevious(beforeActive[0],null)) await endPrevious(date);
 
-    await api('/v1/subscriptionIntroductoryOffers', {
-      data: {
-        type: 'subscriptionIntroductoryOffers',
-        attributes: {startDate:date, duration:'TWO_MONTHS', offerMode:'FREE_TRIAL', numberOfPeriods:1},
-        relationships: {
-          subscription: {data:{type:'subscriptions',id:subscription}},
-          territory: {data:{type:'territories',id:'KOR'}},
+    try {
+      await api('/v1/subscriptionIntroductoryOffers', {
+        data: {
+          type: 'subscriptionIntroductoryOffers',
+          attributes: {startDate:starts, duration:'TWO_MONTHS', offerMode:'FREE_TRIAL', numberOfPeriods:1},
+          relationships: {
+            subscription: {data:{type:'subscriptions',id:subscription}},
+            territory: {data:{type:'territories',id:'KOR'}},
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      const current = await readOffers();
+      if (!settled(current)) {
+        // A network failure can still be processing. Compensate only on an
+        // explicit Apple rejection and our unchanged one-offer state.
+        if (!/^KOR_OFFER_HTTP_4\d\d/.test(error.message)) throw error;
+        const active = current.filter(x => !x.attributes?.endDate || x.attributes.endDate >= date);
+        requireState(active.length === 1 && isPrevious(active[0],date),'ROLLBACK_UNCERTAIN');
+        await endPrevious(null);
+        throw error;
+      }
+    }
     changed = true;
     let offers = await readOffers();
     for (let attempt = 0; !settled(offers) && attempt < 4; attempt++) {
@@ -94,7 +117,7 @@ export async function alignIntroOffer(env, {
     }
     requireState(settled(offers), 'POST_NOT_VERIFIED');
   }
-  return {app, product, territory:'KOR', duration:'TWO_MONTHS', offerMode:'FREE_TRIAL', startDate:date, monthlyPriceKrw:9900, changed};
+  return {app, product, territory:'KOR', duration:'TWO_MONTHS', offerMode:'FREE_TRIAL', startDate:starts, monthlyPriceKrw:9900, changed};
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

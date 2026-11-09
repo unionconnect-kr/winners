@@ -16,18 +16,30 @@ const old = {
 };
 const desired = {
   ...old,id:'new-korean-offer',
-  attributes:{...old.attributes,duration:'TWO_MONTHS',startDate:'2026-11-09'},
+  attributes:{...old.attributes,duration:'TWO_MONTHS',startDate:'2026-11-10'},
 };
-function fixture({offers=[old],price='9900',after=[desired],bundle='kr.co.manee.app'}={}) {
-  const posts=[];
+const ended={...old,attributes:{...old.attributes,endDate:'2026-11-09'}};
+function fixture({offers=[old],price='9900',after=[ended,desired],bundle='kr.co.manee.app',reject=false}={}) {
+  const posts=[],patches=[];
   const request=async (url,options)=>{
     const route=new URL(url);
     assert.equal(route.origin,'https://api.appstoreconnect.apple.com');
     assert.equal(options.headers.Authorization,'Bearer disposable');
     let result;
-    if(options.method==='POST'){
+    if(options.method==='PATCH'){
+      assert.equal(route.pathname,'/v1/subscriptionIntroductoryOffers/'+old.id);
+      const body=JSON.parse(options.body);
+      assert.equal(body.data.id,old.id);
+      assert.equal(body.data.type,'subscriptionIntroductoryOffers');
+      const endDate=body.data.attributes.endDate;
+      patches.push(endDate);
+      const updated={...old,attributes:{...old.attributes,endDate}};
+      offers=offers.map(x=>x.id===old.id?updated:x);
+      result={data:updated};
+    }else if(options.method==='POST'){
       assert.equal(route.pathname,'/v1/subscriptionIntroductoryOffers');
       posts.push(JSON.parse(options.body));
+      if(reject)return {ok:false,status:409,json:async()=>({errors:[{code:'STATE_ERROR'}]})};
       offers=after;
       result={data:desired};
     }else if(route.pathname==='/v1/apps/6820833544'){
@@ -45,7 +57,7 @@ function fixture({offers=[old],price='9900',after=[desired],bundle='kr.co.manee.
     }
     return {ok:true,json:async()=>result};
   };
-  return {posts,options:{request,token:()=> 'disposable',now:new Date('2026-11-09T11:00:00Z'),wait:async()=>{}}};
+  return {posts,patches,options:{request,token:()=> 'disposable',now:new Date('2026-11-09T11:00:00Z'),wait:async()=>{}}};
 }
 
 test('only the designated push can use ASC credentials',async()=>{
@@ -53,20 +65,23 @@ test('only the designated push can use ASC credentials',async()=>{
     await assert.rejects(alignIntroOffer({...env,...changed},{request:()=>assert.fail('Unexpected Apple request')}),/UNAUTHORIZED_CONTEXT/);
   }
 });
-test('writes only one two-month free trial for the expected Korean product and verifies it',async()=>{
+test('ends only the original offer and verifies one new nonoverlapping two-month offer',async()=>{
   const f=fixture();
-  assert.equal((await alignIntroOffer(env,f.options)).changed,true);
+  const result=await alignIntroOffer(env,f.options);
+  assert.equal(result.changed,true);
+  assert.equal(result.startDate,'2026-11-10');
+  assert.deepEqual(f.patches,['2026-11-09']);
   assert.deepEqual(f.posts,[{data:{
     type:'subscriptionIntroductoryOffers',
-    attributes:{startDate:'2026-11-09',duration:'TWO_MONTHS',offerMode:'FREE_TRIAL',numberOfPeriods:1},
+    attributes:{startDate:'2026-11-10',duration:'TWO_MONTHS',offerMode:'FREE_TRIAL',numberOfPeriods:1},
     relationships:{subscription:{data:{type:'subscriptions',id:'6820834755'}},territory:korea},
   }}]);
 });
 test('existing desired offer is an idempotent read even after the change date',async()=>{
-  const ended={...old,attributes:{...old.attributes,endDate:'2026-11-09'}};
   const f=fixture({offers:[ended,desired]});
   assert.equal((await alignIntroOffer(env,{...f.options,now:new Date('2026-11-10')})).changed,false);
   assert.equal(f.posts.length,0);
+  assert.equal(f.patches.length,0);
 });
 test('changed price, foreign app, future offer and wrong date all fail before mutation',async()=>{
   const future={...desired,attributes:{...desired.attributes,startDate:'2026-12-01'}};
@@ -74,13 +89,22 @@ test('changed price, foreign app, future offer and wrong date all fail before mu
     const f=fixture(params);
     await assert.rejects(alignIntroOffer(env,f.options),error);
     assert.equal(f.posts.length,0);
+    assert.equal(f.patches.length,0);
   }
   const f=fixture();
   await assert.rejects(alignIntroOffer(env,{...f.options,now:new Date('2026-11-10')}),/OUTSIDE_CHANGE_DATE/);
   assert.equal(f.posts.length,0);
+  assert.equal(f.patches.length,0);
 });
 test('unverified creation polls without creating a second offer',async()=>{
-  const f=fixture({after:[old]});
+  const f=fixture({after:[ended]});
   await assert.rejects(alignIntroOffer(env,f.options),/POST_NOT_VERIFIED/);
   assert.equal(f.posts.length,1);
+  assert.deepEqual(f.patches,['2026-11-09']);
+});
+test('definite creation rejection restores the previous indefinite offer',async()=>{
+  const f=fixture({reject:true});
+  await assert.rejects(alignIntroOffer(env,f.options),/HTTP_409_STATE_ERROR/);
+  assert.equal(f.posts.length,1);
+  assert.deepEqual(f.patches,['2026-11-09',null]);
 });
