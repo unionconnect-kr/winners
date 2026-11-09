@@ -29,6 +29,10 @@ export async function alignIntroOffer(env, {
       const data = await response.json().catch(() => ({}));
       const code = data.errors?.[0]?.code;
       const safeCode = typeof code === 'string' && /^[A-Z0-9_.]{1,80}$/.test(code) ? '_' + code.replaceAll('.', '_') : '';
+      if (body && response.status === 409 && typeof data.errors?.[0]?.detail === 'string') {
+        const detail = data.errors[0].detail.replace(/[^a-zA-Z0-9 .,:;()'/-]/g,' ').replace(/[a-zA-Z0-9]{24,}/g,'[redacted]').slice(0,400);
+        console.error('App Store Connect offer conflict:', detail);
+      }
       throw Error('KOR_OFFER_HTTP_' + response.status + safeCode);
     }
     return response.json();
