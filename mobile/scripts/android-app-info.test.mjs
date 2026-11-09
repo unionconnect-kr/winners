@@ -132,6 +132,15 @@ test('production Android removes the old footer and preserves app info and subsc
   assert.match(productionHtml('ios'), /s4Hint\('매니 1\.45'\)/);
 });
 
+test('the public Android release keeps notification controls without test actions', () => {
+  const html = applyAndroidAppInfoChanges(productionHtml('android'), {includeTestNotification: false});
+  assert.doesNotMatch(html, /owner-push-test-btn|native-staff-push-test|테스트 알림 보내기/);
+  assert.doesNotMatch(html, /s4Hint\('매니 1\.45'\)/);
+  assert.match(html, /id="owner-push-toggle-btn"/);
+  assert.match(html, /id="native-settings-btn">앱 정보/);
+  assert.match(html, /id="native-subscription-btn">매니 구독/);
+});
+
 test('the owner can send a test from notification settings without changing the enabled state', async () => {
   const html = applyAndroidAppInfoChanges(productionHtml('android'));
   const slice = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));

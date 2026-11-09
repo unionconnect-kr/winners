@@ -1,0 +1,155 @@
+name: MANEE 1.57 signed Android production candidate
+on:
+  push:
+    branches: [codex/android-production-157-20261109]
+    paths: ['mobile/**', 'supabase/**', 'security/**', 'tests/**', 'scripts/**', 'config/**', 'index.html', '*.js', '*.css', 'package*.json', '.github/workflows/android157-release.yml']
+permissions:
+  contents: read
+concurrency:
+  group: android157-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  regression:
+    name: App regression and concurrent database checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local_ci_only
+          POSTGRES_DB: manee_code_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MANEE_TEST_DATABASE_URL: postgresql://postgres:local_ci_only@127.0.0.1:5432/manee_code_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Install workbook test dependencies
+        run: npm --prefix mobile ci
+      - name: Ensure database and PDF inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client poppler-utils
+      - name: Check concurrent requests on the disposable database
+        run: |
+          set -euo pipefail
+          test -n "$MANEE_TEST_DATABASE_URL"
+          # Cluster roles are shared, so bootstrap suites sequentially.
+          # Each suite still sends competing requests concurrently.
+          node --test --test-reporter=tap security/store-code-concurrency.test.mjs | tee /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/new-staff-self-profile-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/attendance-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --test --test-reporter=tap security/new-store-billing-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --test --test-reporter=tap tests/phone-one-account-concurrency.test.mjs | tee -a /tmp/android-concurrency.txt
+          node --input-type=module - <<'JS'
+          import { readFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const log = readFileSync('/tmp/android-concurrency.txt', 'utf8');
+          // A skipped suite must never allow an APK through this gate.
+          assert.equal([...log.matchAll(/^# tests 1$/gm)].length, 5);
+          assert.equal([...log.matchAll(/^# pass 1$/gm)].length, 5);
+          assert.equal([...log.matchAll(/^# skipped 0$/gm)].length, 5);
+          JS
+      - name: Check app and security regressions
+        run: |
+          set -euo pipefail
+          # Real concurrency ran above. Backup rehearsals have separate requirements.
+          env -u MANEE_TEST_DATABASE_URL node --test --test-concurrency=2 --test-reporter=tap security/*.test.mjs tests/*.test.mjs | tee /tmp/android-regression.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee157-full-regression-results
+          path: /tmp/android-*.txt
+          retention-days: 14
+  verify:
+    needs: [regression]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix mobile
+      - run: node --test --test-concurrency=2 --test-reporter=tap mobile/scripts/*.test.mjs
+  android:
+    needs: [verify]
+    if: github.repository == 'unionconnect-kr/winners' && github.event_name == 'push' && github.ref == 'refs/heads/codex/android-production-157-20261109' && github.workflow_ref == 'unionconnect-kr/winners/.github/workflows/android157-release.yml@refs/heads/codex/android-production-157-20261109'
+    runs-on: ubuntu-24.04
+    environment: android-play-internal
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Build upload-signed AAB and APK with production services
+        env:
+          MANEE_ANDROID_RELEASE_PURPOSE: store-update
+          MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          MANEE_ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.MANEE_ANDROID_UPLOAD_STORE_PASSWORD }}
+          MANEE_ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.MANEE_ANDROID_UPLOAD_KEY_ALIAS }}
+          MANEE_ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.MANEE_ANDROID_UPLOAD_KEY_PASSWORD }}
+          MANEE_ANDROID_UPLOAD_CERT_SHA256: ${{ vars.MANEE_ANDROID_UPLOAD_CERT_SHA256 }}
+          MANEE_ANDROID_FIREBASE_PRODUCTION_JSON: ${{ secrets.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export MANEE_ANDROID_UPLOAD_KEYSTORE="$RUNNER_TEMP/manee-upload.jks"
+          trap 'rm -f "$MANEE_ANDROID_UPLOAD_KEYSTORE" android/app/src/release/google-services.json' EXIT
+          node --input-type=module - <<'JS'
+          import {writeFileSync,mkdirSync} from 'node:fs';
+          import assert from 'node:assert/strict';
+          for(const n of ['MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64','MANEE_ANDROID_UPLOAD_STORE_PASSWORD','MANEE_ANDROID_UPLOAD_KEY_ALIAS','MANEE_ANDROID_UPLOAD_KEY_PASSWORD','MANEE_ANDROID_UPLOAD_CERT_SHA256','MANEE_ANDROID_FIREBASE_PRODUCTION_JSON'])assert.ok(process.env[n],'Missing release configuration: '+n);
+          mkdirSync('android/app/src/release',{recursive:true});
+          writeFileSync(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE,Buffer.from(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64,'base64'),{mode:0o600});
+          writeFileSync('android/app/src/release/google-services.json',process.env.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON,{mode:0o600});
+          JS
+          node scripts/build-release157.mjs android production
+          node scripts/verify-store-assets.mjs --release157
+          npm run sync:android
+          cd android
+          ./gradlew :app:bundleRelease :app:assembleRelease -PmaneeRelease157
+          cd ..
+          node scripts/verify-android-aab.mjs --store-update
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging android/app/build/outputs/apk/release/app-release.apk > "$RUNNER_TEMP/manee157-apk-manifest.txt"
+          python3 - <<'PY'
+          import os,pathlib
+          report=(pathlib.Path(os.environ['RUNNER_TEMP'])/'manee157-apk-manifest.txt').read_text()
+          assert "package: name='kr.co.manee.app' versionCode='58' versionName='1.57'" in report
+          assert "targetSdkVersion:'36'" in report
+          assert "uses-permission: name='android.permission.POST_NOTIFICATIONS'" in report
+          assert "uses-permission: name='com.android.vending.BILLING'" in report
+          assert 'application-debuggable' not in report
+          assert "application-label:'매니'" in report
+          print('Release APK package, version, permissions and non-debuggable manifest verified.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manee-android-1.57-production-candidate
+          path: |
+            mobile/android/app/build/outputs/bundle/release/app-release.aab
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+          if-no-files-found: error

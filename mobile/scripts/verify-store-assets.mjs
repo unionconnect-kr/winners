@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
+const release157=process.argv.includes('--release157');
 const release156=process.argv.includes('--release156');
 const release155=process.argv.includes('--release155');
 const release154=process.argv.includes('--release154');
@@ -14,13 +15,14 @@ const release149=process.argv.includes('--release149');
 const release148=process.argv.includes('--release148');
 const release147=process.argv.includes('--release147');
 const release146=process.argv.includes('--release146');
-const releaseAndroidOnly=release153||release154||release155||release156;
+const releaseAndroidOnly=release153||release154||release155||release156||release157;
 const release152OrLater=release152||releaseAndroidOnly;
-const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154','--release155','--release156'];
+const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154','--release155','--release156','--release157'];
 const root=resolve(process.argv.slice(2).find(x=>!releaseFlags.includes(x))||fileURLToPath(new URL('../www',import.meta.url)));
 const info=JSON.parse(readFileSync(resolve(root,'build-info.json'),'utf8'));
 assert.equal(info.environment,'production');assert.equal(info.projectRef,'bhwuuxcrzxespkjlmqxr');
-const expectedVersion = release156 ? ['1.56',57]
+const expectedVersion = release157 ? ['1.57',58]
+  : release156 ? ['1.56',57]
   : release155 ? ['1.55',56]
   : release154 ? ['1.54',55]
   : release153 ? ['1.53',54]
@@ -64,9 +66,13 @@ if(release152OrLater){
   new vm.Script(readFileSync(resolve(root,'email-verification.js'),'utf8'));
   assert.ok(readFileSync(resolve(root,'email-verification.css'),'utf8').trim());
 }
-if (release156) {
+if (release156 || release157) {
   assert.doesNotMatch(html, /s4Hint\(\s*(['"])매니 1\.45\1\s*\)/);
-  assert.match(html, /id="owner-push-test-btn"/);
+  if (release156) assert.match(html, /id="owner-push-test-btn"/);
+  if (release157) {
+    assert.doesNotMatch(html, /owner-push-test-btn|native-staff-push-test|테스트 알림 보내기/);
+    assert.match(html, /id="owner-push-toggle-btn"/);
+  }
   assert.match(native, /manee-android-info/);
   assert.match(native, /android-info-version/);
 }

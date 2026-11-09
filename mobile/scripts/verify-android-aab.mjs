@@ -9,11 +9,16 @@ const unpack = path => execFileSync('unzip', ['-p', aab, path], {encoding:'utf8'
 const entries = execFileSync('unzip',['-Z1',aab],{encoding:'utf8'}).trim().split('\n');
 assert.ok(entries.includes('base/manifest/AndroidManifest.xml'));
 assert.ok(entries.includes('BundleConfig.pb'));
+const info = JSON.parse(unpack('base/assets/public/build-info.json'));
 verifyAndroidAssets({environment:'production',firebaseProject:'manee-production-3eafa',releasePurpose:purpose,
-  info:JSON.parse(unpack('base/assets/public/build-info.json')),
+  info,
   appConfig:unpack('base/assets/public/app-config.js'),
   environments:JSON.parse(readFileSync(new URL('../../config/environments.json',import.meta.url),'utf8'))});
 const packagedHtml=unpack('base/assets/public/index.html');
+if (info.versionCode === 58) {
+  assert.doesNotMatch(packagedHtml, /owner-push-test-btn|native-staff-push-test|테스트 알림 보내기/);
+  assert.match(packagedHtml, /id="owner-push-toggle-btn"/);
+}
 assert.doesNotMatch(packagedHtml, /매니 Android 테스트 · 테스트 데이터만 입력해 주세요/);
 for(const id of ['staff-signup-age-confirmed','owner-request-age-confirmed','new-franchise-age-confirmed']) {
   assert.ok(packagedHtml.includes(id), 'Required signup age confirmation missing from signed bundle: '+id);

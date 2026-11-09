@@ -1,5 +1,5 @@
 // Apply only to the new production Android assets, after the approved UI is built.
-export function applyAndroidAppInfoChanges(source) {
+export function applyAndroidAppInfoChanges(source, {includeTestNotification = true} = {}) {
   let html = source;
   const replaceOnce = (before, after) => {
     if (html.split(before).length !== 2) throw Error('Android app info anchor changed: ' + before.slice(0, 80));
@@ -7,6 +7,8 @@ export function applyAndroidAppInfoChanges(source) {
   };
 
   replaceOnce("+s4Hint('매니 1.45')+", '+');
+  if (!includeTestNotification) return html;
+
   const toggle = "+(busy?'알림 연결 확인 중…':on?'알림 끄기':'알림 켜기')+";
   replaceOnce(
     toggle + "'</button></section>';",
