@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {readFileSync} from 'node:fs';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {cpSync,existsSync,mkdirSync,mkdtempSync,readFileSync,rmSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {JSDOM} from 'jsdom';
 import {hardenUi} from '../../scripts/harden-ui.mjs';
 import {adaptIos139,adaptIos139Social} from './adapt-ios139.mjs';
@@ -17,6 +21,52 @@ const baseline = read('../release139/assets/index.html');
 const social = read('../release139/assets/social-auth.js');
 const configSource = read('../release139/assets/app-config.js');
 const settle = () => new Promise(resolve=>setImmediate(resolve));
+
+test('native verification builds require opt-in and generate platform-matched staging assets',t=>{
+  const workspace=mkdtempSync(join(tmpdir(),'manee-verification-build-'));
+  t.after(()=>rmSync(workspace,{recursive:true,force:true}));
+  const mobile=join(workspace,'mobile');
+  mkdirSync(mobile);
+  for(const path of ['scripts','src','release139','assets']){
+    cpSync(new URL('../'+path,import.meta.url),join(mobile,path),{recursive:true});
+  }
+  cpSync(new URL('../package.json',import.meta.url),join(mobile,'package.json'));
+  mkdirSync(join(workspace,'scripts'));
+  cpSync(new URL('../../scripts/harden-ui.mjs',import.meta.url),join(workspace,'scripts','harden-ui.mjs'));
+  symlinkSync(fileURLToPath(new URL('../node_modules',import.meta.url)),join(mobile,'node_modules'),'junction');
+
+  const command='scripts/build-account-verification-qa.mjs';
+  const optIn='--account-verification-gate';
+  const output=join(mobile,'www');
+  for(const args of [['ios','staging'],['ios','production',optIn],['web','staging',optIn]]){
+    const result=spawnSync(process.execPath,[command,...args],{cwd:mobile,encoding:'utf8'});
+    assert.equal(result.status,1);
+    assert.match(result.stderr,/Specify android or ios, staging, and --account-verification-gate explicitly/);
+    assert.equal(existsSync(output),false);
+  }
+
+  for(const platform of ['android','ios']){
+    execFileSync(process.execPath,[command,platform,'staging',optIn],{cwd:mobile});
+    const load=name=>readFileSync(join(output,name),'utf8');
+    const info=JSON.parse(load('build-info.json'));
+    assert.equal(info.platform,platform);
+    assert.equal(info.environment,'staging');
+    assert.equal(info.candidate,'account-verification-qa');
+    assert.equal(info.servicesReady,false);
+    assert.equal(info.pushEnabled,false);
+    assert.equal(info.signupCheckoutEnabled,false);
+    const context={window:{}};
+    vm.runInNewContext(load('app-config.js'),context);
+    const config=context.window.MANEE_CONFIG;
+    assert.equal(config.projectRef,'obpkzecgswnfuyhwvncd');
+    assert.equal(config.accountVerificationPlatform,platform);
+    assert.equal(config.accountVerificationEnabled,true);
+    assert.match(load('index.html'),/manee_account_verification_status/);
+    assert.match(load('secure-auth.js'),/ManeeSecureAuth/);
+    assert.match(load('email-verification.js'),/manee-email-auth/);
+    if(platform==='ios')assert.match(load('native.js'),/staging-services-disabled\.invalid/);
+  }
+});
 
 function htmlFor(platform){
   const adapted = secureAuthHtml(hardenUi(adaptIos139(baseline,platform)));

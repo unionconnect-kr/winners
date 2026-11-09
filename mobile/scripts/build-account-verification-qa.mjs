@@ -11,14 +11,14 @@ import {
 } from './account-verification-html.mjs';
 
 const [platform, environment, optIn] = process.argv.slice(2);
-if (process.argv.length !== 5 || platform !== 'android' || environment !== 'staging' || optIn !== '--account-verification-gate') {
-  throw Error('Specify android staging --account-verification-gate explicitly.');
+if (process.argv.length !== 5 || !['android', 'ios'].includes(platform) || environment !== 'staging' || optIn !== '--account-verification-gate') {
+  throw Error('Specify android or ios, staging, and --account-verification-gate explicitly.');
 }
 
 const stagingRef = 'obpkzecgswnfuyhwvncd';
 const productionRef = 'bhwuuxcrzxespkjlmqxr';
 const mobile = fileURLToPath(new URL('..', import.meta.url));
-execFileSync(process.execPath, ['scripts/build-feedback144.mjs', 'android', 'staging'], {
+execFileSync(process.execPath, ['scripts/build-feedback144.mjs', platform, 'staging'], {
   cwd: mobile,
   stdio: 'inherit',
 });
@@ -38,19 +38,24 @@ function readStagingConfig(source) {
 }
 
 const info = JSON.parse(read('build-info.json'));
-if (info.platform !== 'android' || info.environment !== 'staging' || info.projectRef !== stagingRef ||
-    info.versionCode !== 45 || info.nativeAuthStorage !== 'keystore-v1' ||
-    info.pushEnabled !== false || info.signupCheckoutEnabled !== false || info.billingEnabled === true) {
-  throw Error('Unexpected Android staging QA base or service configuration.');
+if (info.platform !== platform || info.environment !== 'staging' || info.projectRef !== stagingRef ||
+    info.versionCode !== 45 || info.servicesReady !== false || info.pushEnabled !== false ||
+    info.signupCheckoutEnabled !== false || info.billingEnabled === true) {
+  throw Error('Unexpected native staging QA base or service configuration.');
+}
+if ((platform === 'android' && info.nativeAuthStorage !== 'keystore-v1') ||
+    (platform === 'ios' && !read('native.js').includes('https://staging-services-disabled.invalid')) ||
+    !read('secure-auth.js').includes('ManeeSecureAuth')) {
+  throw Error('Unexpected native staging bridge or authentication storage.');
 }
 
 const baseConfig = read('app-config.js');
 if (readStagingConfig(baseConfig).accountVerificationEnabled === true) {
   throw Error('The default staging build already enables account verification.');
 }
-const config = enableAccountVerificationConfig(baseConfig);
+const config = enableAccountVerificationConfig(baseConfig, platform);
 const qaConfig = readStagingConfig(config);
-if (qaConfig.accountVerificationEnabled !== true || qaConfig.accountVerificationPlatform !== 'android') {
+if (qaConfig.accountVerificationEnabled !== true || qaConfig.accountVerificationPlatform !== platform) {
   throw Error('The account verification QA opt-in is missing.');
 }
 
@@ -68,4 +73,4 @@ for (const asset of ['email-verification.js', 'email-verification.css']) {
   copyFileSync(resolve(mobile, 'src', asset), resolve(output, asset));
 }
 write('build-info.json', JSON.stringify({...info, candidate: 'account-verification-qa', accountVerificationEnabled: true}, null, 2) + '\n');
-console.log('Prepared opt-in Android staging assets for account verification QA.');
+console.log(`Prepared opt-in ${platform} staging assets for account verification QA.`);

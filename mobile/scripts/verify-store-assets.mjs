@@ -14,13 +14,14 @@ const release149=process.argv.includes('--release149');
 const release148=process.argv.includes('--release148');
 const release147=process.argv.includes('--release147');
 const release146=process.argv.includes('--release146');
+const iosRelease156=process.argv.includes('--ios-release156');
 const releaseAndroidOnly=release153||release154||release155||release156;
-const release152OrLater=release152||releaseAndroidOnly;
-const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154','--release155','--release156'];
+const release152OrLater=release152||releaseAndroidOnly||iosRelease156;
+const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154','--release155','--release156','--ios-release156'];
 const root=resolve(process.argv.slice(2).find(x=>!releaseFlags.includes(x))||fileURLToPath(new URL('../www',import.meta.url)));
 const info=JSON.parse(readFileSync(resolve(root,'build-info.json'),'utf8'));
 assert.equal(info.environment,'production');assert.equal(info.projectRef,'bhwuuxcrzxespkjlmqxr');
-const expectedVersion = release156 ? ['1.56',57]
+const expectedVersion = release156 || iosRelease156 ? ['1.56',57]
   : release155 ? ['1.55',56]
   : release154 ? ['1.54',55]
   : release153 ? ['1.53',54]
@@ -38,6 +39,7 @@ assert.equal(info.releasePurpose,'store-update');
 assert.equal(info.pushEnabled,true);assert.equal(info.billingEnabled,true);assert.equal(info.signupCheckoutEnabled,true);
 assert.ok(['ios','android'].includes(info.platform));
 if(releaseAndroidOnly)assert.equal(info.platform,'android');
+if(iosRelease156)assert.equal(info.platform,'ios');
 const config=readFileSync(resolve(root,'app-config.js'),'utf8'),html=readFileSync(resolve(root,'index.html'),'utf8'),native=readFileSync(resolve(root,'native.js'),'utf8');
 assert.match(config,/bhwuuxcrzxespkjlmqxr/);assert.doesNotMatch(config,/obpkzecgswnfuyhwvncd/);
 assert.doesNotMatch(html+native,/staging-services-disabled\.invalid|이 테스트 버전은 휴대폰 푸시|이 테스트 버전에서는 휴대폰 푸시|매니 1\.44 · 테스트 데이터만/);
@@ -69,5 +71,16 @@ if (release156) {
   assert.match(html, /id="owner-push-test-btn"/);
   assert.match(native, /manee-android-info/);
   assert.match(native, /android-info-version/);
+}
+if (iosRelease156) {
+  assert.equal(info.appInfoEnabled,true);
+  assert.equal(info.nativeAuthStorage,'keychain-v1');
+  assert.doesNotMatch(html, /s4Hint\(\s*(['"])매니 1\.45\1\s*\)/);
+  assert.match(html, /id="native-settings-btn">앱 정보/);
+  assert.match(html, /native-settings-btn"\)\?\.addEventListener\("click",\(\)=>void window\.MANEE_NATIVE\.openAppInfo\(\)\)/);
+  assert.match(html, /native-subscription-btn"\)\?\.addEventListener\("click",\(\)=>window\.MANEE_NATIVE\.openSubscriptionStatus\(\)\)/);
+  assert.match(native, /manee-ios-info/);
+  assert.match(native, /ios-info-version/);
+  assert.doesNotMatch(config+html, /accountVerificationEnabled|manee_account_verification_status/);
 }
 console.log('Verified complete production '+info.versionName+' assets: '+info.platform);

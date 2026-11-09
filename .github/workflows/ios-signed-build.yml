@@ -2,7 +2,7 @@ name: iOS signed archive
 
 on:
   push:
-    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016]
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016, codex/ios-final-156-20261109]
     paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
     inputs:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   archive:
-    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016')
+    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016' || (github.event_name == 'push' && github.ref == 'refs/heads/codex/ios-final-156-20261109'))
     runs-on: macos-15-intel
     timeout-minutes: 60
     defaults:
@@ -148,6 +148,9 @@ jobs:
         run: |
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
             npm run build:ios139
+          elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ]; then
+            node scripts/build-ios-release156.mjs ios production
+            node scripts/verify-store-assets.mjs --ios-release156
           else
             npm run build:production
           fi
@@ -158,6 +161,10 @@ jobs:
           build_number="1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           version_args=()
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then version_args=(MARKETING_VERSION=1.39); fi
+          if [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ]; then
+            build_number="156.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+            version_args=(MARKETING_VERSION=1.56)
+          fi
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/manee.xcarchive" \
@@ -176,6 +183,26 @@ jobs:
           echo 'Signed IPA exported. No App Store upload or review submission was performed.'
           echo '### Signed archive verified' >> "$GITHUB_STEP_SUMMARY"
           echo 'Signing succeeded; the IPA is an artifact only. Native subscriptions, push notifications, branding and real-device QA remain release gates.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify the exported 1.56 IPA matches the tested production assets
+        if: github.ref == 'refs/heads/codex/ios-final-156-20261109'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, plistlib, zipfile
+          archives = list((pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-ipa').glob('*.ipa'))
+          if len(archives) != 1:
+              raise SystemExit('Expected exactly one signed IPA')
+          expected_build = '156.' + os.environ['GITHUB_RUN_NUMBER'] + '.' + os.environ['GITHUB_RUN_ATTEMPT']
+          with zipfile.ZipFile(archives[0]) as archive:
+              app = 'Payload/App.app/'
+              info = plistlib.loads(archive.read(app + 'Info.plist'))
+              if (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != ('kr.co.manee.app', '1.56', expected_build):
+                  raise SystemExit('Unexpected signed app version or bundle')
+              for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'build-info.json'):
+                  if archive.read(app + 'public/' + asset) != (pathlib.Path('www') / asset).read_bytes():
+                      raise SystemExit('Exported IPA differs from tested asset: ' + asset)
+          print('Signed IPA matches the verified MANEE 1.56 production assets.')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: manee-ios-signed-${{ github.run_number }}-${{ github.run_attempt }}
@@ -183,7 +210,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Upload to App Store Connect for TestFlight
-        if: github.event_name == 'workflow_dispatch' && inputs.upload_testflight && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'workflow_dispatch' && inputs.upload_testflight && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/codex/ios-final-156-20261109')
         env:
           MANEE_UPLOAD_TESTFLIGHT: 'true'
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -196,6 +223,24 @@ jobs:
           test "${#ipas[@]}" -eq 1
           node scripts/upload-testflight.mjs "${ipas[0]}"
           echo 'Upload accepted; Apple processing is pending. No review submission or tester invitation was performed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify Apple processing and connect the existing internal QA group
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/ios-final-156-20261109'
+        env:
+          MANEE_INTERNAL_BUILD: ios-20261109-1.56
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/connect-testflight.mjs | tee "$RUNNER_TEMP/manee156-testflight-status.json"
+          cat "$RUNNER_TEMP/manee156-testflight-status.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always() && github.ref == 'refs/heads/codex/ios-final-156-20261109'
+        with:
+          name: manee-ios-1.56-testflight-status
+          path: ${{ runner.temp }}/manee156-testflight-status.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Remove temporary signing materials
         if: always()
         run: |

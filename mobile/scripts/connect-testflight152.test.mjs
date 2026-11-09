@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectTestFlight152} from './connect-testflight152.mjs';
+import {connectTestFlight} from './connect-testflight.mjs';
 
 const branch='refs/heads/codex/final-email-billing-152-20261106';
 const env={GITHUB_REPOSITORY:'unionconnect-kr/winners',GITHUB_REF:branch,GITHUB_EVENT_NAME:'push',
   GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/mobile152-release.yml@${branch}`,
   GITHUB_RUN_NUMBER:'1',GITHUB_RUN_ATTEMPT:'1',MANEE_INTERNAL_BUILD:'ios-20261106-1.52'};
 const buildId='11111111-1111-1111-1111-111111111111';
-function mock({version='152.1.1',marketing='1.52',groupInternal=true,processing='VALID',linked=false}={}) {
+function mock({version='152.1.1',marketing='1.52',groupInternal=true,processing='VALID',linked=false,betaState='IN_BETA_TESTING'}={}) {
   const calls=[];let connected=linked;
   const request=async(url,options)=>{
     const path=new URL(url).pathname;calls.push({path,method:options.method,body:options.body});
@@ -22,7 +23,7 @@ function mock({version='152.1.1',marketing='1.52',groupInternal=true,processing=
         connected=true;return {ok:true,status:204};
       }
       data=connected?[{type:'builds',id:buildId}]:[];
-    } else if(path.endsWith('/buildBetaDetail'))data={attributes:{internalBuildState:'IN_BETA_TESTING'}};
+    } else if(path.endsWith('/buildBetaDetail'))data={attributes:{internalBuildState:betaState}};
     else data={id:'6820833544',attributes:{bundleId:'kr.co.manee.app'}};
     return {ok:true,status:200,json:async()=>({data})};
   };
@@ -52,4 +53,24 @@ test('internal QA connection is idempotent and never selects a mismatched build'
     const options=mock(overrides);await assert.rejects(connectTestFlight152(env,options),error);
     assert.equal(options.calls.filter(x=>x.method==='POST').length,0);
   }
+});
+
+test('1.56 only connects the exact signed run to the existing internal group and verifies beta readiness',async()=>{
+  const branch156='refs/heads/codex/ios-final-156-20261109';
+  const env156={...env,GITHUB_REF:branch156,
+    GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${branch156}`,
+    GITHUB_RUN_NUMBER:'11',GITHUB_RUN_ATTEMPT:'2',MANEE_INTERNAL_BUILD:'ios-20261109-1.56'};
+  const build156={version:'156.11.2',marketing:'1.56'};
+  const options=mock(build156);
+  const status=await connectTestFlight(env156,options);
+  assert.equal(status.marketingVersion,'1.56');
+  assert.equal(status.version,'156.11.2');
+  assert.equal(status.internalBuildState,'IN_BETA_TESTING');
+  assert.equal(options.calls.filter(x=>x.method==='POST').length,1);
+  await assert.rejects(connectTestFlight({...env156,GITHUB_REF:branch},{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
+  await assert.rejects(connectTestFlight152(env156,{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
+  await assert.rejects(connectTestFlight(env156,mock({...build156,betaState:'READY_FOR_BETA_TESTING'})),/INTERNAL_CONNECT_BETA_NOT_READY/);
+  const wrongBuild=mock({...build156,version:'156.11.1'});
+  await assert.rejects(connectTestFlight(env156,wrongBuild),/INTERNAL_CONNECT_BUILD_NOT_READY/);
+  assert.equal(wrongBuild.calls.filter(x=>x.method==='POST').length,0);
 });

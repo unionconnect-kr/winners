@@ -1,4 +1,5 @@
 import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet} from './subscription-sheet.mjs';
+import { App } from '@capacitor/app';
 import { Geolocation } from '@capacitor/geolocation';
 
 import { createAndroidGeolocation as createNativeGeolocation } from './android-geolocation.js';
@@ -50,6 +51,40 @@ function showSheet(sheet){
   sheet.close=()=>sheet.dispatchEvent(new Event('close'));
  }
 }
+async function openAppInfo() {
+ if (document.getElementById('manee-ios-info')) return;
+ const sheet = document.createElement('dialog');
+ sheet.id = 'manee-ios-info';
+ sheet.setAttribute('aria-labelledby', 'ios-info-title');
+ sheet.style.cssText = 'max-width:360px;width:85%;border:0;border-radius:20px;padding:24px;line-height:1.7;box-sizing:border-box';
+ sheet.innerHTML = `
+  <h2 id="ios-info-title" style="margin:0;color:#173f2e;font-size:22px">앱 정보</h2>
+  <dl style="margin:18px 0;color:#203c30">
+   <div style="display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e2ebe5">
+    <dt>앱 이름</dt><dd id="ios-info-name" style="margin:0;font-weight:700;text-align:right;overflow-wrap:anywhere">매니</dd>
+   </div>
+   <div style="display:flex;justify-content:space-between;gap:16px;padding:10px 0">
+    <dt>앱 버전</dt><dd id="ios-info-version" role="status" style="margin:0;font-weight:700;text-align:right;overflow-wrap:anywhere">확인 중…</dd>
+   </div>
+  </dl>
+  <button type="button" style="width:100%;min-height:48px;padding:12px;border:0;border-radius:12px;background:#16774c;color:#fff;font:inherit;font-weight:700">닫기</button>`;
+ const name = sheet.querySelector('#ios-info-name');
+ const version = sheet.querySelector('#ios-info-version');
+ sheet.querySelector('button').addEventListener('click', () => sheet.close());
+ sheet.addEventListener('close', () => sheet.remove(), {once:true});
+ document.body.append(sheet);
+ showSheet(sheet);
+ try {
+  const info = await App.getInfo();
+  if (!sheet.isConnected) return;
+  if (typeof info?.name === 'string' && info.name.trim()) name.textContent = info.name.trim();
+  version.textContent = typeof info?.version === 'string' && info.version.trim()
+   ? info.version.trim()
+   : '확인할 수 없어요';
+ } catch {
+  if (sheet.isConnected) version.textContent = '확인할 수 없어요';
+ }
+}
 function openSubscriptionStatus(){
  if(document.getElementById('manee-subscription-status'))return;
  const c=getContext();if(!c?.userId||!c.storeId||c.role!=='storeOwner')return;
@@ -78,6 +113,7 @@ function openSubscriptionStatus(){
   const view=subscriptionView(access,bill,unconfigured,'Apple');
   title.textContent=view.title;message.textContent=view.message;sheetView.promotion.hidden=access?.canWrite===true;
   if(view.testActive){sandbox.hidden=false;sandbox.textContent='Apple 테스트 구독이 확인됐습니다. 테스트 결제는 정식 이용권과 구분됩니다.';}
+  restore.textContent=access?.canWrite===true?'구독 관리·복원':'무료체험·구독 확인';
   restore.hidden=!info?.appAccountToken;refresh.disabled=false;
  }
  void load().catch(()=>{if(same()){refresh.disabled=false;message.textContent='잠시 후 새로고침해 주세요.';}});
@@ -149,6 +185,7 @@ window.MANEE_NATIVE={
  },
  subscriptionDenied(){if(getContext()?.role==='storeOwner')openSubscriptionStatus();},
  configure(context,onNotification){getContext=context;if(onNotification)openNotification=onNotification;void navigation.flush();},openSettings,
+ openAppInfo,
  push(action){return notifications.action(action);},
  openSubscriptionStatus,
  refresh(){

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script,createContext} from 'node:vm';
 import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet} from '../src/subscription-sheet.mjs';
+import {subscriptionView} from '../src/store-subscription.mjs';
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture(overrides={}){
+function fixture(overrides={},access=null){
  let body,purchases=0;
  class Element{
   constructor(tag){this.tagName=tag;this.children=[];this.parent=null;this.style={cssText:''};this.dataset={};this.listeners={};this.hidden=false;this.disabled=false;}
@@ -20,10 +21,10 @@ function fixture(overrides={}){
  body=new Element('body');
  const document={body,createElement:tag=>new Element(tag),getElementById:id=>body.children.find(c=>c.id===id)};
  const billing={status:async()=>({ready:true,appAccountToken:'token',subscriptions:[]}),products:async()=>({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:false}),purchase:async()=>{purchases++;return {status:'cancelled'};},restore:async()=>({status:'empty'}),...overrides};
- const window={};const c={userId:'owner',storeId:'store',role:'storeOwner'};
+ const window={};const c={userId:'owner',storeId:'store',role:'storeOwner',db:{rpc:async()=>({data:access})}};
  const context=createContext({window,document,localStorage:{},registerPlugin:()=>({addListener:()=>{}}),Geolocation:{},PushNotifications:{},
   createBillingClient:()=>billing,createAndroidGeolocation:()=>({}),createNativeGeolocation:()=>({}),createIosPush:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>()=>{},
-  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet});
+  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet,subscriptionView});
  new Script(readFileSync(new URL('../src/native.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'')).runInContext(context);
  window.MANEE_NATIVE.configure(()=>c);
  const descendants=e=>e.children.flatMap(child=>[child,...descendants(child)]);
@@ -54,4 +55,12 @@ test('iOS restore while product loading cannot show a new purchase button for an
  await f.button('기존 구독 복원').onclick();
  finish({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:false});await opening;
  assert.equal(f.purchases(),0);assert.equal(f.button('월 구독 시작').hidden,true);
+});
+test('iOS active account status offers management and restoration without starting a purchase',async()=>{
+ const f=fixture({}, {enforced:true,canWrite:true});
+ f.native.openSubscriptionStatus();await settle();
+ assert.equal(f.button('구독 관리·복원').hidden,false);
+ f.button('구독 관리·복원').onclick();await settle();
+ assert.ok(f.button('기존 구독 복원'));
+ assert.equal(f.purchases(),0);
 });
