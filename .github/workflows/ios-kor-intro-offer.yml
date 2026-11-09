@@ -1,0 +1,33 @@
+name: Align MANEE Korea iOS two-month trial
+on:
+  push:
+    branches: [codex/ios-korea-intro-2m-20261109]
+    paths: ['.github/workflows/ios-kor-intro-offer.yml', '.github/scripts/ios-kor-intro-offer*.mjs']
+permissions:
+  contents: read
+concurrency:
+  group: manee-kor-ios-two-month-intro-20261109
+  cancel-in-progress: false
+jobs:
+  align-offer:
+    if: github.repository == 'unionconnect-kr/winners' && github.event_name == 'push' && github.ref == 'refs/heads/codex/ios-korea-intro-2m-20261109'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test .github/scripts/ios-kor-intro-offer.test.mjs
+      - name: Apply and verify only the Korean introductory offer
+        env:
+          MANEE_KOR_INTRO_OFFER: 20261109-free-trial-two-months
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/ios-kor-intro-offer.mjs | tee "$RUNNER_TEMP/manee-ios-kor-intro-offer.json"
+          cat "$RUNNER_TEMP/manee-ios-kor-intro-offer.json" >> "$GITHUB_STEP_SUMMARY"
