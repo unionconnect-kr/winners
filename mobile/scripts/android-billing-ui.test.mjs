@@ -15,6 +15,37 @@ test('trial offer requires exactly sixty free days before the monthly price',()=
   assert.deepEqual(testOffers([p]).map(o=>o.offerToken),['paid']);
  }
 });
+test('a Google Play trial expressed as eight weeks and four days is exactly sixty days', () => {
+ for (const period of ['P60D', 'P8W4D', 'P1W53D']) {
+  const candidate = structuredClone(product);
+  candidate.offers[1].phases[0].period = period;
+  const [offer] = testOffers([candidate]);
+  assert.equal(offer.offerToken, 'trial');
+  assert.equal(offer.trialDays, 60);
+  assert.equal(offer.label, '무료 (60일) → ₩9,900 (1개월)');
+ }
+});
+test('near misses and other billing terms stay outside the exact sixty-day selection', () => {
+ const changes = [
+  ...['P8W3D', 'P8W5D', 'P2M', 'P1M30D', 'P60DT0S', 'PT1440H', 'P8W+4D', 'P8W4D\n',
+   'P0W60D', 'P008W4D', 'P8W4D4D'].map(period => trial => {trial.phases[0].period = period;}),
+  trial => {trial.phases[0].amountMicros = 1000000;},
+  trial => {trial.phases[0].currency = 'USD';},
+  trial => {trial.phases[0].cycles = 2;},
+  trial => {trial.phases[0].recurrenceMode = 3;},
+  trial => {trial.phases[1].amountMicros = 10900000000;},
+  trial => {trial.phases[1].period = 'P2M';},
+  trial => {trial.phases[1].recurrenceMode = 2;},
+  trial => {trial.basePlanId = 'annual';},
+ ];
+ for (const change of changes) {
+  const candidate = structuredClone(product);
+  candidate.offers[1].phases[0].period = 'P8W4D';
+  candidate.offers[1].phases[1] = {...candidate.offers[1].phases[1]};
+  change(candidate.offers[1]);
+  assert.deepEqual(testOffers([candidate]).map(offer => [offer.offerToken, offer.trialDays]), [['paid', 0]]);
+ }
+});
 test('renamed Console offer IDs preserve an eligible exact 60-day trial and duplicate offers create one choice',()=>{
  const p=structuredClone(product);
  p.offers[1].offerId='welcome-2026';p.offers.push({...p.offers[1],offerToken:'second-trial'});
@@ -79,6 +110,25 @@ function dialogFixture(overrides={}){
 const diagnosticPanel = fixture => fixture.document.body.children[0].children.find(node =>
  node.tagName === 'details' && node.children[0]?.textContent === 'Play 혜택 진단');
 const diagnosticText = element => [element.textContent || '', ...element.children.map(diagnosticText)].join(' ');
+
+test('the normal Play sheet displays the eight-week four-day offer as sixty days and opens that trial', async () => {
+ const candidate = structuredClone(product);
+ candidate.offers[1].phases[0].period = 'P8W4D';
+ let launched;
+ const fixture = dialogFixture({products:async () => ({products:[candidate]}),
+  purchase:async selection => {launched = selection; return {status:'cancelled'};}});
+ await settle();
+ const [buy] = fixture.visibleOffers();
+ assert.equal(buy.textContent, '60일 무료체험 후 월 9,900원 구독 · 테스트 구매');
+ const copy = diagnosticText(diagnosticPanel(fixture));
+ assert.match(copy, /60일 제안: 선택됨/);
+ assert.match(copy, /trial-60days · monthly · 선택됨/);
+ assert.match(copy, /P8W4D · KRW 0 micros · 횟수 1 · 반복 2/);
+ assert.equal(launched, undefined);
+ await buy.onclick();
+ assert.equal(launched.offerToken, 'trial');
+ assert.equal(launched.trialDays, 60);
+});
 
 test('Play diagnostics distinguish a missing trial from a returned trial rejected by the existing filter', async () => {
  const paidSixtyDays = {...product.offers[0], offerId:'paid-long-phase', phases:[{...phase, period:'P60D'}]};

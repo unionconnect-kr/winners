@@ -1,4 +1,12 @@
 import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,closeSubscriptionSheet,reuseSubscriptionSheet} from './subscription-sheet.mjs';
+
+function dayBasedPeriod(period) {
+ if (typeof period !== 'string') return null;
+ const match = /^P(?:([1-9]\d{0,2})W)?(?:([1-9]\d{0,2})D)?$/.exec(period);
+ if (!match || match[0] !== period || (!match[1] && !match[2])) return null;
+ return Number(match[1] ?? 0) * 7 + Number(match[2] ?? 0);
+}
+
 // Only offers returned as eligible by Google Play are shown. Never invent prices.
 export function testOffers(products,productId='manee.store1.monthly') {
  if(!/^manee\.store[1-9][0-9]*\.monthly$/.test(productId))return [];
@@ -6,7 +14,7 @@ export function testOffers(products,productId='manee.store1.monthly') {
  // Console IDs name offers; their actual pricing phases define the promise.
  // An eligible 60-day offer may be renamed without changing its terms.
  const isTrial=o=>o.phases?.length===2 &&
-  Number(o.phases[0]?.amountMicros)===0 && o.phases[0]?.period==='P60D' &&
+  Number(o.phases[0]?.amountMicros)===0 && dayBasedPeriod(o.phases[0]?.period)===60 &&
   o.phases[0].cycles===1 && o.phases[0].recurrenceMode===2;
  // Keep the server-allocated base plan; receipt verification pins this ID.
  const offers=(product?.offers||[]).filter(o=>o.basePlanId==='monthly' &&
@@ -18,7 +26,7 @@ export function testOffers(products,productId='manee.store1.monthly') {
  // duplicate buttons when multiple eligible offers have identical terms.
  const selected=offers.find(isTrial)||offers.find(o=>!o.offerId)||offers[0];
  return (selected?[selected]:[]).map(o=>({productId:product.productId,offerToken:o.offerToken,trialDays:isTrial(o)?60:0,price:'9,900원',
-  label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':p.period==='P60D'?'60일':p.period})`).join(' → ')}));
+  label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':dayBasedPeriod(p.period)===60?'60일':p.period})`).join(' → ')}));
 }
 
 const diagnosticOfferKinds = ['trial-60days', 'trial-1month', 'base', 'other'];
@@ -41,7 +49,7 @@ function addOfferDiagnostics(view, products, productId, selected) {
  const rows = returned.map(offer => {
   const kind = diagnosticOfferKind(offer);
   const phases = Array.isArray(offer.phases) ? offer.phases : [];
-  const trialCandidate = kind === 'trial-60days' || phases.some(phase => phase?.period === 'P60D' && phase.amountMicros === 0);
+  const trialCandidate = kind === 'trial-60days' || phases.some(phase => dayBasedPeriod(phase?.period) === 60 && phase.amountMicros === 0);
   return {offer, kind, phases, trialCandidate, chosen: Boolean(selected && offer.offerToken === selected.offerToken)};
  });
  const hasTrialCandidate = rows.some(row => row.trialCandidate);
@@ -83,13 +91,14 @@ function addOfferDiagnostics(view, products, productId, selected) {
   const phasesTruncated = phases.length > diagnosticPhaseLimit;
   const shownPhases = phasesTruncated ? [...phases.slice(0, diagnosticPhaseLimit - 1), renewal] : phases;
   for (const phase of shownPhases) {
-   const period = typeof phase?.period === 'string' && /^P(?:\d{1,3}[DWMY]|T\d{1,3}[HMS])$/.exec(phase.period)?.[0] === phase.period
-    ? phase.period : '기타';
+   const period = phase?.period;
+   const knownPeriod = dayBasedPeriod(period) !== null ||
+    (typeof period === 'string' && /^P(?:\d{1,3}[DWMY]|T\d{1,3}[HMS])$/.exec(period)?.[0] === period);
    const currency = diagnosticCurrencies.has(phase?.currency) ? phase.currency : '기타';
    const amount = diagnosticInteger(phase?.amountMicros, 1_000_000_000_000);
    const cycles = diagnosticInteger(phase?.cycles, 99);
    const recurrence = [1, 2, 3].includes(phase?.recurrenceMode) ? phase.recurrenceMode : '기타';
-   view.el('li', `${period} · ${currency} ${amount} micros · 횟수 ${cycles} · 반복 ${recurrence}`, phaseList);
+   view.el('li', `${knownPeriod ? period : '기타'} · ${currency} ${amount} micros · 횟수 ${cycles} · 반복 ${recurrence}`, phaseList);
   }
   if (phasesTruncated) view.el('p', '중간 가격 단계 생략', row, 'margin:0');
  }

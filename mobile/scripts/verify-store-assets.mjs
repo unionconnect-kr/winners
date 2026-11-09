@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
+const release155=process.argv.includes('--release155');
 const release154=process.argv.includes('--release154');
 const release153=process.argv.includes('--release153');
 const release152=process.argv.includes('--release152');
@@ -12,13 +13,14 @@ const release149=process.argv.includes('--release149');
 const release148=process.argv.includes('--release148');
 const release147=process.argv.includes('--release147');
 const release146=process.argv.includes('--release146');
-const releaseAndroidOnly=release153||release154;
+const releaseAndroidOnly=release153||release154||release155;
 const release152OrLater=release152||releaseAndroidOnly;
-const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154'];
+const releaseFlags=['--release146','--release147','--release148','--release149','--release150','--release151','--release152','--release153','--release154','--release155'];
 const root=resolve(process.argv.slice(2).find(x=>!releaseFlags.includes(x))||fileURLToPath(new URL('../www',import.meta.url)));
 const info=JSON.parse(readFileSync(resolve(root,'build-info.json'),'utf8'));
 assert.equal(info.environment,'production');assert.equal(info.projectRef,'bhwuuxcrzxespkjlmqxr');
-const expectedVersion = release154 ? ['1.54',55]
+const expectedVersion = release155 ? ['1.55',56]
+  : release154 ? ['1.54',55]
   : release153 ? ['1.53',54]
   : release152 ? ['1.52',53]
   : release151 ? ['1.51',52]
