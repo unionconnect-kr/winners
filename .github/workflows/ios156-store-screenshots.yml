@@ -1,0 +1,158 @@
+name: MANEE 1.56 native iPhone store screenshots
+
+on:
+  push:
+    branches: [codex/ios-store-screenshots-156-20261109]
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-store-screenshots-156-20261109'
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Select Xcode and install dependencies
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          npm ci
+      - name: Prepare tested 1.56 UI and offline capture data
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = fe353ccab36cc02098ec5a9cfefa942380028399
+          node scripts/build-ios-release156.mjs ios production
+          node scripts/verify-store-assets.mjs --ios-release156
+          node scripts/prepare-ios-store-screenshots.mjs
+          npm run sync:ios
+      - name: Compile native iPhone Simulator app without signing
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/manee-sim-build" \
+            MARKETING_VERSION=1.56 CURRENT_PROJECT_VERSION=156.15.1 \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/manee-sim.log" 2>&1 || {
+              tail -n 75 "$RUNNER_TEMP/manee-sim.log"; exit 1;
+            }
+      - name: Capture authentic app screens on supported iPhone Simulators
+        run: |
+          set -euo pipefail
+          export CAPTURE_OUTPUT="$RUNNER_TEMP/manee-ios-store-screenshots"
+          mkdir -p "$CAPTURE_OUTPUT"
+          exec > >(tee "$RUNNER_TEMP/manee-capture.log") 2>&1
+          set -x
+          app="$RUNNER_TEMP/manee-sim-build/Build/Products/Debug-iphonesimulator/App.app"
+          test -d "$app"
+          cmp www/index.html "$app/public/index.html"
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/manee-sim-devices.json"
+          udid="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["devices"]; print(next(x["udid"] for x in d["com.apple.CoreSimulator.SimRuntime.iOS-26-2"] if x["name"]=="iPhone 17 Pro" and x["isAvailable"]))' "$RUNNER_TEMP/manee-sim-devices.json")"
+          echo "$udid" > "$RUNNER_TEMP/manee-sim-udid.txt"
+          capture_device() {
+            local model="$1" width="$2" height="$3" target="$4"
+            local udid data marker scene image scratch attempt
+            udid="$(cat "$RUNNER_TEMP/manee-sim-udid.txt")"
+            if [[ "$(xcrun simctl list devices booted | grep -c "$udid" || true)" == '0' ]]; then
+              xcrun simctl boot "$udid"
+            fi
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl ui "$udid" appearance light
+            xcrun simctl status_bar "$udid" override --time "9:41" --dataNetwork wifi \
+              --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 \
+              --batteryState discharging --batteryLevel 100 || true
+            xcrun simctl install "$udid" "$app"
+            data="$(xcrun simctl get_app_container "$udid" kr.co.manee.app data)"
+            marker="$data/tmp/manee-store-capture-ready.txt"
+            mkdir -p "$CAPTURE_OUTPUT/$target"
+            shift 4
+            for scene in "$@"; do
+              rm -f "$marker"
+              SIMCTL_CHILD_MANEE_STORE_CAPTURE_SCENE="$scene" \
+                xcrun simctl launch --terminate-running-process "$udid" kr.co.manee.app \
+                -AppleLanguages '(ko-KR)' -AppleLocale ko_KR
+              for attempt in {1..100}; do
+                if [[ -f "$marker" ]] && [[ "$(cat "$marker")" == "$scene" ]]; then break; fi
+                sleep 1
+              done
+              if [[ ! -f "$marker" ]] || [[ "$(cat "$marker")" != "$scene" ]]; then
+                echo "Could not render $model $scene"
+                cat "$data/tmp/manee-store-capture-native.txt" || true
+                xcrun simctl spawn "$udid" log show --last 3m --style compact --predicate 'process == "App"' > "$RUNNER_TEMP/manee-app-runtime.log" 2>&1 || true
+                xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/failed-$target-$scene.png"
+                exit 1
+              fi
+              image="$CAPTURE_OUTPUT/$target/$scene.jpg"
+              scratch="$RUNNER_TEMP/manee-sim-frame.png"
+              xcrun simctl io "$udid" screenshot "$scratch"
+              sips -s format jpeg -s formatOptions best "$scratch" --out "$image" >/dev/null
+              sips -g pixelWidth -g pixelHeight "$image" | tee "$RUNNER_TEMP/manee-sim-dimensions.txt"
+              grep -Eq "pixelWidth: ${width}$" "$RUNNER_TEMP/manee-sim-dimensions.txt"
+              grep -Eq "pixelHeight: ${height}$" "$RUNNER_TEMP/manee-sim-dimensions.txt"
+            done
+          }
+
+          capture_device 'iPhone 17 Pro' 1206 2622 'iphone-dynamic-island-medium' \
+            01-home 02-schedule 03-sales 04-expenses 05-operations 06-report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee-ios156-native-store-screenshots
+          path: ${{ runner.temp }}/manee-ios-store-screenshots
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Capture in-app subscription for separate Apple review metadata
+        if: success()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          export CAPTURE_OUTPUT="$RUNNER_TEMP/manee-ios-subscription-review"
+          mkdir -p "$CAPTURE_OUTPUT"
+          app="$RUNNER_TEMP/manee-sim-build/Build/Products/Debug-iphonesimulator/App.app"
+          udid="$(cat "$RUNNER_TEMP/manee-sim-udid.txt")"
+          data="$(xcrun simctl get_app_container "$udid" kr.co.manee.app data)"
+          marker="$data/tmp/manee-store-capture-ready.txt"
+          rm -f "$marker"
+          SIMCTL_CHILD_MANEE_STORE_CAPTURE_SCENE=07-subscription \
+            xcrun simctl launch --terminate-running-process "$udid" kr.co.manee.app \
+            -AppleLanguages '(ko-KR)' -AppleLocale ko_KR
+          for attempt in {1..100}; do
+            if [[ -f "$marker" ]] && [[ "$(cat "$marker")" == '07-subscription' ]]; then break; fi
+            sleep 1
+          done
+          test "$(cat "$marker")" = '07-subscription'
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/manee-sim-review.png"
+          sips -s format jpeg -s formatOptions best "$RUNNER_TEMP/manee-sim-review.png" --out "$CAPTURE_OUTPUT/07-subscription.jpg"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee-ios156-native-subscription-review
+          path: ${{ runner.temp }}/manee-ios-subscription-review
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: manee-ios156-native-capture-diagnostics
+          path: |
+            ${{ runner.temp }}/manee-sim.log
+            ${{ runner.temp }}/manee-capture.log
+            ${{ runner.temp }}/manee-app-runtime.log
+            ${{ runner.temp }}/manee-boot.log
+            ${{ runner.temp }}/failed-*.png
+          if-no-files-found: ignore
+          retention-days: 7
