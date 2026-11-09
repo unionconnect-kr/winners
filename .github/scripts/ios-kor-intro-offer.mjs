@@ -5,7 +5,8 @@ const app = '6820833544';
 const subscription = '6820834755';
 const product = 'manee.store1.monthly';
 const date = '2026-11-09';
-const starts = '2026-11-10';
+const ends = '2026-11-10';
+const starts = '2026-11-11';
 const branch = 'refs/heads/codex/ios-korea-intro-2m-20261109';
 const workflow = 'unionconnect-kr/winners/.github/workflows/ios-kor-intro-offer.yml@' + branch;
 const offerPath = '/v1/subscriptions/' + subscription + '/introductoryOffers?filter%5Bterritory%5D=KOR&include=territory&limit=200';
@@ -91,8 +92,8 @@ export async function alignIntroOffer(env, {
   if (!settled(before)) {
     const beforeActive = before.filter(x => !x.attributes?.endDate || x.attributes.endDate >= date);
     requireState(now.toISOString().slice(0,10) === date, 'OUTSIDE_CHANGE_DATE');
-    requireState(beforeActive.length === 1 && (isPrevious(beforeActive[0],null) || isPrevious(beforeActive[0],date)), 'UNEXPECTED_CURRENT_OFFER');
-    if (isPrevious(beforeActive[0],null)) await endPrevious(date);
+    requireState(beforeActive.length === 1 && (isPrevious(beforeActive[0],null) || isPrevious(beforeActive[0],ends)), 'UNEXPECTED_CURRENT_OFFER');
+    if (isPrevious(beforeActive[0],null)) await endPrevious(ends);
 
     try {
       await api('/v1/subscriptionIntroductoryOffers', {
@@ -112,7 +113,7 @@ export async function alignIntroOffer(env, {
         // explicit Apple rejection and our unchanged one-offer state.
         if (!/^KOR_OFFER_HTTP_4\d\d/.test(error.message)) throw error;
         const active = current.filter(x => !x.attributes?.endDate || x.attributes.endDate >= date);
-        requireState(active.length === 1 && isPrevious(active[0],date),'ROLLBACK_UNCERTAIN');
+        requireState(active.length === 1 && isPrevious(active[0],ends),'ROLLBACK_UNCERTAIN');
         await endPrevious(null);
         throw error;
       }

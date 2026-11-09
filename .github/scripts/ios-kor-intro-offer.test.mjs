@@ -16,9 +16,9 @@ const old = {
 };
 const desired = {
   ...old,id:'new-korean-offer',
-  attributes:{...old.attributes,duration:'TWO_MONTHS',startDate:'2026-11-10'},
+  attributes:{...old.attributes,duration:'TWO_MONTHS',startDate:'2026-11-11'},
 };
-const ended={...old,attributes:{...old.attributes,endDate:'2026-11-09'}};
+const ended={...old,attributes:{...old.attributes,endDate:'2026-11-10'}};
 function fixture({offers=[old],price='9900',after=[ended,desired],bundle='kr.co.manee.app',reject=false}={}) {
   const posts=[],patches=[];
   const request=async (url,options)=>{
@@ -69,11 +69,11 @@ test('ends only the original offer and verifies one new nonoverlapping two-month
   const f=fixture();
   const result=await alignIntroOffer(env,f.options);
   assert.equal(result.changed,true);
-  assert.equal(result.startDate,'2026-11-10');
-  assert.deepEqual(f.patches,['2026-11-09']);
+  assert.equal(result.startDate,'2026-11-11');
+  assert.deepEqual(f.patches,['2026-11-10']);
   assert.deepEqual(f.posts,[{data:{
     type:'subscriptionIntroductoryOffers',
-    attributes:{startDate:'2026-11-10',duration:'TWO_MONTHS',offerMode:'FREE_TRIAL',numberOfPeriods:1},
+    attributes:{startDate:'2026-11-11',duration:'TWO_MONTHS',offerMode:'FREE_TRIAL',numberOfPeriods:1},
     relationships:{subscription:{data:{type:'subscriptions',id:'6820834755'}},territory:korea},
   }}]);
 });
@@ -100,13 +100,13 @@ test('unverified creation polls without creating a second offer',async()=>{
   const f=fixture({after:[ended]});
   await assert.rejects(alignIntroOffer(env,f.options),/POST_NOT_VERIFIED/);
   assert.equal(f.posts.length,1);
-  assert.deepEqual(f.patches,['2026-11-09']);
+  assert.deepEqual(f.patches,['2026-11-10']);
 });
 test('definite creation rejection restores the previous indefinite offer',async()=>{
   const f=fixture({reject:true});
   await assert.rejects(alignIntroOffer(env,f.options),/HTTP_409_STATE_ERROR/);
   assert.equal(f.posts.length,1);
-  assert.deepEqual(f.patches,['2026-11-09',null]);
+  assert.deepEqual(f.patches,['2026-11-10',null]);
 });
 test('resumes from a verified end date without patching it again',async()=>{
   const f=fixture({offers:[ended]});
