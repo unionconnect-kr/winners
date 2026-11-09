@@ -1,0 +1,27 @@
+name: MANEE App Review demo smoke check
+on:
+  push:
+    branches: [codex/ios-review-demo-smoke-20261109]
+    paths: ['.github/workflows/ios-review-demo-smoke.yml', '.github/scripts/ios-review-demo-smoke.mjs']
+permissions:
+  contents: read
+concurrency:
+  group: manee-app-review-demo-smoke
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-review-demo-smoke-20261109'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify demo owner and expired checkout status without purchasing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          NODE_OPTIONS: ''
+          NODE_DEBUG: ''
+        run: node .github/scripts/ios-review-demo-smoke.mjs
