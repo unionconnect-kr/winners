@@ -36,14 +36,20 @@ Deno.serve(async(req)=>{
    const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'')||'';
    const {data,error}=await admin.auth.getUser(token);if(error||!data.user)return invalid();
    let sid='';try{sid=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id||'';}catch{return invalid();}
+   if(!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sid))return invalid();
    actor={user_id:data.user.id,session_id:sid};
-   const cred=await rpc('credentials',actor);if(!cred?.ok||cred.username!==uname)return invalid();
    if(action==='request'){
-    if(!validPassword(b.current_password))return invalid();
-    const userClient=createClient(url,pub,{auth:{persistSession:false,autoRefreshToken:false}});
-    const signed=await userClient.auth.signInWithPassword({email:cred.email,password:b.current_password});
-    if(signed.error||signed.data.user?.id!==data.user.id)return invalid();
-    await userClient.auth.signOut({scope:'local'});
+    const cred=await rpc('credentials',actor);
+    if(cred?.error==='social_reauth_required')return reply({ok:false,error:'social_reauth_required',message:'간편로그인으로 다시 로그인한 뒤 휴대폰 인증을 진행해 주세요.'},403);
+    if(!cred?.ok||cred.username!==uname)return invalid();
+    if(cred.bind_method==='password'){
+     if(!validPassword(b.current_password))return invalid();
+     const userClient=createClient(url,pub,{auth:{persistSession:false,autoRefreshToken:false}});
+     const signed=await userClient.auth.signInWithPassword({email:cred.email,password:b.current_password});
+     if(signed.error||signed.data.user?.id!==data.user.id)return invalid();
+     await userClient.auth.signOut({scope:'local'});
+    }else if(cred.bind_method!=='recent_social')return invalid();
+    actor.bind_method=cred.bind_method;
    }
   }
   if(action==='request'){
@@ -69,16 +75,21 @@ Deno.serve(async(req)=>{
   }
   if(action!==purpose||!['reset','bind'].includes(action)||!/^[0-9a-f]{64}$/.test(String(b.proof||'')))return invalid();
   if(action==='reset'&&!validNewPassword(b.new_password))return reply({error:'invalid_password',message:'비밀번호는 8자 이상, 영문과 숫자를 모두 포함해 주세요. (72바이트 이하)'},400);
-  const claim=await rpc('claim',{id:b.challenge_id,purpose,username:uname,proof_hash:await sha(b.proof),...actor});
+  const bindingProof={id:b.challenge_id,purpose,username:uname,proof_hash:await sha(b.proof),...actor};
+  if(action==='bind'){
+   const bound=await rpc('finish_bind',bindingProof);
+   if(bound?.error==='phone_taken')return phoneTaken();
+   if(!bound?.ok)return invalid();
+   return reply({ok:true,message:'복구용 휴대폰 번호를 등록했어요.'});
+  }
+  const claim=await rpc('claim',bindingProof);
   if(claim?.error==='phone_taken')return phoneTaken();
   if(!claim?.ok)return invalid();
-  if(action==='reset'){
-   const result=await admin.auth.admin.updateUserById(claim.user_id,{password:b.new_password});
-   if(result.error)return reply({error:'reset_uncertain',message:'변경 결과를 확인하지 못했어요. 새 비밀번호로 로그인을 확인해 주세요.'},503);
-  }
+  const result=await admin.auth.admin.updateUserById(claim.user_id,{password:b.new_password});
+  if(result.error)return reply({error:'reset_uncertain',message:'변경 결과를 확인하지 못했어요. 새 비밀번호로 로그인을 확인해 주세요.'},503);
   const done=await rpc('complete',{id:b.challenge_id,operation_id:claim.operation_id,user_id:claim.user_id});
   if(done?.error==='phone_taken')return phoneTaken();
   if(!done?.ok)throw new Error('completion_uncertain');
-  return reply({ok:true,message:action==='reset'?'비밀번호를 변경했어요. 새 비밀번호로 로그인해 주세요.':'복구용 휴대폰 번호를 등록했어요.'});
+  return reply({ok:true,message:'비밀번호를 변경했어요. 새 비밀번호로 로그인해 주세요.'});
  }catch{return reply({error:'request_failed',message:'처리 결과를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'},503);}
 });

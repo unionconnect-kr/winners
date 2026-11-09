@@ -98,11 +98,12 @@
     catch(e){if(slot.isConnected&&userId()===uid)renderAccount(slot,null,e.message);}
   }
   function close(){if(!active)return false;active.close();return true;}
-  function open(opener){
+  function open(opener,{required=false}={}){
     if(active)return;
     const uid=userId();if(!uid)return;
     const dialog=document.createElement('dialog');dialog.className='manee-email-dialog';dialog.setAttribute('aria-labelledby','mee-title');
     dialog.innerHTML='<div class="mee-heading"><h2 id="mee-title">이메일 인증</h2><button type="button" class="mee-close" data-mee-close aria-label="닫기">×</button></div><div data-mee-form><p class="mee-description">아이디·비밀번호 찾기에 사용할 이메일을 확인해 주세요.<br>주소가 다르면 수정한 뒤 인증메일을 보내 주세요.</p><label for="mee-email">인증할 이메일</label><div class="mee-input-row"><input id="mee-email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254"><button type="button" data-mee-send>인증 보내기</button></div><p class="mee-note">인증을 완료한 이메일이 회원정보에 자동 반영돼요.</p><div class="mee-wait" data-mee-wait hidden><strong>이메일을 확인해 주세요</strong><p>받은 메일에서 <b>‘매니 이메일 인증하기’</b>를 누른 뒤 매니로 돌아와 주세요.</p><p data-mee-target></p></div><button type="button" class="mee-primary" data-mee-confirm hidden>확인했어요</button><p class="mee-status" data-mee-status role="status" aria-live="polite"></p><button type="button" class="mee-secondary" data-mee-later>나중에 하기</button></div><div class="mee-success" data-mee-success hidden><span class="mee-success-mark" aria-hidden="true">✓</span><h3>매니 이메일 인증이<br>완료되었습니다.</h3><strong class="mee-success-address" data-mee-verified></strong><p>인증한 이메일이 회원정보에 반영됐어요.<br>이제 이메일로도 아이디·비밀번호를 찾을 수 있습니다.</p><button type="button" class="mee-primary" data-mee-done>확인</button></div>';
+    if(required)dialog.querySelector('[data-mee-later]').textContent='돌아가기';
     document.body.append(dialog);active=dialog;dialog.__uid=uid;
     const input=dialog.querySelector('#mee-email'),send=dialog.querySelector('[data-mee-send]'),confirm=dialog.querySelector('[data-mee-confirm]'),status=dialog.querySelector('[data-mee-status]');
     const state={uid,version:0,closed:false,busy:false,requested:null,resend:0};
@@ -280,6 +281,6 @@
     }
     open(null);
   }
-  window.MANEE_EMAIL_UI=Object.freeze({signupValue,afterSignup,close,bindSocialSignup});
+  window.MANEE_EMAIL_UI=Object.freeze({signupValue,afterSignup,open,close,bindSocialSignup});
   install();
 })();
