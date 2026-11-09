@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {testOffers,openAndroidBilling} from '../src/android-billing-ui.mjs';
 import {PURCHASE_BINDING_MISMATCH_MESSAGE} from '../src/android-billing-request.mjs';
-const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M',recurrenceMode:1};
+const phase={currency:'KRW',amountMicros:9900000000,price:'₩9,900',period:'P1M',cycles:0,recurrenceMode:1};
 const product={productId:'manee.store1.monthly',offers:[{basePlanId:'monthly',offerToken:'paid',phases:[phase]},{basePlanId:'monthly',offerId:'trial-60days',offerToken:'trial',phases:[{...phase,amountMicros:0,period:'P60D',cycles:1,recurrenceMode:2},phase]}]};
 test('only eligible fixed monthly offers use the actual Play price and free phase',()=>{
  const offers=testOffers([product]);assert.equal(offers.length,1);assert.equal(offers[0].label,'무료 (60일) → ₩9,900 (1개월)');assert.equal(offers[0].offerToken,'trial');
@@ -48,10 +48,10 @@ test('offers follow the server allocated store product',()=>{
 
 function fakeDocument() {
  class Element {
-  constructor(tag){this.tagName=tag;this.children=[];this.parent=null;this.style={};this.hidden=false;this.disabled=false;this.listeners={};this.dataset={};}
+  constructor(tag){this.tagName=tag;this.children=[];this.parent=null;this.style={};this.hidden=false;this.disabled=false;this.listeners={};this.dataset={};this.attributes={};}
   get isConnected(){return this===body||Boolean(this.parent?.isConnected);}
   append(child){if(child.parent)child.parent.children=child.parent.children.filter(c=>c!==child);child.parent=this;this.children.push(child);}
-  setAttribute(){}
+  setAttribute(name,value){this.attributes[name]=String(value);}
   addEventListener(name,fn){this.listeners[name]=fn;}
   showModal(){}
   close(){this.listeners.close?.();}
@@ -75,6 +75,81 @@ function dialogFixture(overrides={}){
  const buttons=()=>descendants(document.body.children[0]).filter(e=>e.tagName==='button');
  return {billing,document,buttons,visibleOffers:()=>buttons().filter(e=>!e.hidden&&e.dataset.purchase==='true')};
 }
+
+const diagnosticPanel = fixture => fixture.document.body.children[0].children.find(node =>
+ node.tagName === 'details' && node.children[0]?.textContent === 'Play 혜택 진단');
+const diagnosticText = element => [element.textContent || '', ...element.children.map(diagnosticText)].join(' ');
+
+test('Play diagnostics distinguish a missing trial from a returned trial rejected by the existing filter', async () => {
+ const paidSixtyDays = {...product.offers[0], offerId:'paid-long-phase', phases:[{...phase, period:'P60D'}]};
+ const rejected = structuredClone(product.offers[1]);
+ rejected.phases[0] = {...rejected.phases[0], period:'PT3M', currency:'USD', cycles:0, recurrenceMode:3};
+ rejected.phases[1] = {...phase, period:'PT5M', currency:'USD'};
+ for (const [extra, status] of [[paidSixtyDays,'미수신'], [rejected,'수신 · 미선택']]) {
+  const fixture = dialogFixture({products:async () => ({products:[{...product, offers:[product.offers[0], extra]}]})});
+  await settle();
+  const panel = diagnosticPanel(fixture);
+  assert.equal(panel.children[0].tagName, 'summary');
+  assert.notEqual(panel.open, true);
+  assert.equal(Object.hasOwn(panel.attributes, 'open'), false);
+  const copy = diagnosticText(panel);
+  assert.ok(copy.includes(`60일 제안: ${status}`));
+  assert.match(copy, /base · monthly · 선택됨 · 기준 요금 일치/);
+  assert.match(copy, /P1M · KRW 9900000000 micros · 횟수 0 · 반복 1/);
+  assert.equal(fixture.visibleOffers().length, 0, 'diagnostics do not bypass paid review');
+  if (extra === rejected) {
+   assert.match(copy, /trial-60days · monthly · 미선택 · 기준 요금 불일치/);
+   assert.match(copy, /통화 불일치 · 반복 유형 불일치/);
+   assert.match(copy, /PT3M · USD 0 micros · 횟수 0 · 반복 3/);
+   assert.match(copy, /PT5M · USD 9900000000 micros/);
+  }
+ }
+});
+
+test('Play diagnostics show the selected trial and bound sanitized metadata without copying native identifiers', async () => {
+ const exact = {...product.offers[1], offerToken:'private-offer-token'};
+ const old = {...product.offers[1], offerId:'trial-1month', phases:[{...product.offers[1].phases[0], period:'P1M'}, phase]};
+ const unusual = {
+  offerId:'private-offer-id', offerToken:'private-other-token', basePlanId:'private-plan-id', accountId:'private-account-id',
+  purchaseToken:'private-purchase-token', phases:[...Array.from({length:4}, () => ({
+   period:'private-period', currency:'private-currency', amountMicros:'private-price', price:'private-formatted-price',
+   cycles:1000000, recurrenceMode:5,
+  })), {...phase, period:'PT5M'}],
+ };
+ const offers = [product.offers[0], old, ...Array(12).fill(unusual), exact];
+ let purchased = 0;
+ const fixture = dialogFixture({products:async () => ({products:[{...product, offers}]}),
+  purchase:async selection => {purchased++; assert.equal(selection.offerToken, exact.offerToken); return {status:'cancelled'};}});
+ await settle();
+ const panel = diagnosticPanel(fixture);
+ const copy = diagnosticText(panel);
+ assert.match(copy, /60일 제안: 선택됨/);
+ assert.match(copy, /trial-60days · monthly · 선택됨 · 기준 요금 일치/);
+ assert.match(copy, /trial-1month · monthly · 미선택/);
+ assert.match(copy, /other · 기타 플랜 · 미선택/);
+ assert.match(copy, /기타 · 기타 기타 micros · 횟수 기타 · 반복 기타/);
+ assert.match(copy, /PT5M · KRW 9900000000 micros/);
+ assert.match(copy, /중간 가격 단계 생략/);
+ assert.match(copy, /추가 제안 생략/);
+ assert.doesNotMatch(copy, /private-/);
+ assert.equal(panel.children.find(node => node.tagName === 'ul').children.length, 8);
+ assert.equal(purchased, 0);
+ await fixture.visibleOffers()[0].onclick();
+ assert.equal(purchased, 1, 'the purchase still uses the original exact trial selection');
+});
+
+test('Play diagnostics are absent for paid accounts and unsuccessful Play product lookups', async () => {
+ for (const overrides of [
+  {status:async () => ({ready:true, testOnly:false, productId:product.productId})},
+  {products:async () => {throw Error('lookup failed');}},
+  {products:async () => ({ready:false, products:[]})},
+ ]) {
+  const fixture = dialogFixture(overrides);
+  await settle();
+  assert.equal(diagnosticPanel(fixture), undefined);
+ }
+});
+
 test('successful checkout immediately hides all offers but keeps close and restore usable',async()=>{
  const f=dialogFixture();await settle();assert.equal(f.visibleOffers().length,1);
  await f.visibleOffers()[0].onclick();

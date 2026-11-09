@@ -20,6 +20,82 @@ export function testOffers(products,productId='manee.store1.monthly') {
  return (selected?[selected]:[]).map(o=>({productId:product.productId,offerToken:o.offerToken,trialDays:isTrial(o)?60:0,price:'9,900원',
   label:o.phases.map(p=>`${Number(p.amountMicros)===0?'무료':p.price} (${p.period==='P1M'?'1개월':p.period==='P60D'?'60일':p.period})`).join(' → ')}));
 }
+
+const diagnosticOfferKinds = ['trial-60days', 'trial-1month', 'base', 'other'];
+const diagnosticCurrencies = new Set(['KRW', 'USD', 'JPY', 'EUR', 'GBP', 'CNY', 'CAD', 'AUD']);
+const diagnosticOfferLimit = 8;
+const diagnosticPhaseLimit = 4;
+
+function diagnosticOfferKind(offer) {
+ if (offer.offerId === 'trial-60days' || offer.offerId === 'trial-1month') return offer.offerId;
+ return offer.offerId == null ? 'base' : 'other';
+}
+
+function diagnosticInteger(value, max) {
+ return Number.isSafeInteger(value) && value >= 0 && value <= max ? String(value) : '기타';
+}
+
+function addOfferDiagnostics(view, products, productId, selected) {
+ const product = products.find(item => item?.productId === productId);
+ const returned = Array.isArray(product?.offers) ? product.offers.filter(offer => offer && typeof offer === 'object') : [];
+ const rows = returned.map(offer => {
+  const kind = diagnosticOfferKind(offer);
+  const phases = Array.isArray(offer.phases) ? offer.phases : [];
+  const trialCandidate = kind === 'trial-60days' || phases.some(phase => phase?.period === 'P60D' && phase.amountMicros === 0);
+  return {offer, kind, phases, trialCandidate, chosen: Boolean(selected && offer.offerToken === selected.offerToken)};
+ });
+ const hasTrialCandidate = rows.some(row => row.trialCandidate);
+ const trialStatus = selected?.trialDays === 60 ? '선택됨' : hasTrialCandidate ? '수신 · 미선택' : '미수신';
+
+ const panel = view.el('details', null, view.sheet, 'margin-top:12px;color:#52675b;font-size:12px;line-height:1.7');
+ view.el('summary', 'Play 혜택 진단', panel, 'cursor:pointer;padding:10px 0;font-weight:600;min-height:24px');
+ view.el('p', `60일 제안: ${trialStatus}`, panel, 'margin:4px 0 8px;font-weight:600');
+ if (typeof productId === 'string' && /^manee\.store[1-9]\d{0,3}\.monthly$/.exec(productId)?.[0] === productId) {
+  view.el('p', productId, panel, 'margin:4px 0 8px');
+ }
+ if (!rows.length) {
+  view.el('p', '조회된 제안이 없어요.', panel, 'margin:4px 0 8px');
+  return;
+ }
+
+ // Keep the selected offer and the known trials visible in a long response.
+ rows.sort((a, b) => Number(b.chosen) - Number(a.chosen) || diagnosticOfferKinds.indexOf(a.kind) - diagnosticOfferKinds.indexOf(b.kind));
+ const list = view.el('ul', null, panel, 'margin:0;padding-left:20px');
+ for (const {offer, kind, phases, trialCandidate, chosen} of rows.slice(0, diagnosticOfferLimit)) {
+  const plan = offer.basePlanId === 'monthly' ? 'monthly' : '기타 플랜';
+  const choice = chosen ? '선택됨' : '미선택';
+  const renewal = phases.at(-1);
+  const priceMatch = renewal?.currency === 'KRW' && renewal.amountMicros === 9900000000;
+  const row = view.el('li', `${kind} · ${plan} · ${choice} · 기준 요금 ${priceMatch ? '일치' : '불일치'}`, list, 'margin:6px 0');
+  if (!phases.length) {
+   view.el('p', '가격 단계 없음', row, 'margin:0');
+   continue;
+  }
+  if (trialCandidate && !chosen) {
+   const mismatches = [];
+   if (phases.some(phase => phase?.currency !== 'KRW')) mismatches.push('통화 불일치');
+   if (phases.length === 2 && (phases[0]?.recurrenceMode !== 2 || renewal?.recurrenceMode !== 1)) {
+    mismatches.push('반복 유형 불일치');
+   }
+   if (mismatches.length) view.el('p', mismatches.join(' · '), row, 'margin:0');
+  }
+  const phaseList = view.el('ul', null, row, 'margin:0;padding-left:16px');
+  const phasesTruncated = phases.length > diagnosticPhaseLimit;
+  const shownPhases = phasesTruncated ? [...phases.slice(0, diagnosticPhaseLimit - 1), renewal] : phases;
+  for (const phase of shownPhases) {
+   const period = typeof phase?.period === 'string' && /^P(?:\d{1,3}[DWMY]|T\d{1,3}[HMS])$/.exec(phase.period)?.[0] === phase.period
+    ? phase.period : '기타';
+   const currency = diagnosticCurrencies.has(phase?.currency) ? phase.currency : '기타';
+   const amount = diagnosticInteger(phase?.amountMicros, 1_000_000_000_000);
+   const cycles = diagnosticInteger(phase?.cycles, 99);
+   const recurrence = [1, 2, 3].includes(phase?.recurrenceMode) ? phase.recurrenceMode : '기타';
+   view.el('li', `${period} · ${currency} ${amount} micros · 횟수 ${cycles} · 반복 ${recurrence}`, phaseList);
+  }
+  if (phasesTruncated) view.el('p', '중간 가격 단계 생략', row, 'margin:0');
+ }
+ if (rows.length > diagnosticOfferLimit) view.el('p', '추가 제안 생략', panel, 'margin:4px 0 8px');
+}
+
 export function openAndroidBilling({billing,getContext,document,launchTrial=false}) {
  if(reuseSubscriptionSheet(document,'manee-android-billing'))return;
  const c=getContext();if(c?.role!=='storeOwner')return;
@@ -55,6 +131,9 @@ export function openAndroidBilling({billing,getContext,document,launchTrial=fals
   button('기존 구독 복원',async()=>show(await billing.restore()),'link');
   const data=await billing.products();if(!same()||purchaseBlocked)return;
   const offers=testOffers(data.products,info.productId);
+  if (info.testOnly === true && data.ready !== false && Array.isArray(data.products)) {
+   addOfferDiagnostics(view, data.products, info.productId, offers[0]);
+  }
   status.textContent=subscriptionActive?(testMode?'이 매장의 테스트 구독을 이용 중이에요.':'이 매장의 구독을 이용 중이에요.'):offers.length?'다음 화면에서 Google Play 결제 조건을 확인해 주세요.':(testMode?'현재 구매 가능한 상품이 없어요. Play 설치 계정과 내부 테스트 참여 상태를 확인해 주세요.':'현재 구매 가능한 상품이 없어요. Google Play 계정을 확인해 주세요.');
   if(subscriptionActive){view.label.textContent='이용 중인 구독';view.price.textContent='구독 이용 중';view.after.textContent='구독 관리에서 다음 결제일을 확인해 주세요.';}
   else if(!offers.length){retry.hidden=false;}
