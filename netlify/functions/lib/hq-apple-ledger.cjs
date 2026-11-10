@@ -15,7 +15,7 @@ function transactionRecord(t){
   purchasedAt:new Date(t.purchaseDate).toISOString(),updatedAt:new Date(t.signedDate).toISOString(),refundAt:revoked?new Date(t.revocationDate).toISOString():null};
 }
 async function saveLedger(db,records){
- let ok=true;
+ let ok=records.some(Boolean);
  for(const record of records.filter(Boolean)){
   try{const result=await db.rpc('manee_hq_record_transaction',{p_record:record});if(result.error||result.data!==true)ok=false;}catch{ok=false;}
  }

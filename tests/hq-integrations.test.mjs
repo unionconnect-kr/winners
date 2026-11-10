@@ -49,6 +49,7 @@ test('Apple missing prices and legacy refund amounts are never invented',()=>{
 });
 test('ledger reporting outage never throws through a successful entitlement flow',async()=>{
  assert.equal(await saveLedger({rpc:async()=>{throw Error('private failure');}},[transactionRecord(apple())]),false);
+ assert.equal(await saveLedger({rpc:async()=>({data:true})},[null]),false);
 });
 test('all modified app scripts parse, including inline boot code',()=>{
  const html=fs.readFileSync(new URL('../web/index.html',import.meta.url),'utf8');

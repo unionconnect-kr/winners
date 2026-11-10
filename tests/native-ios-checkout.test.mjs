@@ -24,9 +24,9 @@ test('public checkout still requires both rollout and catalog gates plus legal l
 const nativePath=require.resolve('../netlify/functions/lib/native-request.cjs');
 const applePath=require.resolve('../netlify/functions/lib/apple-billing.cjs');
 const actualNative=require(nativePath),actualApple=require(applePath);
-let authenticated=true,owned=store,crossPlatform=false,attempted=[],saved=[];
+let authenticated=true,owned=store,crossPlatform=false,attempted=[],saved=[],reportingFails=false;
 require.cache[nativePath].exports={...actualNative,preflight:()=>undefined,
- authenticate:async()=>{if(!authenticated)throw Error('authentication_required');return {user:{rpc:async()=>({data:{status:'claimed'}})},service:{rpc:async(name,args)=>{saved.push(args.p_record);return {data:true};}}};},
+ authenticate:async()=>{if(!authenticated)throw Error('authentication_required');return {user:{rpc:async()=>({data:{status:'claimed'}})},service:{rpc:async(name,args)=>{if(name==='manee_ios_save_subscription')saved.push(args.p_record);else if(reportingFails)throw Error('reporting_unavailable');return {data:true};}}};},
  ownerContext:async(user,id)=>{if(id!==owned)throw Error('owner_access_denied');return {appAccountToken:store,productId:'manee.store1.monthly',catalogEnabled:false,subscriptions:[],otherPlatformActive:crossPlatform};}};
 require.cache[applePath].exports={...actualApple,configured:()=>true,apple:(env,environment)=>({environment}),
  verifyPurchase:async(api,signed)=>{attempted.push(api.environment);if(signed!==api.environment)throw Error('purchase_mismatch');return {environment:api.environment,status:1,revoked:false,expiresAt:new Date(Date.now()+86400000).toISOString()};}};
@@ -49,6 +49,7 @@ test('endpoint authenticates and authorizes before pilot use, and accepts only s
   const verified=await call('verify',store,'Sandbox');assert.equal(verified.statusCode,200);
   const subscription=JSON.parse(verified.body).subscriptions[0];
   assert.equal(subscription.testActive,true);assert.equal(subscription.active,false);assert.equal(saved.length,1);
+  reportingFails=true;assert.equal((await call('verify',store,'Sandbox')).statusCode,200);reportingFails=false;
   process.env.IOS_QA_EXPIRES_AT=new Date(Date.now()-1).toISOString();
   assert.equal((await call('prepare')).statusCode,503);assert.equal((await call('verify',store,'Sandbox')).statusCode,503);
  }finally{for(const [key,value] of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
