@@ -42,7 +42,7 @@ export function createHandler({client,api,binding,verifiedRecord}){
   if(claimed.error)return reply(claimed.error.code==='42501'?403:503,{error:'claim_failed'});
   if(!Array.isArray(claimed.data)||claimed.data.length>10)return reply(503,{error:'claim_failed'});
   let succeeded=0,failed=0,records=0;
-  for(const job of claimed.data){
+  await Promise.all(claimed.data.map(async job=>{
    let result='unavailable';
    try{
     if(!api)throw Error('not_ready');
@@ -60,7 +60,7 @@ export function createHandler({client,api,binding,verifiedRecord}){
    }catch(e){result=e?.httpStatus===403?'permission_denied':e?.message==='order_mismatch'?'mismatch':'unavailable';failed++;}
    const finished=await client.rpc('hq_billing_sync_finish',{p_token:job.purchaseToken,p_result:result});
    if(finished.error)failed++;
-  }
+  }));
   // Raw order payloads, buyer addresses, tokens, user IDs and provider errors never leave the worker.
   return reply(200,{accounts:claimed.data.length,succeeded,failed,records});
  };
