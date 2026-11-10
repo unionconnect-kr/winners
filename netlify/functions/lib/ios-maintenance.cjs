@@ -1,3 +1,4 @@
+const {saveLedger,transactionRecord}=require('./hq-apple-ledger.cjs');
 'use strict';
 const {timingSafeEqual}=require('node:crypto');
 const {sendApns,configured}=require('./native-push.cjs');
@@ -36,6 +37,7 @@ function maintenanceHandler({mode,db,env=process.env,send=sendApns,apiFactory=ap
      try{
       const record=await currentRecord(apiFactory(env,job.environment),job.original_id,job.token,job.product_id);
       const saved=await client.rpc('manee_ios_save_subscription',{p_record:record});if(saved.error||saved.data!==true)throw Error('save_failed');
+      await saveLedger(client,[record.ledger]);
       ok=true;
      }catch{}
      const finish=await client.rpc('manee_ios_finish_refresh',{p_environment:job.environment,p_original_id:job.original_id,p_lease:job.refresh_lease,p_ok:ok});

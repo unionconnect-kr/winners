@@ -1,0 +1,21 @@
+name: HQ integration service checks
+on:
+  pull_request:
+    paths: ['web/index.html', 'web/social-auth.js', 'web/manee-support*', 'supabase/functions/manee-hq-integrations/**', 'supabase/functions/manee-social-auth/**', 'netlify/functions/lib/hq-apple-ledger.cjs', 'netlify/functions/lib/apple-billing.cjs', 'netlify/functions/lib/ios-maintenance.cjs', 'netlify/functions/ios-billing.js', 'netlify/functions/ios-apple-notifications.js', 'tests/hq-integrations.test.mjs', '.github/workflows/hq-integrations-checks.yml']
+  push:
+    branches: [main]
+    paths: ['web/index.html', 'web/social-auth.js', 'web/manee-support*', 'supabase/functions/manee-hq-integrations/**', 'supabase/functions/manee-social-auth/**', 'netlify/functions/lib/hq-apple-ledger.cjs', 'netlify/functions/lib/apple-billing.cjs', 'netlify/functions/lib/ios-maintenance.cjs', 'netlify/functions/ios-billing.js', 'netlify/functions/ios-apple-notifications.js', 'tests/hq-integrations.test.mjs', '.github/workflows/hq-integrations-checks.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/hq-integrations.test.mjs tests/native-apple-services.test.mjs tests/native-ios-maintenance.test.mjs tests/google-play-billing.test.mjs
+      - run: CONTEXT=deploy-preview node scripts/build-environment.mjs

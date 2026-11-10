@@ -1,3 +1,4 @@
+const {saveLedger,transactionRecord}=require('./lib/hq-apple-ledger.cjs');
 const {response,preflight,authenticate,ownerContext,failure}=require('./lib/native-request.cjs');
 const {configured,apple,verifyPurchase,currentRecord,entitlement}=require('./lib/apple-billing.cjs');
 const {checkoutPolicy}=require('./lib/ios-checkout.cjs');
@@ -53,6 +54,7 @@ exports.handler=async event=>{
   for(const record of records){
    const saved=await service.rpc('manee_ios_save_subscription',{p_record:record});
    if(saved.error||saved.data!==true)throw Error('save_failed');
+   await saveLedger(service,[record.ledger]);
   }
   // Recheck live access after the Apple round trip, before exposing account data.
   await ownerContext(user,body.storeId);

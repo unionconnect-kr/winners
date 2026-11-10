@@ -159,6 +159,7 @@
         const session = { access_token: data.session.access_token, refresh_token: data.session.refresh_token, user: { id: user.id } };
         // Only the existing session adapter may commit an explicit sign-in.
         await applySession(session, record);
+        try{options.onOutcome?.(record.provider,'ok');}catch{}
         return { handled: true, user, ...record };
       } finally { cancel(); completing = false; }
     }
