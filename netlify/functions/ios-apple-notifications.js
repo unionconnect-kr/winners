@@ -1,5 +1,6 @@
+const {saveLedger,transactionRecord}=require('./lib/hq-apple-ledger.cjs');
 const {createClient}=require('@supabase/supabase-js');
-const {PRODUCTS,apple,currentRecord}=require('./lib/apple-billing.cjs');
+const {PRODUCTS,apple,currentRecord,validateTransaction}=require('./lib/apple-billing.cjs');
 const {response,preflight,failure}=require('./lib/native-request.cjs');
 exports.handler=async event=>{
  const early=preflight(event);if(early)return early;
@@ -16,10 +17,13 @@ exports.handler=async event=>{
   if(!signed)return response(200,{received:true,ignored:true},event);
   const t=await api.verifier.verifyAndDecodeTransaction(signed);
   if(!PRODUCTS.has(t.productId))return response(200,{received:true,ignored:true},event);
+  validateTransaction(t,api.environment,t.appAccountToken,t.productId);
   const record=await currentRecord(api,t.originalTransactionId,t.appAccountToken,t.productId);
   const db=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
   const saved=await db.rpc('manee_ios_save_subscription',{p_record:record});
   if(saved.error||saved.data!==true)throw Error('save_failed');
+  let notified=null;try{notified=transactionRecord(t);}catch{}
+  await saveLedger(db,[record.ledger,notified]);
   return response(200,{received:true},event);
  }catch(error){return failure(error,event);}
 };

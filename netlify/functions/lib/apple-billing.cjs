@@ -1,6 +1,7 @@
 'use strict';
 const {SignedDataVerifier,AppStoreServerAPIClient,Environment}=require('@apple/app-store-server-library');
 const root=require('./apple-root.cjs');
+const {transactionRecord}=require('./hq-apple-ledger.cjs');
 const {appleSigningKey}=require('./apple-signing-key.cjs');
 const PRODUCT='manee.store1.monthly',BUNDLE='kr.co.manee.app';
 const PRODUCTS=new Set(Array.from({length:10},(_,i)=>`manee.store${i+1}.monthly`));
@@ -43,7 +44,8 @@ async function currentRecord(api,originalId,token,productId=PRODUCT){
   if(r.originalTransactionId!==originalId||r.productId!==productId||r.environment!==api.environment||!Number.isSafeInteger(r.gracePeriodExpiresDate))throw Error('purchase_mismatch');
   expiry=r.gracePeriodExpiresDate;
  }
- return {productId,environment:api.environment,originalId,transactionId:t.transactionId,
+ let ledger=null;try{ledger=transactionRecord(t);}catch{}
+ return {ledger,productId,environment:api.environment,originalId,transactionId:t.transactionId,
   token:t.appAccountToken.toLowerCase(),status:item.status,expiresAt:new Date(expiry).toISOString(),
   revoked:!!t.revocationDate||item.status===5,signedAt:new Date(t.signedDate).toISOString()};
 }

@@ -374,6 +374,8 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
 <script src="/app-config.js"></script>
 <script src="/web-platform.js"></script>
 <script src="/social-auth.js"></script>
+<script src="/manee-support.js"></script>
+<link rel="stylesheet" href="/manee-support.css">
 <link rel="stylesheet" href="/email-verification.css"></head>
 <body>
 
@@ -5461,7 +5463,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     XLSX.utils.book_append_sheet(wb, wsDetail, "상세기록");
     const filename = state.store+"_"+monthKey()+"_근무기록.xlsx";
     try{
-      XLSX.writeFile(wb, filename);
+      XLSX.writeFile(wb, filename);maneeRecordOperation('report_excel','ok','save');
       showToast("엑셀 파일을 내려받았어요");
     }catch(e){
       showToast("내보내기에 실패했어요.");
@@ -5524,7 +5526,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     XLSX.utils.book_append_sheet(wb, wsPivot, "일자별 거래처 지출");
     const filename = state.store+"_"+monthKey()+"_지출보고.xlsx";
     try{
-      XLSX.writeFile(wb, filename);
+      XLSX.writeFile(wb, filename);maneeRecordOperation('report_excel','ok','save');
       showToast("엑셀 파일을 내려받았어요");
     }catch(e){
       showToast("내보내기에 실패했어요.");
@@ -5551,7 +5553,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     XLSX.utils.book_append_sheet(wb, ws, "직원 관리");
     const filename = state.store+"_직원관리.xlsx";
     try{
-      XLSX.writeFile(wb, filename);
+      XLSX.writeFile(wb, filename);maneeRecordOperation('report_excel','ok','save');
       showToast("엑셀 파일을 내려받았어요");
     }catch(e){
       showToast("내보내기에 실패했어요.");
@@ -5664,7 +5666,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     XLSX.utils.book_append_sheet(wb, wsLabor, "인건비(개인별)");
     const filename = state.store+"_"+monthKey()+"_월말리포트.xlsx";
     try{
-      XLSX.writeFile(wb, filename);
+      XLSX.writeFile(wb, filename);maneeRecordOperation('report_excel','ok','save');
       showToast("엑셀 파일을 내려받았어요");
     }catch(e){
       showToast("내보내기에 실패했어요.");
@@ -7087,7 +7089,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   function r135AiSheet(){if(!state.r135AiOpen)return '';const msgs=state.askAppMessages||[];let h='<div class="r135-ai-backdrop"><section class="r135-ai-sheet" role="dialog" aria-modal="true" aria-labelledby="r135-ai-title"><header>'+r135AiFace()+'<div><h2 id="r135-ai-title" tabindex="-1">매니 AI</h2><small>사장님의 매장 운영 도우미</small></div><button id="r135-ai-close" aria-label="대화창 닫기">×</button></header><div class="r135-ai-chat"><p class="r135-ai-status">매장 운영에 대해 물어보세요</p><div class="r135-bubble">사장님, 안녕하세요 👋<br>매장 운영에서 궁금한 점을 물어보세요.</div><p class="r135-ai-example-label">이렇게 물어볼 수 있어요 · 질문 예시</p>'+['이번 달 식자재비율을 알려줘','지난달과 매출을 비교해줘','급여 조정은 어디서 하나요?'].map(x=>'<button class="r135-bubble example" data-r135-example="'+escapeHtml(x)+'">'+escapeHtml(x)+' ↗</button>').join('');msgs.forEach(m=>{let t=m.content;if(m.role!=='user'){try{t=JSON.parse(t).text||JSON.parse(t).confirmText||t;}catch{}}h+='<div class="r135-bubble '+(m.role==='user'?'user':'')+'">'+escapeHtml(t)+'</div>';});return h+'</div><div class="r135-ai-compose"><label class="sr-only" for="ask-app-input">질문</label><textarea id="ask-app-input" rows="2" placeholder="궁금한 점을 편하게 물어보세요">'+escapeHtml(state.r135AiDraft||'')+'</textarea><div><small>음성 입력은 키보드의 마이크를 이용해 주세요.</small><button id="ask-app-mic-btn" aria-label="음성 입력 안내"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v4M8 22h8"/></svg></button><button id="ask-app-btn" aria-label="질문 보내기">↑</button></div></div></section></div>';}
   const R135_FAQ=[['계정·구독','비밀번호를 잊어버렸어요.','일반 가입 계정은 로그인 화면의 비밀번호 찾기에서 등록된 휴대폰으로 문자 인증 후 변경할 수 있어요. 카카오·네이버 가입 계정은 해당 서비스에서 계정을 확인해 주세요.'],['계정·구독','카카오·네이버 계정은 어디서 연결하나요?','더보기 → 내 계정 → 간편계정 연결에서 연결할 수 있어요.'],['매장관리','완료한 매장 준비 설정을 바꾸고 싶어요.','더보기 → 매장관리 → 매장 준비 가이드에서 매장을 선택한 뒤, 각 항목의 수정 버튼을 눌러 주세요. 매장이 하나면 바로 가이드가 열려요.'],['직원·급여','가불과 기타 조정은 어디서 확인하나요?','직원 → 급여 → 직원 급여 상세에서 이번 달 조정 내역과 남은 지급액을 확인할 수 있어요.'],['직원·급여','매니저 권한은 어디서 설정하나요?','직원 → 직원관리 → 직원 선택 → 매니저 권한 설정에서 열람 범위와 업무 권한을 선택해 주세요.'],['매출·지출','날짜별 매출과 지출을 보고 싶어요.','매출 → 매출현황의 캘린더에서 날짜를 누르면 결제수단·할인·반품·지출을 포함한 상세 내용이 열려요.']];
   function r135FaqRows(q=''){const rows=R135_FAQ.filter(x=>x.join(' ').includes(q.trim()));return rows.map(([c,t,a])=>'<details class="r135-faq"><summary><b>Q</b>'+escapeHtml(t)+'</summary><p>'+escapeHtml(a)+'</p></details>').join('')||'<p class="owner-note">일치하는 질문이 없어요. 다른 검색어를 입력해 주세요.</p>';}
-  function r135Support(){return '<h2 class="r135-support-welcome">안녕하세요, 매니입니다.<br>무엇을 도와드릴까요?</h2><label class="s2-field">궁금한 점 검색<input id="r135-faq-search" class="field-input" type="search" placeholder="궁금한 점을 검색해 보세요"></label><h4>자주 묻는 질문</h4><div id="r135-faq-list">'+r135FaqRows()+'</div><h4>카테고리별로 찾아보세요</h4><div class="r135-support-categories">'+['계정·구독','매장관리','직원·급여','매출·지출'].map(x=>'<button data-r135-category="'+x+'">'+x+' ›</button>').join('')+'</div><details class="r135-faq"><summary>고객센터 / 운영정책</summary><p>문의할 때 앱 버전·화면·재현 순서를 함께 알려 주세요. 비밀번호와 문자 인증번호는 보내지 마세요.</p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청 안내 ↗</a></details><button class="s4-btn full" data-r135-app-info>앱 정보·정책 확인</button><p class="owner-note">문의는 고객센터를 이용해 주세요.</p>';}
+  function r135Support(){return '<button class="s4-btn full" data-manee-support>1:1 문의 · 내 문의 확인</button>'+'<h2 class="r135-support-welcome">안녕하세요, 매니입니다.<br>무엇을 도와드릴까요?</h2><label class="s2-field">궁금한 점 검색<input id="r135-faq-search" class="field-input" type="search" placeholder="궁금한 점을 검색해 보세요"></label><h4>자주 묻는 질문</h4><div id="r135-faq-list">'+r135FaqRows()+'</div><h4>카테고리별로 찾아보세요</h4><div class="r135-support-categories">'+['계정·구독','매장관리','직원·급여','매출·지출'].map(x=>'<button data-r135-category="'+x+'">'+x+' ›</button>').join('')+'</div><details class="r135-faq"><summary>고객센터 / 운영정책</summary><p>문의할 때 앱 버전·화면·재현 순서를 함께 알려 주세요. 비밀번호와 문자 인증번호는 보내지 마세요.</p><a href="https://winners-staffapp.netlify.app/account-deletion.html" target="_blank" rel="noopener noreferrer">계정 삭제 요청 안내 ↗</a></details><button class="s4-btn full" data-r135-app-info>앱 정보·정책 확인</button><p class="owner-note">문의는 고객센터를 이용해 주세요.</p>';}
   function r135PayAdjustments(c){const rows=(state.payAdjustments||[]).filter(a=>a.crewId===c.id&&a.monthKey===monthKey());let h='<section class="day-panel r135-adjustments"><h3>이번 달 조정 내역 <small>'+rows.length+'건</small></h3>';if(!rows.length)return h+'<p class="owner-note">등록된 가불·조정 내역이 없어요.</p></section>';return h+rows.map(a=>'<div class="s2-pair"><span>'+escapeHtml(a.type==='무급휴가'?'무급휴무':a.type==='기타'?'기타 조정':a.type)+'<small>'+escapeHtml(a.unpaidDate||a.adjustmentDate||a.monthKey)+(a.note?' · '+escapeHtml(a.note):'')+'</small></span><strong class="'+(a.amount>0?'positive':'negative')+'">'+(a.amount>0?'+':'−')+Math.abs(a.amount).toLocaleString()+'원</strong></div>').join('')+'<p class="owner-note">가불은 남은 지급액에서 차감돼요. 최종 급여를 입력한 뒤 조정했다면 최종 금액을 다시 확인해 주세요.</p></section>';}
   function bindR135(){document.body.classList.toggle('r135-ai-open',!!state.r135AiOpen);document.getElementById('r135-ai-close')?.addEventListener('click',r135CloseAi);const ai=document.querySelector('.r135-ai-sheet');if(ai){const input=document.getElementById('ask-app-input');input.oninput=()=>state.r135AiDraft=input.value;ai.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();r135CloseAi();}if(e.key==='Tab'){const els=[...ai.querySelectorAll('button,textarea')].filter(x=>!x.disabled);if(e.shiftKey&&document.activeElement===els[0]){e.preventDefault();els.at(-1)?.focus();}else if(!e.shiftKey&&document.activeElement===els.at(-1)){e.preventDefault();els[0]?.focus();}}};app.querySelectorAll('[data-r135-example]').forEach(b=>b.onclick=()=>{input.value=b.dataset.r135Example;state.r135AiDraft=input.value;input.focus();});}const search=document.getElementById('r135-faq-search');if(search)search.oninput=()=>document.getElementById('r135-faq-list').innerHTML=r135FaqRows(search.value);app.querySelectorAll('[data-r135-category]').forEach(b=>b.onclick=()=>{search.value=b.dataset.r135Category;search.oninput();});document.querySelector('[data-r135-app-info]')?.addEventListener('click',()=>window.MANEE_WEB.openSettings());}
 
@@ -10339,6 +10341,10 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
     finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
     return {status:'downloaded'};
   }
+  function maneeRecordOperation(service,outcome,phase='complete'){
+    try{if(!state.authProfile?.user_id)return;Promise.resolve(db.rpc('manee_operation_event',{p_service:service,p_outcome:outcome,p_phase:phase,p_id:crypto.randomUUID()})).catch(()=>{});}catch{}
+  }
+  document.addEventListener('click',event=>{if(event.target.closest('[data-manee-support]')){const userId=state.authProfile?.user_id;if(userId&&window.MANEE_SUPPORT)window.MANEE_SUPPORT.open({db,userId,isAlive:()=>state.authProfile?.user_id===userId});}});
   async function downloadReport(type,rpc,payload,area='current'){
     if(state.reportDownloading||!['pdf','excel'].includes(type))return;
     const alive=reportActionGuard(),label=type==='pdf'?'PDF':'엑셀',feedback=(message,kind)=>setReportExportFeedback(message,kind,area);state.reportDownloading=true;
@@ -10364,10 +10370,12 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
       feedback(window.MANEE_WEB?.saveFile?'저장할 위치를 선택해 주세요.':'다운로드를 시작하고 있어요…');
       const result=await saveReportFile(bytes,reportDownloadName(closing,extension),mimeType);
       if(!alive())return;
+      maneeRecordOperation(type==='pdf'?'report_pdf':'report_excel',result?.status==='cancelled'?'cancelled':'ok','save');
       if(result?.status==='cancelled')feedback('저장을 취소했어요.','cancelled');
       else if(result?.status==='shared')feedback(label+' 파일 저장·공유를 완료했어요.','success');
       else feedback(result?.status==='saved'?label+' 파일을 저장했어요.':'다운로드를 시작했어요. 다운로드 목록을 확인해 주세요.','success');
     }catch(e){
+      if(alive())maneeRecordOperation(type==='pdf'?'report_pdf':'report_excel','error',phase);
       if(alive())feedback(phase==='load'?'보고서를 불러오지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.':phase==='save'?'파일을 저장하지 못했어요. 저장 공간과 위치를 확인하고 다시 시도해 주세요.':'보고서를 만들지 못했어요. 입력한 매출·비용을 확인하고 다시 시도해 주세요.','error');
     }finally{clearTimeout(timer);state.reportDownloading=false;syncReportExportButtons();}
   }
@@ -12496,7 +12504,7 @@ body:has(> .environment-banner:not([hidden])){flex-direction:column;align-items:
   async function initializeSocialLogin(){
     if(!window.MANEE_SOCIAL_AUTH||!db||MANEE_ADMIN_AUTH_ENABLED){resolveIdentity();return;}
     const native=window.MANEE_SOCIAL_NATIVE;
-    socialController=window.MANEE_SOCIAL_AUTH.createController({supabase:window.supabase,db,config:MANEE_CONFIG,storage:sessionStorage,getLocation:()=>location.href,nativeScheme:native?.scheme,platform:window.Capacitor?.getPlatform?.(),open:(url,context)=>location.assign(url),applySession:async(session,record)=>{if(record.intent==='signin'){const user=await fetch(SUPABASE_URL+'/functions/v1/manee-social-auth',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'context'}),signal:AbortSignal.timeout(15000)});const context=await user.json();if(!user.ok||!context.ok)throw Error('가입 정보를 확인하지 못했어요.');maneeSetRememberLogin(record.remember);if(context.registered)await applyManeeEntrySession(session,record.role);else await applyManeeAuthSession(session);}else await applyManeeAuthSession(session);}});
+    socialController=window.MANEE_SOCIAL_AUTH.createController({onOutcome:(provider,outcome)=>maneeRecordOperation('social_'+provider,outcome),supabase:window.supabase,db,config:MANEE_CONFIG,storage:sessionStorage,getLocation:()=>location.href,nativeScheme:native?.scheme,platform:window.Capacitor?.getPlatform?.(),open:(url,context)=>location.assign(url),applySession:async(session,record)=>{if(record.intent==='signin'){const user=await fetch(SUPABASE_URL+'/functions/v1/manee-social-auth',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'context'}),signal:AbortSignal.timeout(15000)});const context=await user.json();if(!user.ok||!context.ok)throw Error('가입 정보를 확인하지 못했어요.');maneeSetRememberLogin(record.remember);if(context.registered)await applyManeeEntrySession(session,record.role);else await applyManeeAuthSession(session);}else await applyManeeAuthSession(session);}});
     const decorate=()=>decorateSocialEntry(socialController);
     let scheduled=false;new MutationObserver(()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;void decorate();},0);}).observe(app,{childList:true,subtree:true});
     try{if(native)await native.listen(url=>finishSocialLogin(url).catch(e=>showToast(e.message)));if(await finishSocialLogin(location.href))return;
