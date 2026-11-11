@@ -51,6 +51,6 @@ export function createSubscriptionStatusSheet(document,{storeName,platform='andr
  view.price.style.cssText+=';font-size:21px;letter-spacing:-.5px';
  view.after.textContent='';view.status.textContent='';view.details.hidden=true;
  view.summary.textContent='사장님 아이디 하나로 연결된 모든 매장을 이용해요.';
- const promotion=view.el('p',(platform==='ios'?'신규 구독 2개월 무료체험':'신규 구독 60일 무료체험')+' · 이후 월 9,900원\n무료체험 대상 여부는 스토어에서 확인해요.',view.card,'margin:12px 0 0;padding-top:12px;border-top:1px solid #dcebe1;color:#52675b;font-size:12px;white-space:pre-line;line-height:1.7');
+ const promotion=platform==='ios'?null:view.el('p','신규 구독 60일 무료체험 · 이후 월 9,900원\n무료체험 대상 여부는 스토어에서 확인해요.',view.card,'margin:12px 0 0;padding-top:12px;border-top:1px solid #dcebe1;color:#52675b;font-size:12px;white-space:pre-line;line-height:1.7');
  return {...view,promotion};
 }

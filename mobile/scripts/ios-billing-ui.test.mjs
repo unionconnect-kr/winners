@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Script,createContext} from 'node:vm';
-import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet} from '../src/subscription-sheet.mjs';
+import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet} from '../src/subscription-sheet.mjs';
 import {subscriptionView} from '../src/store-subscription.mjs';
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
@@ -24,7 +24,7 @@ function fixture(overrides={},access=null){
  const window={};const c={userId:'owner',storeId:'store',role:'storeOwner',db:{rpc:async()=>({data:access})}};
  const context=createContext({window,document,localStorage:{},registerPlugin:()=>({addListener:()=>{}}),Geolocation:{},PushNotifications:{},
   createBillingClient:()=>billing,createAndroidGeolocation:()=>({}),createNativeGeolocation:()=>({}),createIosPush:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>()=>{},
-  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,setSubscriptionPromotion,createSubscriptionStatusSheet,subscriptionView});
+  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet,subscriptionView});
  new Script(readFileSync(new URL('../src/native.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'')).runInContext(context);
  window.MANEE_NATIVE.configure(()=>c);
  const descendants=e=>e.children.flatMap(child=>[child,...descendants(child)]);
@@ -53,8 +53,9 @@ test('iOS restore while product loading cannot show a new purchase button for an
  let finish;const f=fixture({products:()=>new Promise(resolve=>finish=resolve),restore:async()=>({subscriptions:[{active:true}]})});
  const opening=f.native.openSettings();await settle();
  await f.button('기존 구독 복원').onclick();
- finish({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:false});await opening;
+ finish({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:true});await opening;
  assert.equal(f.purchases(),0);assert.equal(f.button('월 구독 시작').hidden,true);
+ assert.match(f.text(),/구독 이용 중/);assert.doesNotMatch(f.text(),/2개월 무료체험|체험 후 월/);
 });
 test('iOS active account status offers management and restoration without starting a purchase',async()=>{
  const f=fixture({}, {enforced:true,canWrite:true});
@@ -62,5 +63,40 @@ test('iOS active account status offers management and restoration without starti
  assert.equal(f.button('구독 관리·복원').hidden,false);
  f.button('구독 관리·복원').onclick();await settle();
  assert.ok(f.button('기존 구독 복원'));
+ assert.equal(f.purchases(),0);
+});
+test('iOS active test subscriptions show management through account status, loading, and confirmed checkout states',async()=>{
+ const active={ready:true,appAccountToken:'token',subscriptions:[{testActive:true}]};
+ let checks=0,resolveCheckout,productChecks=0;
+ const f=fixture({
+  status:()=>++checks===1?Promise.resolve(active):new Promise(resolve=>{resolveCheckout=resolve;}),
+  products:async()=>{productChecks++;},
+ },{enforced:true,canWrite:false});
+ f.native.openSubscriptionStatus();await settle();
+ assert.match(f.text(),/Apple 테스트 구독 이용 중/);
+ assert.match(f.text(),/업무 입력·수정에는 정식 매장 이용권이 필요/);
+ assert.doesNotMatch(f.text(),/2개월 무료체험|매장 이용권 확인 필요/);
+
+ f.button('구독 관리·복원').onclick();await settle();
+ assert.match(f.text(),/기존 구독과 이용 가능한 상품을 확인/);
+ assert.doesNotMatch(f.text(),/2개월 무료체험|체험 후 월/);
+ assert.equal(f.button('월 구독 시작').hidden,true);
+
+ resolveCheckout(active);await settle();
+ assert.match(f.text(),/테스트 구독 이용 중/);
+ assert.doesNotMatch(f.text(),/2개월 무료체험|체험 후 월/);
+ assert.equal(f.button('월 구독 시작').hidden,true);
+ assert.equal(productChecks,0);
+});
+test('iOS checkout shows the two-month trial only after the Apple offer is confirmed',async()=>{
+ let resolveProduct;
+ const f=fixture({products:()=>new Promise(resolve=>{resolveProduct=resolve;})});
+ const opening=f.native.openSettings();await settle();
+ assert.doesNotMatch(f.text(),/2개월 무료체험/);
+ assert.equal(f.button('월 구독 시작').hidden,true);
+
+ resolveProduct({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:true});await opening;
+ assert.match(f.text(),/2개월 무료체험/);
+ assert.equal(f.button('2개월 무료체험 후 월 9,900원 구독').hidden,false);
  assert.equal(f.purchases(),0);
 });
