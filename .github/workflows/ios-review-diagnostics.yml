@@ -39,6 +39,17 @@ jobs:
           const apple=async()=>{
             const output=await auditRelease(process.env);
             const versions=output.versions.filter(v=>v.version==='1.56').map(v=>({version:v.version,state:v.state,build:v.build,review:v.review}));
+            const appAvailability=await get('/v1/apps/6820833544/appAvailabilityV2');
+            const appAvailabilityId=Array.isArray(appAvailability.data?.data)?appAvailability.data.data[0]?.id:appAvailability.data?.data?.id;
+            const appTerritories=appAvailabilityId&&/^[A-Za-z0-9-]+$/.test(appAvailabilityId)?await get('/v2/appAvailabilities/'+appAvailabilityId+'/territoryAvailabilities?include=territory&limit=200'):null;
+            const available=appTerritories?.data?.data?.filter(row=>row.attributes?.available===true).map(row=>row.relationships?.territory?.data?.id);
+            console.log('APP_TERRITORIES '+JSON.stringify({status:appTerritories?.status??appAvailability.status,count:available?.length,korea:available?.includes('KOR'),usa:available?.includes('USA')}));
+            const reviewVersion=output.versions.find(v=>v.version==='1.56');
+            if(reviewVersion&&/^[A-Za-z0-9-]+$/.test(reviewVersion.id)){
+              const detail=await get('/v1/appStoreVersions/'+reviewVersion.id+'/appStoreReviewDetail?fields%5BappStoreReviewDetails%5D=demoAccountName');
+              const login=detail.data?.data?.attributes?.demoAccountName?.normalize('NFKC').trim().toLowerCase();
+              if(login)console.log('REVIEW_DEMO_MATCH '+createHash('sha256').update('manee-app-review-ios-156-20261111:'+login).digest('hex'));
+            }
             const first=output.subscriptions.find(p=>p.productId==='manee.store1.monthly');
             const products=output.subscriptions.map(({id,productId,state,period,familySharable,localizations,koreanOffers,pricePoints,reviewScreenshot})=>({id,productId,state,period,familySharable,locales:localizations.map(x=>x.locale),koreanOffers,pricePoints:pricePoints.map(x=>x.customerPrice),reviewScreenshot}));
             const availability=first?await get('/v1/subscriptions/'+first.id+'/subscriptionAvailability'):null;
@@ -52,7 +63,7 @@ jobs:
               territoriesStatus:territories?.status,territoryCount:territories?.data?.data?.length,
               koreaAvailable:territories?.data?.data?.some(x=>x.id==='KOR'),usaAvailable:territories?.data?.data?.some(x=>x.id==='USA'),
               bundleStatus:bundle.status,capabilityStatus:caps?.status,
-              signInWithApple:caps?.data?.data?.some(x=>x.attributes?.capabilityType==='SIGN_IN_WITH_APPLE')
+              signInWithApple:caps?.data?.data?.some(x=>x.attributes?.capabilityType==='APPLE_ID_AUTH')
             }));
           };
           const auth=async()=>{
