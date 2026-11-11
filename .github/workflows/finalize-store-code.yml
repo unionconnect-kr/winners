@@ -36,7 +36,24 @@ jobs:
       - name: Ensure PostgreSQL client
         run: command -v psql || (sudo apt-get update -qq && sudo apt-get install -y postgresql-client)
       - name: Ensure PDF inspection tools
-        run: command -v pdftotext || (sudo apt-get update -qq && sudo apt-get install -y poppler-utils)
+        run: |
+          if command -v pdftotext; then exit 0; fi
+
+          apt_options=(-o Acquire::Retries=0 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
+          install_poppler() {
+            sudo apt-get "${apt_options[@]}" "$@" -o APT::Update::Error-Mode=any update -qq &&
+              sudo apt-get "${apt_options[@]}" "$@" install --no-install-recommends -y poppler-utils
+          }
+          if install_poppler; then exit 0; fi
+
+          # Use the same Ubuntu-signed packages when the default archive is unavailable.
+          source_file=$(mktemp --suffix=.list)
+          trap 'rm -f "$source_file"' EXIT
+          ubuntu_series=$( . /etc/os-release && printf '%s' "$VERSION_CODENAME" )
+          for pocket in "$ubuntu_series" "$ubuntu_series-updates" "$ubuntu_series-security"; do
+            printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://mirrors.edge.kernel.org/ubuntu/ %s main\n' "$pocket" >> "$source_file"
+          done
+          install_poppler -o Dir::Etc::sourcelist="$source_file" -o Dir::Etc::sourceparts=-
       - name: All security and concurrent connection tests
         run: |
           set -o pipefail
