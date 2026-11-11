@@ -1,0 +1,91 @@
+name: Verify MANEE Apple introductory offer
+on:
+  push:
+    branches: [codex/ios-trial-catalog-check-20261112]
+    paths: ['.github/workflows/ios-trial-catalog-check.yml']
+permissions:
+  contents: read
+jobs:
+  read-catalog:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-trial-catalog-check-20261112'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read Korean introductory offers for the MANEE monthly subscription
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { makeToken } from './mobile/scripts/check-apple-connection.mjs';
+          
+          const origin = 'https://api.appstoreconnect.apple.com';
+          const appId = '6820833544';
+          const productId = 'manee.store1.monthly';
+          const validId = value => typeof value === 'string' && /^[a-z0-9._-]{1,120}$/i.test(value);
+          const dateValue = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+          const label = value => typeof value === 'string' && /^[A-Z0-9_]{1,64}$/.test(value) ? value : null;
+          
+          async function readCatalog() {
+            const headers = { Authorization: 'Bearer ' + makeToken(process.env), Accept: 'application/json' };
+            async function get(path, params = {}) {
+              const url = new URL(path, origin);
+              for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+              let response;
+              try {
+                response = await fetch(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20000), headers });
+              } catch { throw Error('APPLE_CATALOG_NETWORK_ERROR'); }
+              if (!response.ok) throw Error('APPLE_CATALOG_HTTP_' + response.status);
+              try { return await response.json(); }
+              catch { throw Error('APPLE_CATALOG_INVALID_RESPONSE'); }
+            }
+            async function list(path, params = {}) {
+              const result = await get(path, { ...params, limit: '200' });
+              if (!Array.isArray(result.data) || result.links?.next) throw Error('APPLE_CATALOG_INCOMPLETE');
+              return result.data;
+            }
+          
+            const app = await get('/v1/apps/' + appId, { 'fields[apps]': 'bundleId' });
+            if (app.data?.id !== appId || app.data.attributes?.bundleId !== 'kr.co.manee.app') {
+              throw Error('APPLE_CATALOG_APP_MISMATCH');
+            }
+            const groups = await list('/v1/apps/' + appId + '/subscriptionGroups');
+            if (!groups.every(group => validId(group.id))) throw Error('APPLE_CATALOG_INVALID_GROUP');
+            const grouped = await Promise.all(groups.map(group => list('/v1/subscriptionGroups/' + group.id + '/subscriptions', {
+              'fields[subscriptions]': 'productId,state,subscriptionPeriod',
+            })));
+            const products = grouped.flat().filter(item => item.attributes?.productId === productId);
+            if (products.length !== 1 || !validId(products[0].id)) throw Error('APPLE_CATALOG_PRODUCT_MISMATCH');
+            const product = products[0];
+            const offers = await list('/v1/subscriptions/' + product.id + '/introductoryOffers', {
+              'filter[territory]': 'KOR',
+              'fields[subscriptionIntroductoryOffers]': 'startDate,endDate,duration,offerMode,numberOfPeriods,territory',
+            });
+            return {
+              productId,
+              state: label(product.attributes.state),
+              subscriptionPeriod: label(product.attributes.subscriptionPeriod),
+              territory: 'KOR',
+              introductoryOffers: offers.map(({ attributes = {} }) => ({
+                offerMode: label(attributes.offerMode),
+                duration: label(attributes.duration),
+                numberOfPeriods: Number.isSafeInteger(attributes.numberOfPeriods) ? attributes.numberOfPeriods : null,
+                startDate: dateValue(attributes.startDate),
+                endDate: dateValue(attributes.endDate),
+              })),
+            };
+          }
+          
+          try { console.log(JSON.stringify(await readCatalog())); }
+          catch (error) {
+            console.error(/^APPLE_CATALOG_[A-Z0-9_]+$/.test(error.message) ? error.message : 'APPLE_CATALOG_CHECK_FAILED');
+            process.exitCode = 1;
+          }
+          NODE
