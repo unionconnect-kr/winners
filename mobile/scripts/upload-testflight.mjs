@@ -27,8 +27,9 @@ export async function uploadTestFlight(env, ipa, {
     env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile150-release.yml@refs/heads/codex/mobile-release-150-20261105';
   const release152 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/final-email-billing-152-20261106' &&
     env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/mobile152-release.yml@refs/heads/codex/final-email-billing-152-20261106';
-  const release156 = env.GITHUB_EVENT_NAME === 'push' && env.GITHUB_REF === 'refs/heads/codex/ios-final-156-20261109' &&
-    env.GITHUB_WORKFLOW_REF === 'unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@refs/heads/codex/ios-final-156-20261109';
+  const release156 = env.GITHUB_EVENT_NAME === 'push' &&
+    (env.GITHUB_REF === 'refs/heads/codex/ios-final-156-20261109' || env.GITHUB_REF === 'refs/heads/codex/ios-review-fix-20261111') &&
+    env.GITHUB_WORKFLOW_REF === `unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${env.GITHUB_REF}`;
   if ((!manual && !matched143 && !feedback144 && !release145 && !release146 && !release147 && !release148 && !release149 && !release150 && !release152 && !release156) ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');

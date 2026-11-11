@@ -5,6 +5,7 @@ const app='6820833544', group='b5982888-0280-4513-8f78-74ca63dcd342';
 const releases=new Map([
   ['ios-20261106-1.52',{branch:'codex/final-email-billing-152-20261106',workflow:'mobile152-release.yml',marketing:'1.52',buildPrefix:'152',attempts:12}],
   ['ios-20261109-1.56',{branch:'codex/ios-final-156-20261109',workflow:'ios-signed-build.yml',marketing:'1.56',buildPrefix:'156',attempts:20}],
+  ['ios-20261111-1.56-review-fix',{branch:'codex/ios-review-fix-20261111',workflow:'ios-signed-build.yml',marketing:'1.56',buildPrefix:'156',attempts:20}],
 ]);
 
 export async function connectTestFlight(env, {

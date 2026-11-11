@@ -56,21 +56,27 @@ test('internal QA connection is idempotent and never selects a mismatched build'
 });
 
 test('1.56 only connects the exact signed run to the existing internal group and verifies beta readiness',async()=>{
-  const branch156='refs/heads/codex/ios-final-156-20261109';
-  const env156={...env,GITHUB_REF:branch156,
-    GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${branch156}`,
-    GITHUB_RUN_NUMBER:'11',GITHUB_RUN_ATTEMPT:'2',MANEE_INTERNAL_BUILD:'ios-20261109-1.56'};
-  const build156={version:'156.11.2',marketing:'1.56'};
-  const options=mock(build156);
-  const status=await connectTestFlight(env156,options);
-  assert.equal(status.marketingVersion,'1.56');
-  assert.equal(status.version,'156.11.2');
-  assert.equal(status.internalBuildState,'IN_BETA_TESTING');
-  assert.equal(options.calls.filter(x=>x.method==='POST').length,1);
-  await assert.rejects(connectTestFlight({...env156,GITHUB_REF:branch},{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
-  await assert.rejects(connectTestFlight152(env156,{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
-  await assert.rejects(connectTestFlight(env156,mock({...build156,betaState:'READY_FOR_BETA_TESTING'})),/INTERNAL_CONNECT_BETA_NOT_READY/);
-  const wrongBuild=mock({...build156,version:'156.11.1'});
-  await assert.rejects(connectTestFlight(env156,wrongBuild),/INTERNAL_CONNECT_BUILD_NOT_READY/);
-  assert.equal(wrongBuild.calls.filter(x=>x.method==='POST').length,0);
+  for (const [branchName, release] of [
+    ['codex/ios-final-156-20261109', 'ios-20261109-1.56'],
+    ['codex/ios-review-fix-20261111', 'ios-20261111-1.56-review-fix'],
+  ]) {
+    const branch156=`refs/heads/${branchName}`;
+    const env156={...env,GITHUB_REF:branch156,
+      GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${branch156}`,
+      GITHUB_RUN_NUMBER:'11',GITHUB_RUN_ATTEMPT:'2',MANEE_INTERNAL_BUILD:release};
+    const build156={version:'156.11.2',marketing:'1.56'};
+    const options=mock(build156);
+    const status=await connectTestFlight(env156,options);
+    assert.equal(status.marketingVersion,'1.56');
+    assert.equal(status.version,'156.11.2');
+    assert.equal(status.internalBuildState,'IN_BETA_TESTING');
+    assert.equal(options.calls.filter(x=>x.method==='POST').length,1);
+    await assert.rejects(connectTestFlight({...env156,GITHUB_REF:branch},{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
+    await assert.rejects(connectTestFlight({...env156,GITHUB_WORKFLOW_REF:'other'},{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
+    await assert.rejects(connectTestFlight152(env156,{request:()=>assert.fail('No Apple call')}),/INTERNAL_CONNECT_NOT_REQUESTED/);
+    await assert.rejects(connectTestFlight(env156,mock({...build156,betaState:'READY_FOR_BETA_TESTING'})),/INTERNAL_CONNECT_BETA_NOT_READY/);
+    const wrongBuild=mock({...build156,version:'156.11.1'});
+    await assert.rejects(connectTestFlight(env156,wrongBuild),/INTERNAL_CONNECT_BUILD_NOT_READY/);
+    assert.equal(wrongBuild.calls.filter(x=>x.method==='POST').length,0);
+  }
 });
