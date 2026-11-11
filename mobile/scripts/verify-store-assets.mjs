@@ -75,13 +75,16 @@ if (release156) {
 if (iosRelease156) {
   assert.equal(info.appInfoEnabled,true);
   assert.equal(info.appleLoginEnabled,true);
+  assert.equal(info.appleLoginMethod,'native');
   assert.ok(html.includes("apple:'Apple'"));
   assert.match(html, /native\.open\(url,context\)/);
   const social = readFileSync(resolve(root, 'social-auth.js'), 'utf8');
   new vm.Script(social);
   assert.match(social, /PROVIDERS = \['kakao', 'naver', 'apple'\]/);
   assert.match(social, /apple: settings\.external\?\.apple === true/);
-  assert.match(social, /https:\/\/appleid\.apple\.com\/auth\/authorize/);
+  assert.match(social, /oauth\.auth\.signInWithIdToken\(credentials\)/);
+  assert.match(html, /appleSignIn:native\?\.appleSignIn/);
+  assert.match(native, /ManeeAppleSignIn/);
   assert.equal(info.nativeAuthStorage,'keychain-v1');
   assert.doesNotMatch(html, /s4Hint\(\s*(['"])매니 1\.45\1\s*\)/);
   assert.match(html, /id="native-settings-btn">앱 정보/);

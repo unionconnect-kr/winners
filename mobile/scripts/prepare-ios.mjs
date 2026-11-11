@@ -15,6 +15,15 @@ const catalog=JSON.parse(readFileSync(resolve(splash,'Contents.json'),'utf8'));
 const buildInfo=JSON.parse(readFileSync(resolve(mobile,'www/build-info.json'),'utf8'));
 const infoPlist=resolve(mobile,'ios/App/App/Info.plist');
 writeFileSync(infoPlist,iosUrlSchemePlist(readFileSync(infoPlist,'utf8'),buildInfo.environment));
+if(buildInfo.appleLoginMethod==='native'){
+ const path=resolve(mobile,'ios/App/App/App.entitlements');
+ const entitlements=readFileSync(path,'utf8');
+ const key='com.apple.developer.applesignin';
+ if(!entitlements.includes(key)){
+  if(entitlements.split('</dict>').length!==2)throw Error('Unexpected iOS entitlements format');
+  writeFileSync(path,entitlements.replace('</dict>', '<key>'+key+'</key><array><string>Default</string></array></dict>'));
+ }
+}
 const launch=buildInfo.deviceFeedback?resolve(mobile,'assets/launch-144.png'):source;
 for(const image of catalog.images)copyFileSync(launch,resolve(splash,image.filename));
 if(buildInfo.deviceFeedback){

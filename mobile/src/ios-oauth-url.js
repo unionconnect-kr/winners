@@ -5,17 +5,16 @@ export function iosOAuthUrl(raw, origin, provider, intent = 'signin') {
   let url;
   try { url = new URL(raw); } catch { return reject(); }
   if (url.protocol !== 'https:' || url.username || url.password || url.hash) return reject();
-  const providers = { kakao: 'kakao', naver: 'custom:naver', apple: 'apple' };
+  const providers = { kakao: 'kakao', naver: 'custom:naver' };
   const one = key => url.searchParams.getAll(key).length === 1 && url.searchParams.get(key);
   if (url.origin === origin && url.pathname === '/auth/v1/authorize') {
     const p = one('provider');
-    if (!p || (provider ? p !== providers[provider] : p !== providers.kakao && p !== providers.naver)) return reject();
+    if (!p || (provider ? p !== providers[provider] : !Object.values(providers).includes(p))) return reject();
     return url;
   }
   const endpoints = {
     kakao: 'https://kauth.kakao.com/oauth/authorize',
     naver: 'https://nid.naver.com/oauth2.0/authorize',
-    apple: 'https://appleid.apple.com/auth/authorize',
   };
   if (intent !== 'link' || url.origin + url.pathname !== endpoints[provider] || !one('state') ||
       !one('client_id') || one('response_type') !== 'code' || !one('redirect_uri')) return reject();

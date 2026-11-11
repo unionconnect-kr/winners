@@ -12,6 +12,7 @@ export function createBillingClient({storeKit,request,getContext}) {
  const run=async task=>{if(busy)throw Error('처리 중이에요. 잠시 기다려 주세요.');busy=true;try{return await task(context());}finally{busy=false;}};
  const bindings=info=>info.billingScope==='account'&&Array.isArray(info.bindings)?info.bindings:[{productId:info.productId||'manee.store1.monthly',appAccountToken:info.appAccountToken}];
  const matching=(transactions,info)=>(transactions||[]).filter(t=>bindings(info).some(b=>t.productId===b.productId&&typeof t.appAccountToken==='string'&&t.appAccountToken.toLowerCase()===b.appAccountToken?.toLowerCase()));
+ const hasActiveSubscription=info=>info.subscriptions?.some(s=>s.active||s.testActive);
  return {
   async status(){const c=context();const status=await request(c,'ios-billing',{action:'status'});unchanged(c);return status;},
   async products(productId='manee.store1.monthly'){return storeKit.products({productId});},
@@ -25,26 +26,28 @@ export function createBillingClient({storeKit,request,getContext}) {
    if(status.otherPlatformActive)throw Error('이 계정은 다른 스토어에서 구독 중이에요. 기존 구독을 확인해 주세요.');
    if(!status.ready)throw Error('구독 연결을 준비하고 있어요.');
    if(status.otherStoreSubscribed)throw Error('다른 매장에서 이용 중인 구독이 있어요. 추가 매장 결제는 준비 중이에요.');
-   if(status.subscriptions?.some(s=>s.active||s.testActive)){await release();return {...status,status:'alreadyActive'};}
+   if(hasActiveSubscription(status)){await release();return {...status,status:'alreadyActive'};}
    if(status.billingScope==='account'&&!claimed)throw Error('결제 연결을 다시 시도해 주세요.');
    // Recover interrupted purchases before attempting a second charge.
    const pending=await storeKit.pending();unchanged(c);
    const relevant=matching(pending.transactions,status);
-   if(relevant.length){
-    let result;for(const t of relevant)result=await saved(c,t);
-    await release();return {...result,status:'restored'};
+   let restored;
+   for(const transaction of relevant){
+    const result=await saved(c,transaction);
+    if(hasActiveSubscription(result))restored=result;
    }
-   if(pending.transactions?.some(t=>t.productId===(status.productId||'manee.store1.monthly')))throw Error('이 Apple 계정의 구독이 다른 매장에 연결되어 있어요. 처음 구독한 매장에서 구매 복원을 눌러 주세요.');
+   if(restored){await release();return {...restored,status:'restored'};}
+   if(pending.transactions?.some(t=>t.productId===(status.productId||'manee.store1.monthly')&&!relevant.includes(t)))throw Error('이 Apple 계정의 구독이 다른 매장에 연결되어 있어요. 처음 구독한 매장에서 구매 복원을 눌러 주세요.');
    const product=await storeKit.products({productId:status.productId||'manee.store1.monthly'});unchanged(c);
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요.');
    if(selection?.twoMonthsFree===true&&product.twoMonthsFree!==true)throw Error('무료체험 대상이 변경됐어요. 구독 화면을 닫고 요금·혜택을 다시 확인해 주세요.');
    storeStarted=true;
-   const result=await storeKit.purchase({appAccountToken:status.appAccountToken,productId:status.productId||'manee.store1.monthly'});unchanged(c);
+   const result=await storeKit.purchase({appAccountToken:status.appAccountToken,productId:status.productId||'manee.store1.monthly',twoMonthsFree:selection?.twoMonthsFree===true});unchanged(c);
    if(result.status==='cancelled')await release();
    if(result.status!=='purchased')return result;
    const verified=await saved(c,result);await release();
    return {...verified,status:'purchased'};
-   }catch(error){if(!storeStarted)await release();throw error;}
+   }catch(error){if(!storeStarted||error?.code==='storekit_not_started')await release();throw error;}
   }),
   restore:()=>run(async c=>{
    const status=await request(c,'ios-billing',{action:'status'});unchanged(c);

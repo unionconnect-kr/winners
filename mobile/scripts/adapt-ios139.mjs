@@ -31,6 +31,16 @@ export function adaptIos139(source, platform = 'ios', {appleLogin = false} = {})
     once("const label={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const label={kakao:'카카오',naver:'네이버'}");
     once("return '<span aria-hidden=\"true\"></span>';", "return '';");
     once("if(!linking&&!available[provider]||linking&&provider==='apple'&&!available.apple&&!linked)continue;", "if(!linking&&!available[provider])continue;");
+  } else {
+    once(
+      "    if(!window.MANEE_SOCIAL_NATIVE)history.replaceState(null,'',location.pathname);\n    const context=await socialRequest({action:'context'});",
+      "    if(!window.MANEE_SOCIAL_NATIVE)history.replaceState(null,'',location.pathname);\n    return applySocialLoginResult(result);\n  }\n  async function applySocialLoginResult(result){\n    const context=await socialRequest({action:'context'});",
+    );
+    once(
+      "try{await controller.begin(provider,{intent:linking?'link':'signin',role,remember:currentRememberChoice()});}",
+      "try{const result=await controller.begin(provider,{intent:linking?'link':'signin',role,remember:currentRememberChoice()});if(result?.handled)await applySocialLoginResult(result);}",
+    );
+    once('nativeScheme:native?.scheme,platform:', 'nativeScheme:native?.scheme,appleSignIn:native?.appleSignIn,platform:');
   }
   if(ios){
   once("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
@@ -69,6 +79,28 @@ export function adaptIos139Social(source, platform = 'ios', {appleLogin = false}
       ["const PROVIDERS = ['kakao', 'naver', 'apple'];", "const PROVIDERS = ['kakao', 'naver'];"],
       ["const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver', apple: 'apple' };", "const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver' };"],
       ["ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true,\n        apple: settings.external?.apple === true };", "ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true };"],
+    );
+  } else {
+    const verificationStart = source.indexOf('        if (error || !data?.session) throw error');
+    const verificationEnd = source.indexOf('      } finally { cancel(); completing = false; }', verificationStart);
+    if (verificationStart < 0 || verificationEnd < 0) throw Error('Missing shared social session verification');
+    const verification = source.slice(verificationStart, verificationEnd);
+    changes.push(
+      ['apple: settings.external?.apple === true', "apple: settings.external?.apple === true && typeof options.appleSignIn === 'function'"],
+      [verification, '        return await applyVerifiedSession(data, error, record);\n'],
+      ['    async function complete(rawUrl) {',
+        '    async function applyVerifiedSession(data, error, record) {\n'+verification.replace(/^ {2}/gm, '')+'    }\n    async function complete(rawUrl) {'],
+      ['        const flow = random();', '        if (provider === \'apple\') {\n'+
+        '          const { identityToken, nonce } = await options.appleSignIn();\n'+
+        '          if (!identityToken || !nonce) throw failure(\'invalid_apple_credential\', \'Apple 로그인 정보를 확인하지 못했어요.\');\n'+
+        '          if (await currentUserId() !== mainUserId) throw failure(\'account_changed\', \'계정이 바뀌었어요. 다시 시작해 주세요.\');\n'+
+        '          const credentials = { provider: \'apple\', token: identityToken, nonce };\n'+
+        '          const { data, error } = intent === \'link\' ? await oauth.auth.linkIdentity(credentials) : await oauth.auth.signInWithIdToken(credentials);\n'+
+        '          const result = await applyVerifiedSession(data, error, { provider, intent, role, remember: remember !== false, mainUserId });\n'+
+        '          cancel();\n'+
+        '          return result;\n'+
+        '        }\n'+
+        '        const flow = random();'],
     );
   }
   for(const [before,after] of changes){

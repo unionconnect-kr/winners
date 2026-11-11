@@ -62,23 +62,23 @@ test('OAuth handles both cold launch and an existing app; unrelated links are ig
   await state.receive({url:first.replace('code=a','code=b')});assert.equal(state.closed,2);assert.equal(state.handled.length,2);
 });
 
-function socialController({apple=true,kakao=true,naver=true,appleLogin=false,verificationProvider='apple'}={}){
+function socialController({apple=true,kakao=true,naver=true,appleLogin=false,nativeApple=true,link=false,verificationProvider='apple',verifiedId}={}){
   const context={window:{},URL,AbortSignal};
   const script=adaptIos139Social(readFileSync(new URL('../release139/assets/social-auth.js',import.meta.url),'utf8'),'ios',{appleLogin});
   vm.runInNewContext(script,context);
   const api=context.window.MANEE_SOCIAL_AUTH,calls=[],opened=[],saved=new Map(),applied=[];
   const user={id:'existing-user',identities:[{provider:'apple'},{provider:'kakao'}]};
-  const db={auth:{getSession:async()=>({data:{session:appleLogin?null:{user}}}),getUser:async()=>({data:{user}})}};
-  const verifiedUser={id:'signed-in-user',identities:[{provider:verificationProvider}]};
+  const db={auth:{getSession:async()=>({data:{session:appleLogin&&!link?null:{user,access_token:'current-access',refresh_token:'current-refresh'}}}),getUser:async()=>({data:{user}})}};
+  const verifiedUser={id:verifiedId||(link?'existing-user':'signed-in-user'),identities:[{provider:verificationProvider}]};
+  const tokenResult={data:{session:{access_token:'test-access',refresh_token:'test-refresh',user:verifiedUser}}};
   const controller=api.createController({
     supabase:{createClient:(_url,_key,{auth})=>{
       assert.equal(auth.flowType,'pkce');
       return {auth:{
         signInWithOAuth:async input=>{calls.push(input);return{data:{url:'https://example.supabase.co/auth/v1/authorize?provider='+input.provider}};},
-        exchangeCodeForSession:async code=>{
-          assert.equal(code,'apple-test-code');
-          return {data:{session:{access_token:'test-access',refresh_token:'test-refresh',user:verifiedUser}}};
-        },
+        signInWithIdToken:async input=>{calls.push(input);return tokenResult;},
+        linkIdentity:async input=>{calls.push(input);return tokenResult;},
+        setSession:async tokens=>{assert.equal(tokens.access_token,'current-access');return {};},
         getUser:async()=>({data:{user:verifiedUser}}),
       }};
     }},
@@ -86,6 +86,7 @@ function socialController({apple=true,kakao=true,naver=true,appleLogin=false,ver
     platform:'ios',nativeScheme:'kr.co.manee.app.staging',getLocation:()=> 'capacitor://localhost',
     storage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v),removeItem:k=>saved.delete(k)},
     random:()=> 'test-flow',open:async (url,request)=>opened.push({url,request}),
+    appleSignIn:nativeApple?async()=>({identityToken:'apple-test-token',nonce:'apple-test-nonce'}):undefined,
     applySession:async (session,record)=>applied.push({session,record}),
     fetch:async()=>({ok:true,json:async()=>({external:{apple,kakao}})})
   });
@@ -140,22 +141,21 @@ test('iOS Apple release renders the sign-in button for both roles',async()=>{
     const {window}=new JSDOM('<main class="ml-social-slot"></main>');
     try{
       window.MANEE_SOCIAL_AUTH=api;
+      const completed=[];
       const context={window,document:window.document,state:{landingTab:role},
-        currentRememberChoice:()=>true,showToast:assert.fail};
+        currentRememberChoice:()=>true,showToast:assert.fail,applySocialLoginResult:async result=>completed.push(result)};
       vm.runInNewContext(entry,context);
       await context.decorateSocialEntry(controller);
       const buttons=[...window.document.querySelectorAll('#social-login-buttons button')];
       assert.deepEqual(buttons.map(button=>button.textContent.replace(/^/,'')),
         ['카카오로 로그인','네이버로 로그인','Apple로 로그인']);
       await buttons[2].onclick();
-      const pending=controller.pending();
-      assert.equal(pending.role,role);
+      assert.equal(completed[0].role,role);
       assert.equal(calls[0].provider,'apple');
-      assert.equal(opened[0].request.provider,'apple');
-      assert.equal(opened[0].request.intent,'signin');
-      assert.equal(applied.length,0);
-      const result=await controller.complete(pending.redirectTo+'&code=apple-test-code');
-      assert.equal(result.handled,true);
+      assert.equal(calls[0].token,'apple-test-token');
+      assert.equal(calls[0].nonce,'apple-test-nonce');
+      assert.equal(opened.length,0);
+      assert.equal(completed[0].handled,true);
       assert.equal(applied[0].session.user.id,'signed-in-user');
       assert.equal(applied[0].record.role,role);
       assert.equal(controller.pending(),null);
@@ -167,24 +167,30 @@ test('Apple login requires server availability and a verified Apple identity',as
   const disabled=socialController({appleLogin:true,apple:false});
   assert.equal(JSON.stringify(await disabled.controller.providers()),JSON.stringify({kakao:true,naver:true,apple:false}));
   await assert.rejects(disabled.controller.begin('apple'),{code:'provider_unavailable'});
+  await assert.rejects(socialController({appleLogin:true,nativeApple:false}).controller.begin('apple'),{code:'provider_unavailable'});
   const {controller,applied}=socialController({appleLogin:true,verificationProvider:'kakao'});
-  const pending=await controller.begin('apple');
-  await assert.rejects(controller.complete(pending.redirectTo+'&code=apple-test-code'),{code:'identity_mismatch'});
+  await assert.rejects(controller.begin('apple'),{code:'identity_mismatch'});
   assert.equal(applied.length,0);
   assert.equal(controller.pending(),null);
 });
 
-test('iOS opens Apple through the project or an authorized account-linking URL',async()=>{
+test('iOS Apple links the verified identity to the current MANEE account',async()=>{
+  const linked=socialController({appleLogin:true,link:true});
+  assert.equal((await linked.controller.begin('apple',{intent:'link'})).user.id,'existing-user');
+  assert.equal(linked.applied[0].record.intent,'link');
+  assert.equal(linked.opened.length,0);
+  const wrong=socialController({appleLogin:true,link:true,verifiedId:'different-user'});
+  await assert.rejects(wrong.controller.begin('apple',{intent:'link'}),{code:'account_changed'});
+  assert.equal(wrong.applied.length,0);
+});
+
+test('the browser bridge handles other iOS login providers only',async()=>{
   const {native,state}=social();
   const origin='https://obpkzecgswnfuyhwvncd.supabase.co';
   const authorize=origin+'/auth/v1/authorize?provider=apple';
-  await native.open(authorize,{provider:'apple'});
-  await assert.rejects(native.open(authorize,{provider:'naver'}));
+  await assert.rejects(native.open(authorize,{provider:'apple'}));
   const link=new URL('https://appleid.apple.com/auth/authorize');
   link.search=new URLSearchParams({state:'test-state',client_id:'manee-service',response_type:'code',redirect_uri:origin+'/auth/v1/callback'});
-  await assert.rejects(native.open(link.href,{provider:'apple'}));
-  await native.open(link.href,{provider:'apple',intent:'link'});
-  link.searchParams.set('redirect_uri','https://example.test/auth/v1/callback');
   await assert.rejects(native.open(link.href,{provider:'apple',intent:'link'}));
-  assert.equal(state.opened.length,2);
+  assert.equal(state.opened.length,0);
 });

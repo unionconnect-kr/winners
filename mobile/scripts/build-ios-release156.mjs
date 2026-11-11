@@ -38,5 +38,5 @@ writeFileSync(htmlPath, html);
 
 const infoPath = resolve(output, 'build-info.json');
 const info = JSON.parse(readFileSync(infoPath, 'utf8'));
-const updatedInfo = {...info, versionName: '1.56', versionCode: 57, releaseVersion: '1.56', sourceVersion: '1.52', appInfoEnabled: true, appleLoginEnabled: true};
+const updatedInfo = {...info, versionName: '1.56', versionCode: 57, releaseVersion: '1.56', sourceVersion: '1.52', appInfoEnabled: true, appleLoginEnabled: true, appleLoginMethod: 'native'};
 writeFileSync(infoPath, JSON.stringify(updatedInfo, null, 2) + '\n');

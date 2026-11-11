@@ -1,7 +1,9 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { iosOAuthUrl } from './ios-oauth-url.js';
 import { nativeSocialScheme } from './native-environment.mjs';
+const AppleSignIn = registerPlugin('ManeeAppleSignIn');
 
 export function createSocialNative({app, browser, scheme, origin}) {
   let listener;
@@ -33,6 +35,8 @@ export function createSocialNative({app, browser, scheme, origin}) {
 }
 
 export function installIosSocial(config) {
-  window.MANEE_SOCIAL_NATIVE = createSocialNative({app:App,browser:Browser,
+  const native = createSocialNative({app:App,browser:Browser,
     scheme:nativeSocialScheme(config),origin:new URL(config.supabaseUrl).origin});
+  if (Capacitor.isPluginAvailable('ManeeAppleSignIn')) native.appleSignIn = () => AppleSignIn.authorize();
+  window.MANEE_SOCIAL_NATIVE = native;
 }

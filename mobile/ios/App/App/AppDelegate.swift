@@ -2,6 +2,8 @@ import Security
 import UIKit
 import Capacitor
 import StoreKit
+import AuthenticationServices
+import CryptoKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -60,6 +62,82 @@ class ManeeBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(ManeeStoreKitPlugin())
         bridge?.registerPluginInstance(ManeeReportFilesPlugin())
         bridge?.registerPluginInstance(ManeeSecureAuthPlugin())
+        bridge?.registerPluginInstance(ManeeAppleSignInPlugin())
+    }
+}
+
+@objc(ManeeAppleSignInPlugin)
+public class ManeeAppleSignInPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ManeeAppleSignInPlugin"
+    public let jsName = "ManeeAppleSignIn"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise)
+    ]
+    private var authorization: ManeeAppleAuthorization?
+
+    @objc func authorize(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [self] in
+            guard authorization == nil, let window = bridge?.viewController?.viewIfLoaded?.window else {
+                call.reject("Apple 로그인 화면을 열 수 없어요."); return
+            }
+            var randomBytes = [UInt8](repeating: 0, count: 32)
+            let randomStatus = randomBytes.withUnsafeMutableBytes { bytes in
+                guard let address = bytes.baseAddress else { return errSecParam }
+                return SecRandomCopyBytes(kSecRandomDefault, bytes.count, address)
+            }
+            guard randomStatus == errSecSuccess else {
+                call.reject("Apple 로그인을 시작하지 못했어요."); return
+            }
+            let nonce = randomBytes.map { String(format: "%02x", $0) }.joined()
+            let flow = ManeeAppleAuthorization(window: window, nonce: nonce) { [weak self] token, message in
+                self?.authorization = nil
+                if let token { call.resolve(["identityToken": token, "nonce": nonce]) }
+                else { call.reject(message ?? "Apple 로그인 정보를 확인하지 못했어요.") }
+            }
+            authorization = flow
+            flow.start()
+        }
+    }
+}
+
+@MainActor
+private final class ManeeAppleAuthorization: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private let window: UIWindow
+    private let nonce: String
+    private let completion: (String?, String?) -> Void
+    private var controller: ASAuthorizationController?
+
+    init(window: UIWindow, nonce: String, completion: @escaping (String?, String?) -> Void) {
+        self.window = window
+        self.nonce = nonce
+        self.completion = completion
+    }
+
+    func start() {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.email]
+        request.nonce = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        self.controller = controller
+        controller.performRequests()
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor { window }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let data = credential.identityToken, let token = String(data: data, encoding: .utf8), !token.isEmpty else {
+            completion(nil, nil)
+            return
+        }
+        completion(token, nil)
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+        completion(nil, cancelled ? "Apple 로그인을 취소했어요." : "Apple 로그인을 완료하지 못했어요. 다시 시도해 주세요.")
     }
 }
 
@@ -146,16 +224,18 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     deinit { updates?.cancel() }
 
+    private func isTwoMonthTrial(_ offer: Product.SubscriptionOffer?) -> Bool {
+        guard let offer else { return false }
+        return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 2
+    }
+
     private func approvedProduct(_ product: Product) -> Bool {
         guard let subscription = product.subscription,
               subscription.subscriptionPeriod.unit == .month, subscription.subscriptionPeriod.value == 1,
               product.priceFormatStyle.currencyCode == "KRW", product.price == Decimal(9900),
               !product.isFamilyShareable else { return false }
-        if product.id == "manee.store1.monthly" {
-            guard let offer = subscription.introductoryOffer else { return false }
-            return offer.paymentMode == .freeTrial && offer.period.unit == .month && offer.period.value == 2
-        }
-        return subscription.introductoryOffer == nil
+        guard let offer = subscription.introductoryOffer else { return true }
+        return product.id == "manee.store1.monthly" && isTwoMonthTrial(offer)
     }
 
     @objc func products(_ call: CAPPluginCall) {
@@ -173,7 +253,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let subscription = product.subscription {
                     let eligible = await subscription.isEligibleForIntroOffer
                     let offer = subscription.introductoryOffer
-                    item["twoMonthsFree"] = product.id == "manee.store1.monthly" && eligible && offer?.paymentMode == .freeTrial && offer?.period.unit == .month && offer?.period.value == 2
+                    item["twoMonthsFree"] = product.id == "manee.store1.monthly" && eligible && isTwoMonthTrial(offer)
                 }
                 call.resolve(item)
             } catch { call.reject("상품 정보를 확인하지 못했어요.") }
@@ -182,19 +262,28 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func purchase(_ call: CAPPluginCall) {
         guard let productId = call.getString("productId"), productIds.contains(productId) else {
-            call.reject("매장 구독 상품을 확인해 주세요."); return
+            call.reject("매장 구독 상품을 확인해 주세요.", "storekit_not_started"); return
         }
         guard let value = call.getString("appAccountToken"), let account = UUID(uuidString: value) else {
-            call.reject("매장 연결을 다시 확인해 주세요."); return
+            call.reject("매장 연결을 다시 확인해 주세요.", "storekit_not_started"); return
         }
         Task { @MainActor in
+            var purchaseStarted = false
             do {
                 guard let product = try await Product.products(for: [productId]).first else {
-                    call.reject("상품을 불러오지 못했어요."); return
+                    call.reject("상품을 불러오지 못했어요.", "storekit_not_started"); return
                 }
                 guard approvedProduct(product) else {
-                    call.reject("월 구독 상품과 요금을 확인해 주세요."); return
+                    call.reject("월 구독 상품과 요금을 확인해 주세요.", "storekit_not_started"); return
                 }
+                if call.getBool("twoMonthsFree") == true {
+                    guard productId == "manee.store1.monthly", let subscription = product.subscription,
+                          isTwoMonthTrial(subscription.introductoryOffer), await subscription.isEligibleForIntroOffer else {
+                        call.reject("무료체험 대상이 변경됐어요. 구독 화면을 다시 열어 주세요.", "storekit_not_started")
+                        return
+                    }
+                }
+                purchaseStarted = true
                 switch try await product.purchase(options: [.appAccountToken(account)]) {
                 case .success(let result):
                     guard case .verified(let transaction) = result else {
@@ -206,7 +295,10 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                 case .pending: call.resolve(["status": "pending"])
                 @unknown default: call.reject("구매 상태를 확인하지 못했어요.")
                 }
-            } catch { call.reject("구매를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.") }
+            } catch {
+                call.reject("구매를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
+                            purchaseStarted ? nil : "storekit_not_started")
+            }
         }
     }
 

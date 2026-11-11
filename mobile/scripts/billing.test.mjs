@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBillingClient} from '../src/billing.mjs';
-function setup({fail=false,ready=true,pending=[],change=false}={}){
+function setup({fail=false,ready=true,pending=[],change=false,checkout=false,purchaseError,trial=false}={}){
  let c={userId:'owner',storeId:'store',role:'storeOwner'},finished=[],purchases=0,calls=[];
  const client=createBillingClient({getContext:()=>c,storeKit:{
-  products:async()=>({monthly:true,priceApproved:true}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
-  purchase:async()=>{purchases++;return {status:'purchased',transactionId:'1',signedTransaction:'signed'};},
+  products:async()=>({monthly:true,priceApproved:true,twoMonthsFree:trial}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
+  purchase:async selection=>{purchases++;if(purchaseError)throw purchaseError;assert.equal(selection.twoMonthsFree,trial);return {status:'purchased',transactionId:'1',signedTransaction:'signed'};},
   finish:async t=>finished.push(t.transactionId)},
  request:async(_c,_name,body)=>{calls.push(body.action);if(body.action==='verify'){
   if(fail)throw Error('verification_failed');if(change)c={...c,userId:'other'};
-  return {subscriptions:[{active:true}]};
- }return {ready,appAccountToken:'server-token',subscriptions:[]};}});
+  return {subscriptions:[{active:body.signedTransaction!=='expired'}]};
+ }return {ready,appAccountToken:'server-token',subscriptions:[],...(checkout&&body.action==='prepare'?{billingScope:'account',checkoutId:body.checkoutId}:{})};}});
  return {client,finished,calls,purchases:()=>purchases};
 }
 test('server verification must succeed before StoreKit transaction is finished',async()=>{
@@ -39,4 +39,22 @@ test('an iOS trial shown to the user cannot silently become an immediate paid ch
  const h=setup();
  await assert.rejects(()=>h.client.purchase({twoMonthsFree:true}),/무료체험 대상이 변경/);
  assert.equal(h.purchases(),0);assert.deepEqual(h.finished,[]);
+});
+test('an expired unfinished transaction is saved and does not consume a new checkout',async()=>{
+ const h=setup({checkout:true,pending:[{transactionId:'old',signedTransaction:'expired'}]});
+ assert.equal((await h.client.purchase()).status,'purchased');
+ assert.equal(h.purchases(),1);
+ assert.deepEqual(h.finished,['old','1']);
+ assert.deepEqual(h.calls,['prepare','verify','verify','release']);
+});
+test('a product failure before StoreKit opens releases the checkout immediately',async()=>{
+ const h=setup({checkout:true,purchaseError:Object.assign(Error('상품을 불러오지 못했어요.'),{code:'storekit_not_started'})});
+ await assert.rejects(()=>h.client.purchase(),/상품을 불러오지 못했어요/);
+ assert.deepEqual(h.calls,['prepare','release']);
+ assert.deepEqual(h.finished,[]);
+});
+test('the advertised trial is passed through to the last StoreKit product check',async()=>{
+ const h=setup({trial:true});
+ assert.equal((await h.client.purchase({twoMonthsFree:true})).status,'purchased');
+ assert.equal(h.purchases(),1);
 });
