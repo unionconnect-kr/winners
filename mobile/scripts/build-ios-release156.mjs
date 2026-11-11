@@ -10,7 +10,7 @@ if (process.argv.length !== 4 || process.argv[2] !== 'ios' || process.argv[3] !=
 const mobile = fileURLToPath(new URL('..', import.meta.url));
 execFileSync(process.execPath, ['scripts/build-release152.mjs', 'ios', 'production'], {
   cwd: mobile,
-  env: {...process.env, MANEE_IOS_PUBLIC_RELEASE: 'true'},
+  env: {...process.env, MANEE_IOS_PUBLIC_RELEASE: 'true', MANEE_IOS_APPLE_LOGIN: 'true'},
   stdio: 'inherit',
 });
 
@@ -38,5 +38,5 @@ writeFileSync(htmlPath, html);
 
 const infoPath = resolve(output, 'build-info.json');
 const info = JSON.parse(readFileSync(infoPath, 'utf8'));
-const updatedInfo = {...info, versionName: '1.56', versionCode: 57, releaseVersion: '1.56', sourceVersion: '1.52', appInfoEnabled: true};
+const updatedInfo = {...info, versionName: '1.56', versionCode: 57, releaseVersion: '1.56', sourceVersion: '1.52', appInfoEnabled: true, appleLoginEnabled: true};
 writeFileSync(infoPath, JSON.stringify(updatedInfo, null, 2) + '\n');

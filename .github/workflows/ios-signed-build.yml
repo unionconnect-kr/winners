@@ -2,7 +2,7 @@ name: iOS signed archive
 
 on:
   push:
-    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016, codex/ios-final-156-20261109]
+    branches: [main, codex/ios-build-preparation, codex/ios-release-20261016, codex/ios-final-156-20261109, codex/ios-apple-login-20261111]
     paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**']
   workflow_dispatch:
     inputs:
@@ -20,7 +20,14 @@ concurrency:
 
 jobs:
   archive:
-    if: github.repository == 'unionconnect-kr/winners' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/ios-build-preparation' || github.ref == 'refs/heads/codex/ios-release-20261016' || (github.event_name == 'push' && github.ref == 'refs/heads/codex/ios-final-156-20261109'))
+    if: >-
+      github.repository == 'unionconnect-kr/winners' &&
+      (github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/codex/ios-build-preparation' ||
+       github.ref == 'refs/heads/codex/ios-release-20261016' ||
+       (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/codex/ios-final-156-20261109' ||
+         github.ref == 'refs/heads/codex/ios-apple-login-20261111')))
     runs-on: macos-15-intel
     timeout-minutes: 60
     defaults:
@@ -144,11 +151,53 @@ jobs:
           PY
       - run: npm ci
       - run: npm test
+      - name: Check production Apple sign-in configuration
+        if: github.ref == 'refs/heads/codex/ios-apple-login-20261111'
+        continue-on-error: true
+        run: |
+          node --input-type=module <<'JS'
+          import {createHash, randomBytes, randomUUID} from 'node:crypto';
+          import {appendFileSync, readFileSync} from 'node:fs';
+          const {production} = JSON.parse(readFileSync('../config/environments.json','utf8'));
+          const {supabaseUrl, publishableKey} = production;
+          const request = {headers:{apikey:publishableKey},signal:AbortSignal.timeout(15000)};
+          let enabled = 'unknown';
+          let redirects = false;
+          try {
+            const response = await fetch(new URL('/auth/v1/settings',supabaseUrl), request);
+            if (!response.ok) throw Error('Production Auth settings returned HTTP ' + response.status);
+            enabled = (await response.json()).external?.apple === true;
+            if (enabled) {
+              const callback = new URL('kr.co.manee.app://auth/callback');
+              callback.search = new URLSearchParams({manee_auth:'callback',flow:randomUUID()});
+              const authorize = new URL('/auth/v1/authorize',supabaseUrl);
+              authorize.search = new URLSearchParams({
+                provider:'apple',
+                redirect_to:callback.href,
+                code_challenge:createHash('sha256').update(randomBytes(32).toString('base64url')).digest('base64url'),
+                code_challenge_method:'s256',
+              });
+              const result = await fetch(authorize,{...request,redirect:'manual'});
+              const location = result.headers.get('location');
+              const destination = location ? new URL(location,authorize) : null;
+              redirects = result.status >= 300 && result.status < 400 &&
+                destination?.origin === 'https://appleid.apple.com' &&
+                destination?.pathname === '/auth/authorize';
+            }
+          } catch (error) {
+            console.log('Could not verify the Apple redirect:', error.message);
+          }
+          const summary = 'Production Apple sign-in enabled: ' + enabled +
+            '\nProduction Auth redirects to Apple: ' + redirects;
+          console.log(summary);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,'\n' + summary + '\n');
+          if (!redirects) process.exitCode = 1;
+          JS
       - name: Prepare selected native environment
         run: |
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
             npm run build:ios139
-          elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ]; then
+          elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ]; then
             node scripts/build-ios-release156.mjs ios production
             node scripts/verify-store-assets.mjs --ios-release156
           else
@@ -161,7 +210,7 @@ jobs:
           build_number="1.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           version_args=()
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then version_args=(MARKETING_VERSION=1.39); fi
-          if [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ]; then
             build_number="156.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
             version_args=(MARKETING_VERSION=1.56)
           fi
@@ -184,7 +233,7 @@ jobs:
           echo '### Signed archive verified' >> "$GITHUB_STEP_SUMMARY"
           echo 'Signing succeeded; the IPA is an artifact only. Native subscriptions, push notifications, branding and real-device QA remain release gates.' >> "$GITHUB_STEP_SUMMARY"
       - name: Verify the exported 1.56 IPA matches the tested production assets
-        if: github.ref == 'refs/heads/codex/ios-final-156-20261109'
+        if: github.ref == 'refs/heads/codex/ios-final-156-20261109' || github.ref == 'refs/heads/codex/ios-apple-login-20261111'
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -198,7 +247,7 @@ jobs:
               info = plistlib.loads(archive.read(app + 'Info.plist'))
               if (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != ('kr.co.manee.app', '1.56', expected_build):
                   raise SystemExit('Unexpected signed app version or bundle')
-              for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'build-info.json'):
+              for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'social-auth.js', 'build-info.json'):
                   if archive.read(app + 'public/' + asset) != (pathlib.Path('www') / asset).read_bytes():
                       raise SystemExit('Exported IPA differs from tested asset: ' + asset)
           print('Signed IPA matches the verified MANEE 1.56 production assets.')

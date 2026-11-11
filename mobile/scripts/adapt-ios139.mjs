@@ -1,7 +1,7 @@
 import {androidOAuthUrl} from '../src/android-social-guard.js';
 import {adaptIosDeviceFeedback} from './adapt-ios-device-feedback.mjs';
 import {iosOAuthUrl} from '../src/ios-oauth-url.js';
-export function adaptIos139(source, platform = 'ios') {
+export function adaptIos139(source, platform = 'ios', {appleLogin = false} = {}) {
   if(!['ios','android'].includes(platform))throw Error('Unsupported platform');
   const ios=platform==='ios';
   let html=source;
@@ -25,11 +25,13 @@ export function adaptIos139(source, platform = 'ios') {
   once('가입하고 1개월 무료로 시작하기</button>', '가입하고 시작하기</button>');
   once('placeholder="아이디를 입력해 주세요" spellcheck="false"', 'placeholder="아이디를 입력해 주세요" maxlength="30" spellcheck="false"');
   once('placeholder="비밀번호를 입력해 주세요" autocomplete="current-password"', 'placeholder="비밀번호를 입력해 주세요" maxlength="72" autocomplete="current-password"');
-  once('카카오·네이버·Apple로 가입했다면', '카카오·네이버로 가입했다면');
-  once("const providerName={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const providerName={kakao:'카카오',naver:'네이버'}");
-  once("const label={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const label={kakao:'카카오',naver:'네이버'}");
-  once("return '<span aria-hidden=\"true\"></span>';", "return '';");
-  once("if(!linking&&!available[provider]||linking&&provider==='apple'&&!available.apple&&!linked)continue;", "if(!linking&&!available[provider])continue;");
+  if (!ios || !appleLogin) {
+    once('카카오·네이버·Apple로 가입했다면', '카카오·네이버로 가입했다면');
+    once("const providerName={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const providerName={kakao:'카카오',naver:'네이버'}");
+    once("const label={kakao:'카카오',naver:'네이버',apple:'Apple'}", "const label={kakao:'카카오',naver:'네이버'}");
+    once("return '<span aria-hidden=\"true\"></span>';", "return '';");
+    once("if(!linking&&!available[provider]||linking&&provider==='apple'&&!available.apple&&!linked)continue;", "if(!linking&&!available[provider])continue;");
+  }
   if(ios){
   once("if(window.Capacitor?.getPlatform?.()==='android')throw Error('Native file saver unavailable');",
     "if(['android','ios'].includes(window.Capacitor?.getPlatform?.()))throw Error('Native file saver unavailable');");
@@ -55,16 +57,20 @@ export function adaptIos139(source, platform = 'ios') {
   return adaptIosDeviceFeedback(html);
 }
 
-// Both packaged platforms expose only Kakao and Naver; archived inputs stay immutable.
-export function adaptIos139Social(source, platform = 'ios') {
+// Apple sign-in is enabled only for the selected iOS release.
+export function adaptIos139Social(source, platform = 'ios', {appleLogin = false} = {}) {
   if(!['ios','android'].includes(platform))throw Error('Unsupported platform');
   let script=source;
   const changes=[
-    ["const PROVIDERS = ['kakao', 'naver', 'apple'];", "const PROVIDERS = ['kakao', 'naver'];"],
-    ["const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver', apple: 'apple' };", "const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver' };"],
-    ["ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true,\n        apple: settings.external?.apple === true };", "ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true };"],
     ["      // Ship the same privacy-preserving choices on iPhone before exposing Kakao.\n      if (options.platform === 'ios' && !ready.apple) ready.kakao = ready.naver = false;\n", ""]
   ];
+  if (platform !== 'ios' || !appleLogin) {
+    changes.push(
+      ["const PROVIDERS = ['kakao', 'naver', 'apple'];", "const PROVIDERS = ['kakao', 'naver'];"],
+      ["const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver', apple: 'apple' };", "const AUTH_PROVIDERS = { kakao: 'kakao', naver: 'custom:naver' };"],
+      ["ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true,\n        apple: settings.external?.apple === true };", "ready = { kakao: settings.external?.kakao === true, naver: config.socialProviders?.naver === true };"],
+    );
+  }
   for(const [before,after] of changes){
     if(script.split(before).length!==2)throw Error('iOS social auth anchor mismatch: '+before.slice(0,90));
     script=script.replace(before,after);
