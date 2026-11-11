@@ -21,7 +21,7 @@ await db.exec(helpers.slice(helpers.indexOf('create or replace function private.
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261012093336_native_ios_services.sql',import.meta.url),'utf8'));
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261012094025_native_ios_account_cleanup.sql',import.meta.url),'utf8'));
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261015195952_native_ios_catalog_gates.sql',import.meta.url),'utf8'));
-await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261111152000_native_ios_expired_subscription_repurchase.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261111150959_native_ios_expired_subscription_repurchase.sql',import.meta.url),'utf8'));
 const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const owner=id(1),other=id(2),store=id(101),store2=id(102),device='ab'.repeat(32);
 await db.exec(`insert into auth.users(id) values('${owner}'),('${other}');
