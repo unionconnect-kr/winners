@@ -152,7 +152,7 @@ test('SP-05: the owner change notices are fetched by an explicit visit trigger, 
 });
 
 // ---- owner home (approved mockup)
-test('owner home: one merged per-store card, no duplicate notification strip, real logo, bell carries the count', ()=>{
+test('owner home: sales, attendance and cost cards, no quick buttons, real logo and notification count', ()=>{
   const home=slice('  function renderOwnerHome(){','  function renderOwnerPeople(){');
   assert.ok(home.includes('renderOwnerOverview()')&&home.includes('renderOwnerWork()')&&home.includes('renderOwnerFortuneMini()'));
   assert.ok(!home.includes('renderNotifSummaryBar')&&!home.includes('renderDashboard(')&&!home.includes('owner-alerts'));   // no "확인할 일" strip, no second per-store list
@@ -160,7 +160,8 @@ test('owner home: one merged per-store card, no duplicate notification strip, re
   assert.ok(shell.includes('MASCOT_IMG_DATA')&&!shell.includes('owner-wordmark'));
   assert.ok(shell.includes('getNotifGroups().length')&&shell.includes('owner-notice-count'));
   const card=slice('  function renderOwnerWork(){','  function ownerWorkPaint(){');
-  assert.ok(card.includes('월 누적 매출')&&card.includes('스케줄 미등록')&&card.includes('data-ow-sales'));
+  assert.ok(card.includes('매장별 직원 출근')&&card.includes('스케줄 미등록')&&card.includes('data-ow-att'));
+  assert.ok(home.includes('renderOwnerCosts()')&&!home.includes('owner-quick'));
 });
 test('owner home: selected store scopes home cards, numbers and bars', ()=>{
   const scopeSrc=slice('  function ownerHomeScope(){','  // "매장별 오늘 현황"');
@@ -182,23 +183,16 @@ test('V2-01 client requires confirmation for each name or phone not yet adopted'
   assert.equal(changes(ed({name:true,phone:true}))[0].needsConfirm,false);
 });
 const ovSrc=()=>slice('  function ownerYmdAdd(ymd,n){','  function renderOwnerHome(){');
-test('V2-03: sales, labor and food are judged on their own inputs (a failed expense lookup does not hide a readable labor cost)', ()=>{
-  // 지출비율 = expenseRatio (total expense ÷ sales, every category) - this test is about which STORE'S inputs feed
-  // the combined ratio, not about the category split (see expense-category-and-vat.test.mjs).
-  const st={monthNum:9,dashboardLoading:false,myStores:['A','B'],ownerWork:{loadedOnce:false,stores:{}},dashboardData:[
-    {store:'A',salesSum:1000000,salesReportCount:1,laborPay:100000,laborRatio:10,expenseSum:100000,foodThreshold:40,expenseRatio:10,foodConfirmedRatio:10,hasUnclassifiedExpense:false,loadFailures:[],dailySales:{}},
-    {store:'B',salesSum:1000000,salesReportCount:1,laborPay:600000,laborRatio:60,expenseSum:0,foodThreshold:40,expenseRatio:null,foodConfirmedRatio:null,hasUnclassifiedExpense:false,loadFailures:['지출'],dailySales:{}}]};
-  const f=new Function('state','ownerHomeScope','ownerSalesUnreadable','DEFAULT_LABOR_RATIO_LIMIT','ownerRouteButton','escapeHtml','pad','ownerWorkYmd',slice('  function ownerLaborLimit(d){','  function ownerLaborReadable(d){')+ovSrc()+';return renderOwnerOverview;')(st,()=>['A','B'],d=>(d.loadFailures||[]).includes('매출'),22,()=>'',x=>String(x),n=>String(n).padStart(2,'0'),()=>'2026-09-20');
-  const out=f();
-  assert.ok(/인건비율 <b class="bad">35\.0%<\/b>/.test(out),out.slice(0,600));           // (100k+600k)/(2M) - not 10 %
-  assert.ok(/지출비율 <b class="">10\.0%<\/b><small class="oh-of">1\/2곳/.test(out));   // expense: only store A, neutral (never green when partial), range shown
-  assert.ok(out.includes('지출 조회 실패(B)')&&out.includes('읽은 매장만으로 계산'));
-  // every input readable: green "ok" is allowed again
-  st.dashboardData[1]={...st.dashboardData[1],expenseSum:100000,expenseRatio:10,loadFailures:[],laborPay:100000,laborRatio:10};
-  const ok=f();assert.ok(/인건비율 <b class="ok">10\.0%/.test(ok)&&/지출비율 <b class="ok">10\.0%/.test(ok)&&!ok.includes('조회 실패('));
-  // sales failed for B: B leaves every ratio, "조회 성공 1/2곳" is shown, nothing is turned into 0
-  st.dashboardData[1]={store:'B',salesSum:0,salesReportCount:0,laborPay:0,expenseSum:0,foodThreshold:40,expenseRatio:null,foodConfirmedRatio:null,hasUnclassifiedExpense:false,loadFailures:['매출'],dailySales:{}};
-  const sf=f();assert.ok(sf.includes('조회 성공 1/2곳')&&/인건비율 <b class="">10\.0%<\/b><small class="oh-of">1\/2곳/.test(sf));
+test('combined costs use sums, keep readable labor when expenses fail, and never manufacture partial total ratios', ()=>{
+  const rows=[{store:'A',salesSum:1000000,laborPay:100000,expenseSum:200000,foodExpenseSum:150000,fixedExpenseSum:50000,unclassifiedExpenseSum:50000,loadFailures:[]},
+    {store:'B',salesSum:3000000,laborPay:600000,expenseSum:0,foodExpenseSum:0,fixedExpenseSum:0,loadFailures:['지출']}];
+  const calc=new Function(ovSrc()+';return ownerHomeCosts;')();
+  let cost=calc(rows,['A','B']);assert.equal(cost.labor,700000);assert.equal(cost.ratio(cost.labor),17.5);assert.equal(cost.food,null);assert.equal(cost.total,null);
+  rows[1]={...rows[1],expenseSum:300000,foodExpenseSum:200000,fixedExpenseSum:100000,loadFailures:[]};
+  cost=calc(rows,['A','B']);assert.equal(cost.food,350000);assert.equal(cost.other,300000);assert.equal(cost.total,1350000);assert.equal(cost.ratio(cost.total),33.75);
+  rows[1].loadFailures=['매출'];cost=calc(rows,['A','B']);assert.equal(cost.total,1350000);assert.equal(cost.ratio(cost.total),null);
+  cost=calc(rows,['A']);assert.equal(cost.total,350000);assert.equal(cost.ratio(cost.total),35);
+  assert.equal(calc(rows,['A','B','missing']).total,null);
 });
 test('V2-04: the last 7 days use one business day, separate "not entered" / 0 won / failed, and do not depend on the month view', ()=>{
   const st={ownerWork:{loadedOnce:true,stores:{}},dashboardTrendActiveDate:null};
