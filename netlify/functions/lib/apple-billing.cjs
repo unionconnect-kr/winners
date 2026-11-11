@@ -29,7 +29,7 @@ function validateTransaction(t,environment,token,productId=PRODUCT){
 }
 // Device JWS establishes identity only. A fresh server lookup decides entitlement,
 // so replaying a pre-refund receipt cannot reactivate a refunded subscription.
-async function currentRecord(api,originalId,token,productId=PRODUCT){
+async function currentRecord(api,originalId,token,productId=PRODUCT,deviceTransaction){
  const response=await api.client.getAllSubscriptionStatuses(originalId);
  if(response.bundleId!==BUNDLE||response.environment!==api.environment)throw Error('purchase_mismatch');
  const candidates=(response.data||[]).flatMap(g=>g.lastTransactions||[]).filter(t=>t.originalTransactionId===originalId);
@@ -45,14 +45,26 @@ async function currentRecord(api,originalId,token,productId=PRODUCT){
   expiry=r.gracePeriodExpiresDate;
  }
  let ledger=null;try{ledger=transactionRecord(t);}catch{}
- return {ledger,productId,environment:api.environment,originalId,transactionId:t.transactionId,
+ const record={ledger,productId,environment:api.environment,originalId,transactionId:t.transactionId,
   token:t.appAccountToken.toLowerCase(),status:item.status,expiresAt:new Date(expiry).toISOString(),
   revoked:!!t.revocationDate||item.status===5,signedAt:new Date(t.signedDate).toISOString()};
+ // An authenticated device verification can prove a new purchase even if Apple
+ // has since renewed it. A refresh or notification carries no such authorization.
+ if(deviceTransaction&&!record.revoked&&[1,4].includes(record.status)){
+  const purchase=t.transactionReason==='PURCHASE'?t:deviceTransaction;
+  if(purchase.transactionReason==='PURCHASE'&&!purchase.revocationDate&&!purchase.isUpgraded
+   &&Number.isSafeInteger(purchase.purchaseDate)&&purchase.purchaseDate>0
+   &&purchase.purchaseDate<=purchase.signedDate&&purchase.purchaseDate<purchase.expiresDate
+   &&purchase.purchaseDate<=t.purchaseDate){
+   record.verifiedPurchaseAt=new Date(purchase.purchaseDate).toISOString();
+  }
+ }
+ return record;
 }
 async function verifyPurchase(api,signed,token,productId=PRODUCT){
  if(typeof signed!=='string'||signed.length>50000)throw Error('invalid_request');
  const t=validateTransaction(await api.verifier.verifyAndDecodeTransaction(signed),api.environment,token,productId);
- return currentRecord(api,t.originalTransactionId,token,productId);
+ return currentRecord(api,t.originalTransactionId,token,productId,t);
 }
 function entitlement(record,now=Date.now()){
  return {active:record.environment==='Production'&&[1,4].includes(record.status)&&!record.revoked&&Date.parse(record.expiresAt)>now,

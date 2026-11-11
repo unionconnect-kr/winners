@@ -7,7 +7,7 @@ const billing=require('../netlify/functions/lib/apple-billing.cjs');
 const push=require('../netlify/functions/lib/native-push.cjs');
 const token='00000000-0000-4000-8000-000000000001';
 const transaction={bundleId:'kr.co.manee.app',productId:'manee.store1.monthly',environment:'Production',type:'Auto-Renewable Subscription',inAppOwnershipType:'PURCHASED',quantity:1,originalTransactionId:'123',transactionId:'124',expiresDate:Date.now()+86400000,signedDate:Date.now(),appAccountToken:token};
-function api({status=1,t=transaction}={}){return {environment:'Production',client:{getAllSubscriptionStatuses:async()=>({bundleId:transaction.bundleId,environment:'Production',data:[{lastTransactions:[{originalTransactionId:'123',status,signedTransactionInfo:'fresh',signedRenewalInfo:'renewal'}]}]})},verifier:{verifyAndDecodeTransaction:async s=>s==='fresh'?t:transaction,verifyAndDecodeRenewalInfo:async()=>({originalTransactionId:'123',productId:transaction.productId,environment:'Production',gracePeriodExpiresDate:Date.now()+86400000})}};}
+function api({status=1,t=transaction,device=transaction}={}){return {environment:'Production',client:{getAllSubscriptionStatuses:async()=>({bundleId:transaction.bundleId,environment:'Production',data:[{lastTransactions:[{originalTransactionId:'123',status,signedTransactionInfo:'fresh',signedRenewalInfo:'renewal'}]}]})},verifier:{verifyAndDecodeTransaction:async s=>s==='fresh'?t:device,verifyAndDecodeRenewalInfo:async()=>({originalTransactionId:'123',productId:transaction.productId,environment:'Production',gracePeriodExpiresDate:Date.now()+86400000})}};}
 test('fresh Apple state overrides replayed pre-refund device receipts',async()=>{
  const record=await billing.verifyPurchase(api({status:5,t:{...transaction,revocationDate:Date.now()}}),'old-receipt',token);
  assert.equal(billing.entitlement(record).active,false);assert.equal(record.revoked,true);
@@ -20,6 +20,18 @@ test('sandbox purchases never grant a production entitlement; grace and expirati
  const sandbox=billing.entitlement({...live,environment:'Sandbox'});assert.equal(sandbox.active,false);assert.equal(sandbox.testActive,true);
  assert.equal(billing.entitlement({...live,expiresAt:'2000-01-01T00:00:00Z'}).active,false);
  const grace=await billing.verifyPurchase(api({status:4}),'signed',token);assert.equal(billing.entitlement(grace).active,true);
+});
+test('only an authenticated verification with a signed new purchase can replace an expired binding',async()=>{
+ const purchasedAt=transaction.signedDate-1000;
+ const purchase={...transaction,transactionReason:'PURCHASE',purchaseDate:purchasedAt};
+ const renewal={...transaction,transactionId:'125',transactionReason:'RENEWAL',purchaseDate:transaction.signedDate};
+ const expected=new Date(purchasedAt).toISOString();
+ assert.equal((await billing.verifyPurchase(api({t:purchase}),'device',token)).verifiedPurchaseAt,expected);
+ assert.equal((await billing.verifyPurchase(api({t:renewal,device:purchase}),'device',token)).verifiedPurchaseAt,expected);
+ assert.equal((await billing.currentRecord(api({t:purchase}),'123',token)).verifiedPurchaseAt,undefined);
+ assert.equal((await billing.verifyPurchase(api({t:renewal,device:renewal}),'device',token)).verifiedPurchaseAt,undefined);
+ assert.equal((await billing.verifyPurchase(api({status:2,t:purchase}),'device',token)).verifiedPurchaseAt,undefined);
+ assert.equal((await billing.verifyPurchase(api({t:renewal,device:{...purchase,revocationDate:Date.now()}}),'device',token)).verifiedPurchaseAt,undefined);
 });
 test('APNs JWT is ES256 and time bounded; signing credentials never enter payload',()=>{
  const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});

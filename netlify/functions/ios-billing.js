@@ -53,6 +53,7 @@ exports.handler=async event=>{
   }
   for(const record of records){
    const saved=await service.rpc('manee_ios_save_subscription',{p_record:record});
+   if(saved.error?.code==='23505'&&saved.error.message==='Transaction binding conflict')throw Error('purchase_mismatch');
    if(saved.error||saved.data!==true)throw Error('save_failed');
    await saveLedger(service,[record.ledger]);
   }
