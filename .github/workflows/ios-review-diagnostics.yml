@@ -1,0 +1,89 @@
+name: MANEE iOS review diagnostics
+on:
+  push:
+    branches: [codex/ios-review-check-20261111]
+    paths: ['.github/workflows/ios-review-diagnostics.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    if: github.repository == 'unionconnect-kr/winners'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check subscription and Apple sign-in readiness
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { createHash, randomBytes, randomUUID } from 'node:crypto';
+          import { auditRelease } from './.github/scripts/ios-release-audit.mjs';
+          import { makeToken } from './mobile/scripts/check-apple-connection.mjs';
+          const cfg=JSON.parse(readFileSync('config/environments.json','utf8'));
+          const timeout=()=>AbortSignal.timeout(15000);
+          const get=async(path)=>{
+            const response=await fetch('https://api.appstoreconnect.apple.com'+path,
+              {signal:timeout(),redirect:'error',headers:{Authorization:'Bearer '+makeToken(process.env),Accept:'application/json'}});
+            return {status:response.status,data:response.ok?await response.json():null};
+          };
+          const apple=async()=>{
+            const output=await auditRelease(process.env);
+            const versions=output.versions.filter(v=>v.version==='1.56').map(v=>({version:v.version,state:v.state,build:v.build,review:v.review}));
+            const first=output.subscriptions.find(p=>p.productId==='manee.store1.monthly');
+            const products=output.subscriptions.map(({id,productId,state,period,familySharable,localizations,koreanOffers,pricePoints,reviewScreenshot})=>({id,productId,state,period,familySharable,locales:localizations.map(x=>x.locale),koreanOffers,pricePoints:pricePoints.map(x=>x.customerPrice),reviewScreenshot}));
+            const availability=first?await get('/v1/subscriptions/'+first.id+'/subscriptionAvailability'):null;
+            const availabilityId=availability?.data?.data?.id;
+            const territories=availabilityId&&/^[A-Za-z0-9-]+$/.test(availabilityId)?await get('/v1/subscriptionAvailabilities/'+availabilityId+'/availableTerritories?limit=200'):null;
+            const bundle=await get('/v1/bundleIds?filter%5Bidentifier%5D=kr.co.manee.app');
+            const bundleId=bundle.data?.data?.find(r=>r.attributes?.identifier==='kr.co.manee.app')?.id;
+            const caps=bundleId&&/^[A-Za-z0-9-]+$/.test(bundleId)?await get('/v1/bundleIds/'+bundleId+'/bundleIdCapabilities'):null;
+            console.log('ASC_DIAGNOSTICS '+JSON.stringify({
+              versions,products,catalogStatus:output.catalogHttpStatus,availabilityStatus:availability?.status,
+              territoriesStatus:territories?.status,territoryCount:territories?.data?.data?.length,
+              koreaAvailable:territories?.data?.data?.some(x=>x.id==='KOR'),usaAvailable:territories?.data?.data?.some(x=>x.id==='USA'),
+              bundleStatus:bundle.status,capabilityStatus:caps?.status,
+              signInWithApple:caps?.data?.data?.some(x=>x.attributes?.capabilityType==='SIGN_IN_WITH_APPLE')
+            }));
+          };
+          const auth=async()=>{
+            for(const [name,project] of Object.entries(cfg)){
+              const response=await fetch(new URL('/auth/v1/settings',project.supabaseUrl),{headers:{apikey:project.publishableKey},signal:timeout()});
+              const enabled=response.ok&&(await response.json()).external?.apple===true;
+              let clientId=null,redirectsToApple=false;
+              if(enabled){
+                const authorize=new URL('/auth/v1/authorize',project.supabaseUrl);
+                const callback=new URL((name==='production'?'kr.co.manee.app':'kr.co.manee.app.staging')+'://auth/callback');
+                callback.search=new URLSearchParams({manee_auth:'callback',flow:randomUUID()});
+                authorize.search=new URLSearchParams({provider:'apple',redirect_to:callback.href,
+                  code_challenge:createHash('sha256').update(randomBytes(32).toString('base64url')).digest('base64url'),
+                  code_challenge_method:'s256'});
+                const result=await fetch(authorize,{redirect:'manual',signal:timeout(),headers:{apikey:project.publishableKey}});
+                const location=result.headers.get('location');
+                const target=location?new URL(location,authorize):null;
+                redirectsToApple=target?.origin==='https://appleid.apple.com'&&target.pathname==='/auth/authorize';
+                const candidate=redirectsToApple?target.searchParams.get('client_id'):null;
+                if(candidate&&/^[A-Za-z0-9.-]{3,180}$/.test(candidate))clientId=candidate;
+              }
+              console.log('AUTH_DIAGNOSTICS '+JSON.stringify({name,httpStatus:response.status,enabled,redirectsToApple,clientId}));
+              const token=process.env.SUPABASE_ACCESS_TOKEN;
+              if(!token)continue;
+              const status=await fetch('https://api.supabase.com/v1/projects/'+project.projectRef+'/config/auth',{signal:timeout(),redirect:'error',headers:{Authorization:'Bearer '+token}});
+              const existing=status.ok?await status.json():null;
+              console.log('AUTH_MANAGEMENT '+JSON.stringify({name,httpStatus:status.status,clientIdPresent:!!existing?.external_apple_client_id,secretPresent:!!existing?.external_apple_secret}));
+            }
+            if(!process.env.SUPABASE_ACCESS_TOKEN)console.log('AUTH_MANAGEMENT no configured access token');
+          };
+          const checks=await Promise.allSettled([apple(),auth()]);
+          checks.forEach((result,i)=>{if(result.status==='rejected')console.log((i?'AUTH':'ASC')+'_DIAGNOSTICS_FAILED');});
+          if(checks.every(result=>result.status==='rejected'))process.exitCode=1;
+          JS
