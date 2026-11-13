@@ -44,11 +44,15 @@ export function createHandler({ admin }) {
       if (profileError) return respond({ error: 'profile_unavailable', message: '계정 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.' }, 503);
       if (profile && (profile.user_id !== user.id || profile.status !== 'active')) return json({ error: 'account_unavailable', message: '사용할 수 없는 계정이에요. 관리자에게 문의해 주세요.' }, 403);
       verifiedRequest=providers.some(p=>['kakao','naver'].includes(p));
+      const appleIdentity=(user.identities||[]).find(i=>i.provider==='apple');
+      const appleEmail=emailAddress(appleIdentity?.identity_data?.email);
+      const appleEmailVerified=[true,'true'].includes(appleIdentity?.identity_data?.email_verified)&&validEmail(appleEmail);
       if (body.action === 'context') return respond({ ok: true, userId: user.id, registered: !!profile, providers,
-        displayName: profile?.display_name || '', termsVersion: TERMS_VERSION });
+        displayName: profile?.display_name || '', appleEmail:appleEmailVerified?appleEmail:null, termsVersion: TERMS_VERSION });
       if (profile) return json({ ok: true, alreadyRegistered: true, userId: user.id });
       if (!providers.includes(body.provider)) return json({ error: 'identity_required', message: '간편 로그인 인증을 먼저 완료해 주세요.' }, 403);
-      const recoveryEmail=emailAddress(body.recovery_email);
+      const recoveryEmail=body.provider==='apple'?(appleEmailVerified?appleEmail:''):emailAddress(body.recovery_email);
+      if(body.provider==='apple'&&!appleEmailVerified)return json({error:'apple_email_unavailable',message:'Apple 계정 정보를 확인하지 못했어요. Apple 로그인을 다시 시도해 주세요.'},400);
       if(!validEmail(recoveryEmail))return json({error:'invalid_email',message:'이메일 주소를 정확히 입력하고 중복확인해 주세요.'},400);
       if(!uuid(body.sms_challenge_id)||typeof body.sms_proof!=='string'||!/^[0-9a-f]{64}$/.test(body.sms_proof)) {
         return json({error:'phone_verification_required',message:'휴대폰 문자 인증을 먼저 완료해 주세요.'},400);
@@ -56,7 +60,7 @@ export function createHandler({ admin }) {
       let sessionId='';
       try{sessionId=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id||'';}catch{}
       if(!uuid(sessionId))return json({error:'authentication_required',message:'다시 간편 로그인한 뒤 가입해 주세요.'},401);
-      const displayName = clean(body.displayName), storeName = clean(body.storeName), franchiseCode = clean(body.franchiseCode);
+      const displayName = clean(body.displayName)||(body.provider==='apple'?'Apple 사용자':''), storeName = clean(body.storeName), franchiseCode = clean(body.franchiseCode);
       if (!['owner', 'staff'].includes(body.role) || !safe(displayName, 50) ||
           (body.role === 'owner' && !safe(storeName, 80)) || franchiseCode.length > 40 ||
           body.ageConfirmed !== true || body.termsAccepted !== true || body.privacyAccepted !== true ||
