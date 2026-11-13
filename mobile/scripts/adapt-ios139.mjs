@@ -34,7 +34,7 @@ export function adaptIos139(source, platform = 'ios', {appleLogin = false} = {})
   } else {
     once(
       "    if(!window.MANEE_SOCIAL_NATIVE)history.replaceState(null,'',location.pathname);\n    const context=await socialRequest({action:'context'});",
-      "    if(!window.MANEE_SOCIAL_NATIVE)history.replaceState(null,'',location.pathname);\n    return applySocialLoginResult(result);\n  }\n  async function applySocialLoginResult(result){\n    const context=await socialRequest({action:'context'});",
+      "    if(!window.MANEE_SOCIAL_NATIVE)history.replaceState(null,'',location.pathname);\n    return applySocialLoginResult(result);\n  }\n  async function applySocialLoginResult(result){\n    const context=await socialRequest({action:'context'});\n    if(result.provider==='apple'&&typeof result.appleFullName==='string'&&result.appleFullName.trim())context.appleDisplayName=result.appleFullName;",
     );
     once(
       "try{await controller.begin(provider,{intent:linking?'link':'signin',role,remember:currentRememberChoice()});}",
@@ -91,12 +91,13 @@ export function adaptIos139Social(source, platform = 'ios', {appleLogin = false}
       ['    async function complete(rawUrl) {',
         '    async function applyVerifiedSession(data, error, record) {\n'+verification.replace(/^ {2}/gm, '')+'    }\n    async function complete(rawUrl) {'],
       ['        const flow = random();', '        if (provider === \'apple\') {\n'+
-        '          const { identityToken, nonce } = await options.appleSignIn();\n'+
+        '          const { identityToken, nonce, fullName } = await options.appleSignIn();\n'+
         '          if (!identityToken || !nonce) throw failure(\'invalid_apple_credential\', \'Apple 로그인 정보를 확인하지 못했어요.\');\n'+
         '          if (await currentUserId() !== mainUserId) throw failure(\'account_changed\', \'계정이 바뀌었어요. 다시 시작해 주세요.\');\n'+
         '          const credentials = { provider: \'apple\', token: identityToken, nonce };\n'+
         '          const { data, error } = intent === \'link\' ? await oauth.auth.linkIdentity(credentials) : await oauth.auth.signInWithIdToken(credentials);\n'+
         '          const result = await applyVerifiedSession(data, error, { provider, intent, role, remember: remember !== false, mainUserId });\n'+
+        "          if (result?.handled && typeof fullName === 'string') result.appleFullName = fullName;\n"+
         '          cancel();\n'+
         '          return result;\n'+
         '        }\n'+

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBillingClient} from '../src/billing.mjs';
-function setup({fail=false,ready=true,pending=[],change=false,checkout=false,purchaseError,trial=false}={}){
+function setup({fail=false,ready=true,pending=[],change=false,checkout=false,purchaseError,trial=false,price}={}){
  let c={userId:'owner',storeId:'store',role:'storeOwner'},finished=[],purchases=0,calls=[];
  const client=createBillingClient({getContext:()=>c,storeKit:{
-  products:async()=>({monthly:true,priceApproved:true,twoMonthsFree:trial}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
+  products:async()=>({monthly:true,priceApproved:true,price,twoMonthsFree:trial}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
   purchase:async selection=>{purchases++;if(purchaseError)throw purchaseError;assert.equal(selection.twoMonthsFree,trial);return {status:'purchased',transactionId:'1',signedTransaction:'signed'};},
   finish:async t=>finished.push(t.transactionId)},
  request:async(_c,_name,body)=>{calls.push(body.action);if(body.action==='verify'){
@@ -57,4 +57,8 @@ test('the advertised trial is passed through to the last StoreKit product check'
  const h=setup({trial:true});
  assert.equal((await h.client.purchase({twoMonthsFree:true})).status,'purchased');
  assert.equal(h.purchases(),1);
+});
+
+test('changed StoreKit price cannot start a purchase with the previous displayed price',async()=>{
+ const f=setup({price:'$7.99'});await assert.rejects(f.client.purchase({price:'$6.99'}),/요금이 변경/);
 });

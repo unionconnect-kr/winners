@@ -89,9 +89,9 @@ public class ManeeAppleSignInPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Apple 로그인을 시작하지 못했어요."); return
             }
             let nonce = randomBytes.map { String(format: "%02x", $0) }.joined()
-            let flow = ManeeAppleAuthorization(window: window, nonce: nonce) { [weak self] token, message in
+            let flow = ManeeAppleAuthorization(window: window, nonce: nonce) { [weak self] token, fullName, message in
                 self?.authorization = nil
-                if let token { call.resolve(["identityToken": token, "nonce": nonce]) }
+                if let token { call.resolve(["identityToken": token, "nonce": nonce, "fullName": fullName ?? ""]) }
                 else { call.reject(message ?? "Apple 로그인 정보를 확인하지 못했어요.") }
             }
             authorization = flow
@@ -104,10 +104,10 @@ public class ManeeAppleSignInPlugin: CAPPlugin, CAPBridgedPlugin {
 private final class ManeeAppleAuthorization: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let window: UIWindow
     private let nonce: String
-    private let completion: (String?, String?) -> Void
+    private let completion: (String?, String?, String?) -> Void
     private var controller: ASAuthorizationController?
 
-    init(window: UIWindow, nonce: String, completion: @escaping (String?, String?) -> Void) {
+    init(window: UIWindow, nonce: String, completion: @escaping (String?, String?, String?) -> Void) {
         self.window = window
         self.nonce = nonce
         self.completion = completion
@@ -115,7 +115,7 @@ private final class ManeeAppleAuthorization: NSObject, ASAuthorizationController
 
     func start() {
         let request = ASAuthorizationAppleIDProvider().createRequest()
-        request.requestedScopes = [.email]
+        request.requestedScopes = [.fullName, .email]
         request.nonce = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
@@ -129,15 +129,16 @@ private final class ManeeAppleAuthorization: NSObject, ASAuthorizationController
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let data = credential.identityToken, let token = String(data: data, encoding: .utf8), !token.isEmpty else {
-            completion(nil, nil)
+            completion(nil, nil, nil)
             return
         }
-        completion(token, nil)
+        let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) }
+        completion(token, name, nil)
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         let cancelled = (error as? ASAuthorizationError)?.code == .canceled
-        completion(nil, cancelled ? "Apple 로그인을 취소했어요." : "Apple 로그인을 완료하지 못했어요. 다시 시도해 주세요.")
+        completion(nil, nil, cancelled ? "Apple 로그인을 취소했어요." : "Apple 로그인을 완료하지 못했어요. 다시 시도해 주세요.")
     }
 }
 
@@ -232,7 +233,7 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
     private func approvedProduct(_ product: Product) -> Bool {
         guard let subscription = product.subscription,
               subscription.subscriptionPeriod.unit == .month, subscription.subscriptionPeriod.value == 1,
-              product.priceFormatStyle.currencyCode == "KRW", product.price == Decimal(9900),
+              productIds.contains(product.id), product.price > 0,
               !product.isFamilyShareable else { return false }
         guard let offer = subscription.introductoryOffer else { return true }
         return product.id == "manee.store1.monthly" && isTwoMonthTrial(offer)

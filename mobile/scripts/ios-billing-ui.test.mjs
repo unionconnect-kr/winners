@@ -100,3 +100,11 @@ test('iOS checkout shows the two-month trial only after the Apple offer is confi
  assert.equal(f.button('2개월 무료체험 후 월 9,900원 구독').hidden,false);
  assert.equal(f.purchases(),0);
 });
+
+test('non-Korean storefront uses the StoreKit price through paid confirmation',async()=>{
+ let selection;
+ const f=fixture({products:async()=>({monthly:true,priceApproved:true,price:'$6.99',twoMonthsFree:false}),purchase:async input=>{selection=input;return {status:'cancelled'};}});
+ await f.native.openSettings();assert.match(f.text(),/오늘 \$6.99 결제/);assert.doesNotMatch(f.text(),/9,900/);
+ await f.button('무료체험 없는 구독 요금 확인').onclick();assert.doesNotMatch(f.text(),/9,900/);
+ await f.button('오늘 $6.99 결제하고 구독하기').onclick();assert.equal(selection.price,'$6.99');assert.equal(selection.twoMonthsFree,false);
+});

@@ -152,14 +152,14 @@ async function openSettings(){
   buy.hidden=true;buy.style.display='none';
   status.textContent=testActive?'Apple 테스트 구독이 확인됐어요.':'이 계정의 Apple 구독이 확인됐어요.';
  };
- let paidConfirmed=false;
+ let paidConfirmed=false,storePrice='';
  const buy=button('월 구독 시작',async()=>{
   if(buy.dataset.paidReview==='true'&&!paidConfirmed){
-   paidConfirmed=true;buy.textContent='오늘 9,900원 결제하고 구독하기';
-   setSubscriptionOffer(view,{price:'9,900원'});view.after.textContent='무료체험 미적용 · 오늘 9,900원 결제 · 매월 갱신';
-   status.textContent='무료체험 없이 오늘 9,900원을 결제하고 매월 갱신하는 조건이에요. 동의하시면 아래 버튼을 눌러 Apple 결제창에서 최종 조건을 확인해 주세요.';return;
+   paidConfirmed=true;buy.textContent='오늘 '+storePrice+' 결제하고 구독하기';
+   setSubscriptionOffer(view,{price:storePrice});view.after.textContent='무료체험 미적용 · 오늘 '+storePrice+' 결제 · 매월 갱신';
+   status.textContent='무료체험 없이 오늘 '+storePrice+'을 결제하고 매월 갱신하는 조건이에요. 동의하시면 아래 버튼을 눌러 Apple 결제창에서 최종 조건을 확인해 주세요.';return;
   }
-  displayResult(await billing.purchase({twoMonthsFree:trialSelected}));
+  displayResult(await billing.purchase({twoMonthsFree:trialSelected,price:storePrice}));
  });buy.hidden=true;buy.style.display='none';
  button('기존 구독 복원',async()=>displayResult(await billing.restore()),'link');
  button('구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');},'link');
@@ -191,12 +191,14 @@ async function openSettings(){
    const product=await billing.products(info.productId);
    if(!sameContext(c)||dialog!==sheet||hasActivePurchase)return;
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요. 잠시 후 다시 시도해 주세요.');
+   if(typeof product.price!=='string'||!product.price.trim())throw Error('구독 요금을 확인하지 못했어요. 다시 시도해 주세요.');
+   storePrice=product.price;
    trialSelected=product.twoMonthsFree===true;
    if(trialSelected){
     buy.textContent=setSubscriptionOffer(view,{trialMonths:2,price:product.price});
     status.textContent='Apple 결제창에서 체험 기간과 갱신 요금을 확인해 주세요.';
    }
-   else {setSubscriptionOffer(view,{price:product.price});view.label.textContent='현재 Apple 계정에 제공된 요금';view.after.textContent='무료체험 미적용 · 오늘 9,900원 결제 · 매월 갱신';buy.textContent='무료체험 없는 구독 요금 확인';buy.dataset.paidReview='true';status.textContent='이 Apple 계정에는 무료체험이 적용되지 않아요. 무료체험 없이 시작하는 요금을 확인해 주세요.';}
+   else {setSubscriptionOffer(view,{price:product.price});view.label.textContent='현재 Apple 계정에 제공된 요금';view.after.textContent='무료체험 미적용 · 오늘 '+storePrice+' 결제 · 매월 갱신';buy.textContent='무료체험 없는 구독 요금 확인';buy.dataset.paidReview='true';status.textContent='이 Apple 계정에는 무료체험이 적용되지 않아요. 무료체험 없이 시작하는 요금을 확인해 주세요.';}
    view.after.hidden=false;
    buy.hidden=false;buy.style.display='block';
   }else if(info.otherStoreSubscribed)status.textContent=messages.other_store_subscribed;
