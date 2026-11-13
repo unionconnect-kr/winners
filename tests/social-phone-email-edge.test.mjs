@@ -8,9 +8,9 @@ const token='synthetic.'+Buffer.from(JSON.stringify({session_id:sid})).toString(
 const signup={action:'signup',provider:'kakao',role:'owner',displayName:'매니 QA',storeName:'매니 QA store',
   ageConfirmed:true,termsAccepted:true,privacyAccepted:true,termsVersion:TERMS_VERSION,privacyVersion:TERMS_VERSION,
   recovery_email:' SOCIAL152@Example.COM ',sms_challenge_id:challenge,sms_proof:proof};
-function harness({profile=null,provider='kakao',rpcError=null}={}){
+function harness({profile=null,provider='kakao',identityData={},rpcError=null}={}){
  const calls=[];
- const admin={auth:{async getUser(){return {data:{user:{id:uid,identities:[{provider}]}}};}},
+ const admin={auth:{async getUser(){return {data:{user:{id:uid,identities:[{provider,identity_data:identityData}]}}};}},
   from(){const q={select(){return q},eq(){return q},async maybeSingle(){return {data:profile,error:null}}};return q;},
   async rpc(name,args){calls.push({name,args});return name==='consume_auth_rate_limit'?{data:true}:
    rpcError?{error:{message:rpcError}}:{data:{ok:true,userId:uid,alreadyRegistered:false}};}};
@@ -34,7 +34,7 @@ test('existing social login and link context never acquire new-signup requiremen
  const profile={user_id:uid,status:'active',display_name:'existing'};
  const h=harness({profile});assert.equal((await h.run({action:'signup'})).body.alreadyRegistered,true);
  const context=await h.run({action:'context'});assert.equal(context.body.registered,true);assert.equal(context.body.userId,uid);
- assert.equal(h.calls.length,0);
+ assert.equal(h.calls.filter(c=>c.name!=='manee_operation_event').length,0);
 });
 test('new signup preserves provider and consent validation and returns safe policy errors',async()=>{
  for(const override of [{termsAccepted:false},{privacyAccepted:false},{ageConfirmed:false},{provider:'naver'}]){
@@ -42,5 +42,16 @@ test('new signup preserves provider and consent validation and returns safe poli
  }
  for(const [error,status] of [['phone_taken',409],['email_taken',409],['phone_verification_required',400],['database internal detail',503]]){
   const h=harness({rpcError:error});const r=await h.run();assert.equal(r.status,status);assert.equal(JSON.stringify(r.body).includes('database internal detail'),false);
+ }
+});
+
+test('Apple signup derives email from verified identity and ignores forged form email',async()=>{
+ const h=harness({provider:'apple',identityData:{email:'relay@privaterelay.appleid.com',email_verified:true}});
+ const context=await h.run({action:'context'});assert.equal(context.body.appleEmail,'relay@privaterelay.appleid.com');
+ assert.equal((await h.run({...signup,provider:'apple',displayName:'',recovery_email:'forged@example.com'})).status,201);
+ const p=h.calls.find(c=>c.name==='manee_social_signup').args.p_payload;
+ assert.equal(p.recovery_email,'relay@privaterelay.appleid.com');assert.equal(p.displayName,'Apple 사용자');
+ for(const identityData of [{},{email:'fake@example.com',email_verified:false}]){
+  const bad=harness({provider:'apple',identityData});assert.equal((await bad.run({...signup,provider:'apple'})).body.error,'apple_email_unavailable');assert.equal(bad.calls.length,0);
  }
 });

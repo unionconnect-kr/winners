@@ -210,7 +210,7 @@
   function schedule(){if(!scheduled){scheduled=true;queueMicrotask(install);}}
   const observer=new MutationObserver(schedule);observer.observe(document.body,{childList:true,subtree:true});
   window.addEventListener('unload',()=>{observer.disconnect();if(active)close();},{once:true});
-  function bindSocialSignup(dialog,context){
+  function bindSocialSignup(dialog,context,provider){
     const box=dialog.querySelector('[data-mee-social-sms]');
     if(!box||!/^[0-9a-f-]{36}$/i.test(context.userId||''))throw Error('가입 정보를 다시 확인해 주세요.');
     const username='s_'+context.userId.replaceAll('-','').slice(0,28);
@@ -262,7 +262,8 @@
     dialog.addEventListener('close',()=>{state.closed=true;state.version++;state.proof=null;clearInterval(timer);},{once:true});paint();
     return Object.freeze({
       payload(){
-        const recovery_email=signupValue('social');
+        const recovery_email=provider==='apple'?normalize(context.appleEmail):signupValue('social');
+        if(provider==='apple'&&!valid(recovery_email))throw Error('Apple 계정 정보를 확인하지 못했어요. Apple 로그인을 다시 시도해 주세요.');
         if(state.closed||state.busy||!state.proof||state.proofUntil<=Date.now()||state.phone!==number()){phone.focus();throw Error('휴대폰 문자 인증을 먼저 완료해 주세요.');}
         return {recovery_email,sms_challenge_id:state.challenge,sms_proof:state.proof};
       },

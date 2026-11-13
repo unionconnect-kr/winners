@@ -1,3 +1,4 @@
+import {installAppleSignup} from './apple-signup-html.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -16,7 +17,7 @@ execFileSync(process.execPath, ['scripts/build-release152.mjs', 'ios', 'producti
 
 const output = resolve(mobile, 'www');
 const htmlPath = resolve(output, 'index.html');
-let html = readFileSync(htmlPath, 'utf8');
+let html = installAppleSignup(readFileSync(htmlPath, 'utf8'));
 function replaceOnce(before, after) {
   if (html.split(before).length !== 2) throw Error('iOS 1.56 release anchor changed: ' + before);
   html = html.replace(before, () => after);

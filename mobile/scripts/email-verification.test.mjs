@@ -155,3 +155,27 @@ test('new social signup outside the app root requires email and JWT-bound phone 
     assert.equal(signups.length,1);assert.equal(signups[0].recovery_email,'social@example.com');assert.equal(signups[0].sms_challenge_id,'challenge-social');assert.equal(signups[0].sms_proof,'f'.repeat(64));assert.equal(signups[0].role,'staff');
   }finally{for(const d of h.w.document.querySelectorAll('dialog'))d.close();h.close();}
 });
+
+test('Apple signup uses supplied name/email without re-entry and preserves SMS/consent checks',async()=>{
+ const {installAppleSignup}=await import('./apple-signup-html.mjs');
+ const appleHtml=installAppleSignup(full),uid='11111111-2222-4333-8444-555555555555';
+ for(const name of ['Apple 이름','']){
+  const signups=[],h=setup('',p=>p.action==='request'?{ok:true,challenge_id:'apple-phone',expires_in:180,resend_after:30}:{ok:true,proof:'f'.repeat(64),expires_in:600});h.setUid(uid);
+  try{
+   const w=h.w;Object.assign(w,{MANEE_IS_STAGING:false,MASCOT_IMG_DATA:'',loginIcon:()=>'',socialProviderIcon:()=>'',renderOwnerSignupOffer:()=>'',socialSignupChoice:()=>{},resolveIdentity:async()=>{},offerSignupSubscription:async()=>{},state:{},escapeHtml:s=>String(s||'').replaceAll('"','&quot;')});
+   w.db={auth:{getUser:async()=>({data:{user:{id:uid}}})}};w.socialRequest=async p=>{signups.push(p);return {ok:true};};
+   w.eval(appleHtml.slice(appleHtml.indexOf('  function maneeSignupEmail('),appleHtml.indexOf('  function renderStaffSignup('))+'\n'+appleHtml.slice(appleHtml.indexOf('  function renderSocialSignupScreen('),appleHtml.indexOf('  async function finishSocialLogin(')));
+   w.socialSignupDialog({userId:uid,termsVersion:'v1',appleEmail:'relay@privaterelay.appleid.com',appleDisplayName:name},'apple','owner');await flush();
+   const d=w.document.querySelector('.social-signup-dialog'),form=d.querySelector('form');
+   assert.equal(form.elements.displayName.closest('label').hidden,true);assert.equal(form.elements.displayName.value,name||'Apple 사용자');
+   assert.equal(d.querySelector('input[type=email]'),null);form.elements.storeName.value='QA 매장';
+   for(const input of d.querySelectorAll('.ss-consent-row input'))input.checked=true;
+   await form.onsubmit(new w.Event('submit'));assert.equal(signups.length,0);assert.match(d.querySelector('.ss-status').textContent,/휴대폰/);
+   change(w,d.querySelector('#mee-social-phone'),'01012345678');d.querySelector('[data-mee-sms-send]').click();await flush();
+   change(w,d.querySelector('#mee-social-code'),'123456');d.querySelector('[data-mee-sms-verify]').click();await flush();
+   await form.onsubmit(new w.Event('submit'));await flush();
+   assert.equal(signups.length,1);assert.equal(signups[0].recovery_email,'relay@privaterelay.appleid.com');
+   assert.equal(h.calls.some(c=>c.payload.action==='check'),false);assert.equal(w.document.querySelector('.manee-email-dialog'),null);
+  }finally{for(const d of h.w.document.querySelectorAll('dialog'))d.close();h.close();}
+ }
+});
