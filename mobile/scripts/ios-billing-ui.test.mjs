@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Script,createContext} from 'node:vm';
 import {createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet} from '../src/subscription-sheet.mjs';
 import {subscriptionView} from '../src/store-subscription.mjs';
+import {purchaseAccountMessage} from '../src/billing.mjs';
 
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(overrides={},access=null){
@@ -24,7 +25,7 @@ function fixture(overrides={},access=null){
  const window={};const c={userId:'owner',storeId:'store',role:'storeOwner',db:{rpc:async()=>({data:access})}};
  const context=createContext({window,document,localStorage:{},registerPlugin:()=>({addListener:()=>{}}),Geolocation:{},PushNotifications:{},
   createBillingClient:()=>billing,createAndroidGeolocation:()=>({}),createNativeGeolocation:()=>({}),createIosPush:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>()=>{},
-  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet,subscriptionView});
+  createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet,subscriptionView,purchaseAccountMessage});
  new Script(readFileSync(new URL('../src/native.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'')).runInContext(context);
  window.MANEE_NATIVE.configure(()=>c);
  const descendants=e=>e.children.flatMap(child=>[child,...descendants(child)]);
@@ -107,4 +108,35 @@ test('non-Korean storefront uses the StoreKit price through paid confirmation',a
  await f.native.openSettings();assert.match(f.text(),/오늘 \$6.99 결제/);assert.doesNotMatch(f.text(),/9,900/);
  await f.button('무료체험 없는 구독 요금 확인').onclick();assert.doesNotMatch(f.text(),/9,900/);
  await f.button('오늘 $6.99 결제하고 구독하기').onclick();assert.equal(selection.price,'$6.99');assert.equal(selection.twoMonthsFree,false);
+});
+
+test('foreign-account purchase status hides checkout and explains which account to use',async()=>{
+ let productChecks=0;
+ const f=fixture({status:async()=>({ready:true,appAccountToken:'token',subscriptions:[],accountConflict:true}),products:async()=>{productChecks++;}});
+ await f.native.openSettings();
+ assert.match(f.text(),/다른 매니 계정에 연결된 구독/);
+ assert.match(f.text(),/현재 계정에는 구독이 적용되지 않았어요/);
+ assert.equal(f.button('월 구독 시작').hidden,true);assert.equal(productChecks,0);assert.equal(f.purchases(),0);
+ assert.ok(f.button('기존 구독 복원'));assert.ok(f.button('닫기'));
+});
+test('restore mismatch hides a visible buy button without replacing it with a successful status',async()=>{
+ const f=fixture({restore:async()=>{throw Object.assign(Error(purchaseAccountMessage),{code:'purchase_account_mismatch'});}});
+ await f.native.openSettings();
+ const buy=f.button('무료체험 없는 구독 요금 확인');assert.equal(buy.hidden,false);
+ await f.button('기존 구독 복원').onclick();
+ assert.equal(buy.hidden,true);assert.match(f.text(),/처음 구독한 매니 계정으로 로그인/);
+ assert.doesNotMatch(f.text(),/구독 이용 중|구독이 확인됐어요/);
+});
+test('a foreign purchase returned after checkout starts shows an account conflict rather than another checkout',async()=>{
+ const f=fixture({purchase:async()=>{throw Object.assign(Error(purchaseAccountMessage),{code:'purchase_account_mismatch'});}});
+ await f.native.openSettings();await f.button('무료체험 없는 구독 요금 확인').onclick();
+ const buy=f.button('오늘 9,900원 결제하고 구독하기');await buy.onclick();
+ assert.equal(buy.hidden,true);assert.match(f.text(),/현재 계정에는 구독이 적용되지 않았어요/);
+});
+test('product loading cannot re-enable checkout after restore reports an account conflict',async()=>{
+ let resolveProduct;
+ const f=fixture({products:()=>new Promise(resolve=>resolveProduct=resolve),restore:async()=>{throw Object.assign(Error(purchaseAccountMessage),{code:'purchase_account_mismatch'});}});
+ const opening=f.native.openSettings();await settle();await f.button('기존 구독 복원').onclick();
+ resolveProduct({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:true});await opening;
+ assert.equal(f.button('월 구독 시작').hidden,true);assert.doesNotMatch(f.text(),/2개월 무료체험/);
 });

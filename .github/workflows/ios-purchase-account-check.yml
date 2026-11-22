@@ -1,0 +1,51 @@
+name: iOS purchase account validation
+
+on:
+  push:
+    branches: [codex/ios-purchase-account-check-20261123]
+    paths: ['mobile/**', '.github/workflows/ios-purchase-account-check.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-purchase-account-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-check-20261123'
+    runs-on: macos-15-intel
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: mobile
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Build and verify the production app assets
+        run: |
+          node scripts/build-ios-release156.mjs ios production
+          node scripts/verify-store-assets.mjs --ios-release156
+      - run: npm run sync:ios
+      - name: Compile the iOS app without signing or uploading
+        run: |
+          set -euo pipefail
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/manee-account-check" \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/manee-account-check.log" 2>&1 || {
+              tail -n 100 "$RUNNER_TEMP/manee-account-check.log"
+              exit 1
+            }
+          echo 'Tests, production assets and unsigned native compilation passed. No TestFlight upload or review submission.' >> "$GITHUB_STEP_SUMMARY"

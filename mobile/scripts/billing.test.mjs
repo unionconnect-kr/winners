@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBillingClient} from '../src/billing.mjs';
-function setup({fail=false,ready=true,pending=[],change=false,checkout=false,purchaseError,trial=false,price}={}){
+function setup({fail=false,ready=true,pending=[],change=false,checkout=false,purchaseError,trial=false,price,purchased={},verified,restored,info={}}={}){
  let c={userId:'owner',storeId:'store',role:'storeOwner'},finished=[],purchases=0,calls=[];
  const client=createBillingClient({getContext:()=>c,storeKit:{
-  products:async()=>({monthly:true,priceApproved:true,price,twoMonthsFree:trial}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
-  purchase:async selection=>{purchases++;if(purchaseError)throw purchaseError;assert.equal(selection.twoMonthsFree,trial);return {status:'purchased',transactionId:'1',signedTransaction:'signed'};},
+  products:async()=>({monthly:true,priceApproved:true,price,twoMonthsFree:trial}),pending:async()=>({transactions:pending.map(t=>({productId:'manee.store1.monthly',appAccountToken:'server-token',...t}))}),restore:async()=>({transactions:restored??[{transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'}]}),
+  purchase:async selection=>{purchases++;if(purchaseError)throw purchaseError;assert.equal(selection.twoMonthsFree,trial);return {status:'purchased',transactionId:'1',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token',...purchased};},
   finish:async t=>finished.push(t.transactionId)},
  request:async(_c,_name,body)=>{calls.push(body.action);if(body.action==='verify'){
   if(fail)throw Error('verification_failed');if(change)c={...c,userId:'other'};
-  return {subscriptions:[{active:body.signedTransaction!=='expired'}]};
- }return {ready,appAccountToken:'server-token',subscriptions:[],...(checkout&&body.action==='prepare'?{billingScope:'account',checkoutId:body.checkoutId}:{})};}});
+  return verified??{subscriptions:[{active:body.signedTransaction!=='expired'}]};
+ }return {ready,appAccountToken:'server-token',subscriptions:[],...info,...(checkout&&body.action==='prepare'?{billingScope:'account',checkoutId:body.checkoutId}:{})};}});
  return {client,finished,calls,purchases:()=>purchases};
 }
 test('server verification must succeed before StoreKit transaction is finished',async()=>{
@@ -27,7 +27,7 @@ test('restore verifies server state and account changes cannot finish a transact
 });
 test('purchases bound to another store are neither finished nor charged again',async()=>{
  const h=setup({pending:[{transactionId:'foreign',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'other-store'}]});
- await assert.rejects(()=>h.client.purchase(),/다른 매장/);
+ await assert.rejects(()=>h.client.purchase(),/다른 매니 계정/);
  assert.equal(h.purchases(),0);assert.deepEqual(h.finished,[]);assert.equal(h.calls.includes('verify'),false);
 });
 test('another product does not block this store and sync ignores foreign bindings',async()=>{
@@ -61,4 +61,55 @@ test('the advertised trial is passed through to the last StoreKit product check'
 
 test('changed StoreKit price cannot start a purchase with the previous displayed price',async()=>{
  const f=setup({price:'$7.99'});await assert.rejects(f.client.purchase({price:'$6.99'}),/요금이 변경/);
+});
+
+test('opening subscription status detects a foreign Apple purchase without verifying or finishing it',async()=>{
+ const f=setup({pending:[{transactionId:'foreign',appAccountToken:'another-account'}]});
+ assert.equal((await f.client.status()).accountConflict,true);
+ assert.deepEqual(f.calls,['status']);assert.deepEqual(f.finished,[]);assert.equal(f.purchases(),0);
+});
+test('a purchase returned for another account after the preflight is not verified, finished or reported purchased',async()=>{
+ const f=setup({checkout:true,purchased:{appAccountToken:'another-account'}});
+ await assert.rejects(f.client.purchase(),{code:'purchase_account_mismatch'});
+ assert.deepEqual(f.calls,['prepare','release']);assert.deepEqual(f.finished,[]);
+});
+test('a purchase with missing token or wrong product cannot activate the current account',async()=>{
+ for(const purchased of [{appAccountToken:undefined},{productId:'manee.store2.monthly'}]){
+  const f=setup({purchased});await assert.rejects(f.client.purchase(),{code:'purchase_account_mismatch'});
+  assert.equal(f.calls.includes('verify'),false);assert.deepEqual(f.finished,[]);
+ }
+});
+test('a saved but expired purchase is not returned as a successful subscription',async()=>{
+ const f=setup({checkout:true,verified:{subscriptions:[{active:false,testActive:false}]}});
+ await assert.rejects(f.client.purchase(),/활성 구독을 확인하지 못/);
+ assert.deepEqual(f.calls,['prepare','verify','release']);
+});
+test('verified Sandbox purchases remain test subscriptions rather than production access',async()=>{
+ const f=setup({verified:{subscriptions:[{active:false,testActive:true}]}});
+ const result=await f.client.purchase();assert.equal(result.status,'purchased');
+ assert.equal(result.subscriptions[0].active,false);assert.equal(result.subscriptions[0].testActive,true);
+});
+test('restore cannot claim another account purchase and never finishes it',async()=>{
+ const f=setup({restored:[{transactionId:'foreign',productId:'manee.store1.monthly',appAccountToken:'another-account'}]});
+ await assert.rejects(f.client.restore(),{code:'purchase_account_mismatch'});
+ assert.deepEqual(f.calls,['status']);assert.deepEqual(f.finished,[]);
+});
+test('restoring an expired record after an active record retains the active account result',async()=>{
+ const f=setup({restored:[
+  {transactionId:'active',signedTransaction:'signed',productId:'manee.store1.monthly',appAccountToken:'server-token'},
+  {transactionId:'expired',signedTransaction:'expired',productId:'manee.store1.monthly',appAccountToken:'server-token'},
+ ]});
+ assert.equal((await f.client.restore()).subscriptions[0].active,true);
+ assert.deepEqual(f.finished,['active','expired']);
+});
+test('account bindings still allow restoration from another store owned by the same account',async()=>{
+ const f=setup({checkout:true,info:{billingScope:'account',bindings:[{productId:'manee.store1.monthly',appAccountToken:'legacy-token'}]},
+  pending:[{transactionId:'legacy',signedTransaction:'signed',appAccountToken:'LEGACY-TOKEN'}]});
+ assert.equal((await f.client.status()).accountConflict,undefined);
+ assert.equal((await f.client.purchase()).status,'restored');assert.equal(f.purchases(),0);
+});
+test('native account mismatch before StoreKit starts releases the checkout lease',async()=>{
+ const f=setup({checkout:true,purchaseError:Object.assign(Error('다른 매니 계정'),{code:'purchase_account_mismatch'})});
+ await assert.rejects(f.client.purchase(),{code:'purchase_account_mismatch'});
+ assert.deepEqual(f.calls,['prepare','release']);assert.deepEqual(f.finished,[]);
 });

@@ -7,7 +7,7 @@ window.MANEE_GEOLOCATION = createNativeGeolocation(Geolocation);
 
 import { registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { createBillingClient } from './billing.mjs';
+import { createBillingClient,purchaseAccountMessage } from './billing.mjs';
 import { reportBytesToBase64 } from './report-file.js';
 import { createIosPush } from './ios-push.js';
 import { createNotificationNavigation } from './android-notification-navigation.js';
@@ -20,7 +20,7 @@ let openNotification=async()=>'pending';
 const messages={billing_not_ready:'구독 연결을 준비하고 있어요.',service_not_ready:'서비스 연결을 준비하고 있어요.',
  push_access_denied:'연결된 매장을 확인하고 다시 로그인해 주세요.',
  owner_access_denied:'사장님 계정으로 로그인하고 매장을 선택해 주세요.',authentication_required:'다시 로그인해 주세요.',
- purchase_mismatch:'이 구매는 현재 매장과 연결되지 않았어요. 처음 구독한 계정과 매장을 확인해 주세요.',
+ purchase_mismatch:purchaseAccountMessage,
  other_platform_subscribed:'이 계정은 다른 스토어에서 구독 중이에요. 기존 구독을 확인해 주세요.',
  checkout_in_progress:'다른 기기에서 이 계정의 결제를 진행 중이에요. 잠시 후 구매 복원을 눌러 주세요.',
  other_store_subscribed:'다른 매장에서 이용 중인 구독이 있어요. 추가 매장 결제는 준비 중이에요.'};
@@ -32,7 +32,7 @@ async function request(context,name,body){
   headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},
   body:JSON.stringify({...body,storeId:context.storeId}),signal:controller.signal});}finally{clearTimeout(timeout);}
  let result;try{result=await response.json();}catch{throw Error('서비스 연결을 준비하고 있어요. 잠시 후 다시 시도해 주세요.');}
- if(!response.ok)throw Error(messages[result.error]||'연결을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+ if(!response.ok)throw Object.assign(Error(messages[result.error]||'연결을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.'),{code:result.error});
  return result;
 }
 const billing=createBillingClient({storeKit,request,getContext:()=>getContext()});
@@ -130,8 +130,14 @@ async function openSettings(){
  view.after.hidden=true;
  status.textContent='기존 구독과 이용 가능한 상품을 확인하고 있어요…';
  view.summary.textContent='사장님 아이디 하나로 연결된 모든 매장을 이용해요.';
- const buttons=[];let busy=false,hasActivePurchase=false,trialSelected=false;
- const button=(text,fn,kind='primary')=>{const b=subscriptionButton(view,text,async()=>{if(busy)return;busy=true;buttons.forEach(x=>x.disabled=true);try{if(!sameContext(c))throw Error('매장을 다시 선택해 주세요.');await fn();}catch(e){status.textContent=e.message||'다시 시도해 주세요.';}finally{busy=false;buttons.forEach(x=>x.disabled=false);}},kind);buttons.push(b);return b;};
+ const buttons=[];let busy=false,hasActivePurchase=false,hasAccountConflict=false,trialSelected=false;
+ const showAccountConflict=()=>{
+  hasAccountConflict=true;
+  view.label.textContent='구독 계정 확인';view.price.textContent='다른 매니 계정에 연결된 구독';
+  view.after.textContent='';view.after.hidden=true;
+  buy.hidden=true;buy.style.display='none';status.textContent=purchaseAccountMessage;
+ };
+ const button=(text,fn,kind='primary')=>{const b=subscriptionButton(view,text,async()=>{if(busy)return;busy=true;buttons.forEach(x=>x.disabled=true);try{if(!sameContext(c))throw Error('매장을 다시 선택해 주세요.');await fn();}catch(e){if(['purchase_account_mismatch','purchase_mismatch'].includes(e.code))showAccountConflict();else status.textContent=e.message||'다시 시도해 주세요.';}finally{busy=false;buttons.forEach(x=>x.disabled=false);}},kind);buttons.push(b);return b;};
  const resultText=result=>{
   if(result.otherPlatformActive)return '이 계정은 다른 스토어에서 구독 중이에요. 기존 이용권을 확인해 주세요.';
   if(result.status==='cancelled')return '구매를 취소했어요.';
@@ -140,6 +146,7 @@ async function openSettings(){
   return '구매 내역을 확인했어요. 현재 활성 구독은 없어요.';
  };
  const displayResult=result=>{
+  if(result.accountConflict){showAccountConflict();return;}
   const active=result.subscriptions?.some(s=>s.active===true)===true;
   const testActive=!active&&result.subscriptions?.some(s=>s.testActive===true)===true;
   if(!active&&!testActive){status.textContent=resultText(result);return;}
@@ -185,11 +192,11 @@ async function openSettings(){
   for(const [label,url] of [['이용약관',info.termsUrl],['개인정보 처리방침',info.privacyUrl]]){
    if(typeof url==='string'&&url.startsWith('https://')){const a=element('a',label,links);a.href=url;a.target='_blank';a.rel='noopener';a.style.marginRight='12px';}
   }
-  if(hasActivePurchase||info.otherPlatformActive===true)return;
+  if(hasActivePurchase||hasAccountConflict||info.otherPlatformActive===true)return;
   if(info.ready&&!info.otherStoreSubscribed){
    status.textContent='Apple에서 이용 가능한 구독 상품을 확인하고 있어요…';
    const product=await billing.products(info.productId);
-   if(!sameContext(c)||dialog!==sheet||hasActivePurchase)return;
+   if(!sameContext(c)||dialog!==sheet||hasActivePurchase||hasAccountConflict)return;
    if(product.monthly!==true||product.priceApproved!==true)throw Error('월 구독 상품과 요금을 확인하고 있어요. 잠시 후 다시 시도해 주세요.');
    if(typeof product.price!=='string'||!product.price.trim())throw Error('구독 요금을 확인하지 못했어요. 다시 시도해 주세요.');
    storePrice=product.price;
