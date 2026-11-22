@@ -284,11 +284,24 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
                         return
                     }
                 }
+                // Check again at the native boundary; an Apple Account may have
+                // changed after JavaScript checked its current transactions.
+                for await current in Transaction.currentEntitlements {
+                    if case .verified(let transaction) = current, transaction.productID == productId,
+                       transaction.appAccountToken != account {
+                        call.reject("이 Apple 계정의 구독은 다른 매니 계정에 연결되어 있어요. 처음 구독한 매니 계정으로 로그인해 주세요.", "purchase_account_mismatch")
+                        return
+                    }
+                }
                 purchaseStarted = true
                 switch try await product.purchase(options: [.appAccountToken(account)]) {
                 case .success(let result):
                     guard case .verified(let transaction) = result else {
                         call.reject("구매 검증에 실패했어요."); return
+                    }
+                    guard transaction.productID == productId, transaction.appAccountToken == account else {
+                        call.reject("Apple 구매가 현재 매니 계정에 연결되지 않았어요. 다시 결제하지 말고 처음 구독한 매니 계정으로 로그인해 주세요.", "purchase_account_mismatch")
+                        return
                     }
                     // Finish only after the server confirms the entitlement was saved.
                     call.resolve(["status": "purchased", "signedTransaction": result.jwsRepresentation, "transactionId": String(transaction.id), "productId": transaction.productID, "appAccountToken": transaction.appAccountToken?.uuidString.lowercased() ?? ""])
