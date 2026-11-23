@@ -208,10 +208,34 @@ public class ManeeStoreKitPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "restore", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pending", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "finish", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "finish", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "manageSubscriptions", returnType: CAPPluginReturnPromise)
     ]
     private let productIds = Set((1...10).map { "manee.store\($0).monthly" })
     private var updates: Task<Void, Never>?
+    private var presentingSubscriptions = false
+
+    @objc func manageSubscriptions(_ call: CAPPluginCall) {
+        Task { @MainActor [weak self] in
+            guard let self,
+                  !self.presentingSubscriptions,
+                  let controller = self.bridge?.viewController,
+                  let scene = controller.viewIfLoaded?.window?.windowScene,
+                  scene.activationState == .foregroundActive,
+                  controller.presentedViewController == nil else {
+                call.reject("구독 관리 화면을 열 수 없어요. 다른 창을 닫고 다시 시도해 주세요.")
+                return
+            }
+            self.presentingSubscriptions = true
+            defer { self.presentingSubscriptions = false }
+            do {
+                try await AppStore.showManageSubscriptions(in: scene)
+                call.resolve(["status": "closed"])
+            } catch {
+                call.reject("Apple 구독 관리 화면을 열지 못했어요. 잠시 후 다시 시도해 주세요.")
+            }
+        }
+    }
 
     public override func load() {
         updates = Task { [weak self] in

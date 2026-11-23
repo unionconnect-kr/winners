@@ -175,7 +175,7 @@ async function openSettings(){
   displayResult(await billing.purchase({twoMonthsFree:trialSelected,price:storePrice}));
  });buy.hidden=true;buy.style.display='none';
  button('기존 구독 복원',async()=>displayResult(await billing.restore()),'link');
- button('구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');},'link');
+ button('구독 관리',async()=>{await billing.manage();if(!sameContext(c)||dialog!==sheet)return;sheet.close();await openSettings();},'link');
  const notificationDetails=element('details',null,view.details);element('summary','매장 알림 설정',notificationDetails);
  const notificationActions=[['이 매장 알림 켜기','enable']];
  if(typeof IOS_PUBLIC_RELEASE==='undefined'||!IOS_PUBLIC_RELEASE)notificationActions.push(['알림 테스트','test']);

@@ -113,3 +113,22 @@ test('native account mismatch before StoreKit starts releases the checkout lease
  await assert.rejects(f.client.purchase(),{code:'purchase_account_mismatch'});
  assert.deepEqual(f.calls,['prepare','release']);assert.deepEqual(f.finished,[]);
 });
+
+test('subscription management serializes native presentation without claiming a checkout or verifying transactions',async()=>{
+ let finish,calls=0;
+ const c={userId:'owner',storeId:'store',role:'storeOwner'};
+ const client=createBillingClient({getContext:()=>c,storeKit:{manageSubscriptions:()=>{calls++;return new Promise(resolve=>finish=resolve);}},request:()=>{throw Error('management must not mutate billing');}});
+ const opening=client.manage();
+ assert.equal(client.isBusy(),true);
+ await assert.rejects(client.manage(),/처리 중/);
+ assert.equal(calls,1);finish({status:'closed'});await opening;
+ assert.equal(client.isBusy(),false);
+});
+
+test('subscription management rejects changed owners and releases the busy state on native failure',async()=>{
+ let c={userId:'owner',storeId:'store',role:'storeOwner'},fail=false;
+ const client=createBillingClient({getContext:()=>c,storeKit:{manageSubscriptions:async()=>{if(fail)throw Error('native_management_failed');c={...c,userId:'other'};}},request:()=>{throw Error('unexpected server call');}});
+ await assert.rejects(client.manage(),/계정 또는 매장이 바뀌/);assert.equal(client.isBusy(),false);
+ fail=true;await assert.rejects(client.manage(),/native_management_failed/);assert.equal(client.isBusy(),false);
+ c={...c,role:'staff'};await assert.rejects(client.manage(),/사장님/);
+});
