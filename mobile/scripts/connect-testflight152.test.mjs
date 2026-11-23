@@ -59,6 +59,7 @@ test('1.56 only connects the exact signed run to the existing internal group and
   for (const [branchName, release] of [
     ['codex/ios-final-156-20261109', 'ios-20261109-1.56'],
     ['codex/ios-review-fix-20261111', 'ios-20261111-1.56-review-fix'],
+    ['codex/ios-purchase-account-testflight-20261123', 'ios-20261123-1.56-account-fix'],
   ]) {
     const branch156=`refs/heads/${branchName}`;
     const env156={...env,GITHUB_REF:branch156,

@@ -89,7 +89,7 @@ test('1.52 final upload is restricted to the exact requested branch and workflow
 });
 
 test('1.56 iPhone upload requires the dedicated release branch and signing workflow',async()=>{
-  for (const branch of ['refs/heads/codex/ios-final-156-20261109', 'refs/heads/codex/ios-review-fix-20261111']) {
+  for (const branch of ['refs/heads/codex/ios-final-156-20261109', 'refs/heads/codex/ios-review-fix-20261111', 'refs/heads/codex/ios-purchase-account-testflight-20261123']) {
     const approved={...base,GITHUB_EVENT_NAME:'push',GITHUB_REF:branch,GITHUB_WORKFLOW_REF:`unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${branch}`};
     for(const overrides of [{GITHUB_WORKFLOW_REF:'other'},{GITHUB_REF:'refs/heads/codex/mandatory-account-verification-qa-20261109'},
       {GITHUB_EVENT_NAME:'workflow_dispatch'},{MANEE_UPLOAD_TESTFLIGHT:'false'}]){
