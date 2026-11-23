@@ -37,6 +37,10 @@ TestFlight 1.56 (156.22.1)의 실제 iPhone에서 Apple 인증 후 이름·이�
 - 심사정보 암호화·수정 범위·읽어 확인하기 테스트 6개 통과.
 - 서명 아카이브·내보낸 IPA·Apple 로그인 entitlement·IPA와 테스트한 생성 자산 일치 검사 통과.
 
-## TestFlight 배포
+## TestFlight 배포 완료
 
-1.56 (156.23.1)의 서명·업로드가 완료됐으며 Apple 처리와 기존 MANEE 내부 QA 그룹 연결을 확인 중이다. 실행: https://github.com/unionconnect-kr/winners/actions/runs/45091118528
+1.56 (156.23.1)은 2026-11-23 10:03:14 KST에 Apple processingState=VALID, internalBuildState=IN_BETA_TESTING, internalGroupConnected=true를 확인했다. 서명 워크플로 실행은 success로 종료됐다. 정식 심사 제출은 하지 않았다.
+
+실행: https://github.com/unionconnect-kr/winners/actions/runs/45091118528
+
+이 빌드는 마지막 심사 소스와 이번 계정 확인·안내 수정 기준이다. PC에만 있는 미커밋 작업의 포함 여부는 확인하지 못했다.
