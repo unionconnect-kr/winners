@@ -25,6 +25,7 @@ function fixture(overrides={},access=null){
  const window={};const c={userId:'owner',storeId:'store',role:'storeOwner',db:{rpc:async()=>({data:access})}};
  const context=createContext({window,document,localStorage:{},registerPlugin:()=>({addListener:()=>{}}),Geolocation:{},PushNotifications:{},
   createBillingClient:()=>billing,createAndroidGeolocation:()=>({}),createNativeGeolocation:()=>({}),createIosPush:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>()=>{},
+  createModalScrollLock:()=>()=>()=>{},
   createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet,subscriptionView,purchaseAccountMessage});
  new Script(readFileSync(new URL('../src/native.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'')).runInContext(context);
  window.MANEE_NATIVE.configure(()=>c);

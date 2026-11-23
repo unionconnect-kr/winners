@@ -2,6 +2,9 @@
 :root{--ios-safe-top:env(safe-area-inset-top,0px);--ios-safe-bottom:env(safe-area-inset-bottom,0px);--ios-banner-height:28px}
 html,body{width:100%;max-width:100%;overflow-x:clip;overscroll-behavior-x:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body :is(button,a,input,select,textarea,label,summary){touch-action:manipulation}
+/* CSS containment supplements the iOS page lock for short and long dialogs. */
+:is(#manee-subscription-status,#manee-ios-billing,#manee-ios-info){overscroll-behavior:contain}
+:is(#manee-subscription-status,#manee-ios-billing,#manee-ios-info)::backdrop{overscroll-behavior:contain;touch-action:none}
 body :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea){font-size:16px!important}
 .app{box-sizing:border-box;width:100%;min-width:0}
 .app .r136-delete{margin-top:12px;color:var(--danger);border-color:#F0D7D8;background:#fff}
