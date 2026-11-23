@@ -1,0 +1,54 @@
+name: Prepare MANEE beta review login
+on:
+  push:
+    branches: [codex/ios-purchase-account-testflight-20261123]
+    paths: ['.github/workflows/ios-beta-review-info.yml']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-testflight-20261123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reuse the verified review demo login for beta review only
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {makeToken} from './mobile/scripts/check-apple-connection.mjs';
+          import {decryptReviewPayload} from './review-ops/review-info.mjs';
+          const app='6820833544',branch='refs/heads/codex/ios-purchase-account-testflight-20261123';
+          if(process.env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||process.env.GITHUB_REF!==branch||process.env.GITHUB_EVENT_NAME!=='push'||process.env.GITHUB_WORKFLOW_REF!==`unionconnect-kr/winners/.github/workflows/ios-beta-review-info.yml@${branch}`)throw Error('BETA_NOT_REQUESTED');
+          const token=makeToken(process.env);
+          async function api(path,body){
+            const r=await fetch('https://api.appstoreconnect.apple.com'+path,{method:body?'PATCH':'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+            if(!r.ok)throw Error('BETA_HTTP_'+r.status);
+            return r.json();
+          }
+          try{
+            const identity=await api('/v1/apps/'+app+'?fields%5Bapps%5D=bundleId');
+            if(identity.data?.id!==app||identity.data.attributes?.bundleId!=='kr.co.manee.app')throw Error('BETA_WRONG_APP');
+            const envelope=JSON.parse(readFileSync('./review-ops/review-details.enc.json','utf8'));
+            const payload=decryptReviewPayload(envelope,process.env.ASC_PRIVATE_KEY);
+            if(payload.appId!==app||payload.version!=='1.56'||payload.reviewId!=='5b411508-6432-425c-ba40-c5f315f5f7f9'||payload.demoAccountName!=='todtod07'||typeof payload.password!=='string'||payload.password.length<8)throw Error('BETA_INVALID_PAYLOAD');
+            const before=await api('/v1/apps/'+app+'/betaAppReviewDetail');
+            const id=before.data?.id;
+            if(before.data?.type!=='betaAppReviewDetails'||!/^[-a-zA-Z0-9]+$/.test(id||''))throw Error('BETA_DETAIL_UNAVAILABLE');
+            const notes='Beta verification build 1.56 (156.24.1). Use the provided existing owner demo login; signup SMS is not required for this login. Select the synthetic review store named 매니 심사 전용 가상매장. The demo initially has no valid subscription and shows the account access/subscription screen. This beta tests new TestFlight purchases, restoration, purchase ownership conflicts, and modal scrolling. A fresh purchase on the new tester Apple Account is still pending device verification; do not treat it as already passed. SMS is required for new owner signup and there is no fixed SMS bypass code.';
+            const attributes={demoAccountRequired:true,demoAccountName:payload.demoAccountName,demoAccountPassword:payload.password,notes};
+            await api('/v1/betaAppReviewDetails/'+id,{data:{type:'betaAppReviewDetails',id,attributes}});
+            const after=await api('/v1/betaAppReviewDetails/'+id);
+            for(const [key,value] of Object.entries(attributes))if(after.data?.attributes?.[key]!==value)throw Error('BETA_NOT_VERIFIED');
+            console.log(JSON.stringify({appId:app,betaReviewLoginVerified:true,demoAccountName:payload.demoAccountName,notesVerified:true,contactDetailsChanged:false,betaReviewSubmitted:false,appStoreReviewSubmitted:false}));
+          }catch(error){console.error(/^BETA_[A-Z_]+(?:_\d{3})?$/.test(error.message)?error.message:'BETA_FAILED');process.exitCode=1;}
+          JS
