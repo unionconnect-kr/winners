@@ -35,9 +35,11 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
    await page.goto('http://manee.test/');await page.evaluate(value=>window.baseline=value,baseline);
    await page.addScriptTag({content:bundle.outputFiles[0].text});
    await page.evaluate(()=>window.scrollTo(0,428));
+   const originalBackground=await page.locator('main').evaluate(e=>e.getBoundingClientRect().top);
    await page.evaluate(()=>window.MANEE_NATIVE.openSubscriptionStatus());await page.waitForTimeout(100);
    const sheet=page.locator('#manee-subscription-status'),box=await sheet.boundingBox();
    const before=await page.evaluate(()=>({root:scrollY,background:document.querySelector('main').getBoundingClientRect().top}));
+   if(!baseline)assert.equal(before.background,originalBackground,'opening a modal changed the background position');
    // Actual wheel input exercises WebKit scrolling, rather than assigning a
    // scroll offset in JavaScript. Touch-direction handling is tested separately.
    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
@@ -50,7 +52,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
     await sheet.getByRole('button',{name:'구독 확인',exact:true}).click();await page.waitForTimeout(100);
     assert.equal(await page.locator('body').evaluate(b=>b.style.position),'fixed');
     const checkout=page.locator('#manee-ios-billing');
-    await checkout.locator('details').evaluate(d=>{d.open=true;d.querySelector('p').textContent+=' '+('구독 안내문을 확인하세요. '.repeat(200));});
+    await checkout.locator(':scope > details').evaluate(d=>{d.open=true;d.querySelector('p').textContent+=' '+('구독 안내문을 확인하세요. '.repeat(200));});
     await checkout.evaluate(d=>{d.scrollTop=0;});const cb=await checkout.boundingBox();
     await page.mouse.move(cb.x+cb.width/2,cb.y+cb.height/2);await page.mouse.wheel(0,400);await page.waitForTimeout(200);
     assert.ok(await checkout.evaluate(d=>d.scrollTop>0),'long dialog must scroll inside');
