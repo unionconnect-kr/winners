@@ -7,6 +7,18 @@ import {adaptIos139,adaptIos139Social} from './adapt-ios139.mjs';
 import {createSocialNative} from '../src/ios-social.js';
 const source=readFileSync(new URL('../release139/assets/index.html',import.meta.url),'utf8');
 const html=adaptIos139(source);
+test('subscription denial directs owners to their subscription settings and staff to the owner',()=>{
+ const start=html.indexOf('  function businessError(');
+ const end=html.indexOf('  async function checkedBusinessMutation(',start);
+ for(const role of ['storeOwner','staff']){
+  const messages=[];const context={state:{role},showToast:text=>messages.push(text)};vm.createContext(context);
+  vm.runInContext(html.slice(start,end),context);context.businessError({code:'P4402'});
+  assert.equal(messages.length,1);
+  if(role==='storeOwner'){
+   assert.match(messages[0],/더보기에서 구독 상태/);assert.doesNotMatch(messages[0],/사장님께 문의/);
+  }else assert.match(messages[0],/사장님께 문의/);
+ }
+});
 function functionText(name,next){return html.slice(html.indexOf('  async function '+name+'('),html.indexOf('  '+next,html.indexOf('  async function '+name+'(')));}
 test('complete packaged inline scripts parse after iOS adaptation',()=>{
   for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);

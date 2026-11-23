@@ -1,0 +1,29 @@
+name: Prepare MANEE App Review information
+on:
+  push:
+    branches: [codex/ios-purchase-account-testflight-20261123]
+    paths: ['review-ops/**', '.github/workflows/app-review-info.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-review-info-6820833544
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-testflight-20261123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test review-ops/review-info.test.mjs
+      - name: Verify the fixed app and prepare its review information
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node review-ops/review-info.mjs
