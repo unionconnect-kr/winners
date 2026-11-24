@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {submitReview} from './manee-submit157.mjs';
 const branch='refs/heads/codex/manee-ios157-review-20261124';
 const env={GITHUB_REPOSITORY:'unionconnect-kr/winners',GITHUB_REF:branch,GITHUB_EVENT_NAME:'push',GITHUB_WORKFLOW_REF:'unionconnect-kr/winners/.github/workflows/ios157-submit-review.yml@'+branch,MANEE_SUBMIT_REVIEW:'ios-1.57-157.8.1-auto-release'};
-function setup({wrongApp=false,wrongBuild=false,unrelated=false,queued=false,phased=false}={}){
+function setup({wrongApp=false,wrongBuild=false,unrelated=false,queued=false,phased=false,locale='ko'}={}){
  const calls=[],mutations=[];let selected=queued,submitted=queued,created=queued||unrelated,added=queued||unrelated;
  const version=()=>({data:{type:'appStoreVersions',id:'v1',attributes:{versionString:'1.57',platform:'IOS',appStoreState:submitted?'WAITING_FOR_REVIEW':'PREPARE_FOR_SUBMISSION',releaseType:'AFTER_APPROVAL',earliestReleaseDate:null},relationships:{build:{data:selected?{type:'builds',id:'b1'}:null},appStoreVersionPhasedRelease:{data:phased?{id:'phase1'}:null}}},included:phased?[{id:'phase1',attributes:{phasedReleaseState:'INACTIVE'}}]:[]});
  const row=()=>({type:'reviewSubmissions',id:'s1',attributes:{platform:'IOS',state:submitted?'WAITING_FOR_REVIEW':'READY_FOR_REVIEW',submittedDate:submitted?'2026-11-24T14:00:00Z':null}});
@@ -16,7 +16,7 @@ function setup({wrongApp=false,wrongBuild=false,unrelated=false,queued=false,pha
    if(path.includes('/appStoreVersions?'))return {data:[{id:'v1'}]};
    if(path==='/v1/appStoreVersions/v1?include=build,appStoreVersionPhasedRelease')return version();
    if(path.endsWith('/appStoreReviewDetail'))return {data:{attributes:{demoAccountRequired:true,demoAccountName:'todtod07',demoAccountPassword:'fixture-password',notes:'Checklist items can require 1–4 completion photos.'}}};
-   if(path.includes('/appStoreVersionLocalizations?'))return {data:[{attributes:{locale:'ko-KR',whatsNew:'최대 4장'}}]};
+   if(path.includes('/appStoreVersionLocalizations?'))return {data:[{attributes:{locale,whatsNew:'최대 4장'}}]};
    if(path.includes('/apps/6820833544/reviewSubmissions?'))return {data:created?[row()]:[]};
    if(path.includes('/reviewSubmissions/s1/items?'))return {data:added?[{id:'i1',relationships:{appStoreVersion:{data:{id:unrelated?'unrelated-version':'v1'}}}}]:[]};
    if(path==='/v1/reviewSubmissions/s1')return {data:row()};
@@ -41,4 +41,8 @@ test('the exact processed version is linked and submitted only after verificatio
 });
 test('already submitted matching version returns a verified receipt without mutations',async()=>{
  const h=setup({queued:true}),r=await submitReview(env,{api:h.api});assert.equal(r.alreadySubmitted,true);assert.equal(h.mutations.length,0);assert.equal(r.submissionState,'WAITING_FOR_REVIEW');
+});
+test('Apple Korean language identifiers are accepted while an unrelated locale is rejected',async()=>{
+ for(const locale of ['ko','ko-KR']){const h=setup({locale});assert.equal((await submitReview(env,{api:h.api})).state,'WAITING_FOR_REVIEW');}
+ const h=setup({locale:'en-US'});await assert.rejects(submitReview(env,{api:h.api}),/REVIEW_RELEASE_NOTES_MISSING/);assert.equal(h.mutations.length,0);
 });

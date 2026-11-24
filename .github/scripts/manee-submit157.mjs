@@ -30,7 +30,7 @@ export async function submitReview(env,{api,wait=ms=>new Promise(r=>setTimeout(r
  const details=await get(vpath+'/appStoreReviewDetail'),d=details.data?.attributes;
  if(d?.demoAccountRequired!==true||d.demoAccountName!=='todtod07'||!d.demoAccountPassword||!d.notes?.includes('1–4 completion photos'))throw Error('REVIEW_DEMO_DETAILS_MISSING');
  const localizations=await get(vpath+'/appStoreVersionLocalizations?limit=50');
- if(!localizations.data?.some(i=>i.attributes?.locale==='ko-KR'&&i.attributes.whatsNew?.includes('최대 4장')))throw Error('REVIEW_RELEASE_NOTES_MISSING');
+ if(!localizations.data?.some(i=>['ko','ko-KR'].includes(i.attributes?.locale)&&i.attributes.whatsNew?.includes('최대 4장')))throw Error('REVIEW_RELEASE_NOTES_MISSING');
  const rs=await get('/v1/apps/'+app+'/reviewSubmissions?filter%5Bplatform%5D=IOS&limit=50');
  if(rs.links?.next)throw Error('REVIEW_SUBMISSION_PAGINATION');
  let submission,items=[];
