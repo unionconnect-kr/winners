@@ -1,0 +1,61 @@
+name: Verify MANEE App Review demo login
+on:
+  push:
+    branches: [codex/ios-purchase-account-testflight-20261123]
+    paths: ['.github/workflows/ios-review-login-audit.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-review-demo-login-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-testflight-20261123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check stored demo credentials without printing or changing credentials
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          import {makeToken} from './.github/scripts/ios-qa-connection.mjs';
+          import {decryptReviewPayload} from './review-ops/review-info.mjs';
+          const app='6820833544',version='87063b6a-6afc-4384-a766-c493dbbcca1f',username='todtod07';
+          const apple='https://api.appstoreconnect.apple.com';
+          const config=JSON.parse(readFileSync('config/environments.json','utf8')).production;
+          if(config.supabaseUrl!=='https://bhwuuxcrzxespkjlmqxr.supabase.co'||!config.publishableKey.startsWith('sb_publishable_'))throw Error('DEMO_BACKEND_MISMATCH');
+          const request=async(path)=>{
+            const r=await fetch(apple+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+makeToken(process.env),Accept:'application/json'}});
+            if(!r.ok)throw Error('DEMO_APPLE_READ_FAILED');return r.json();
+          };
+          try{
+            const identity=await request('/v1/apps/'+app+'?fields%5Bapps%5D=bundleId');
+            if(identity.data?.id!==app||identity.data.attributes?.bundleId!=='kr.co.manee.app')throw Error('DEMO_APP_MISMATCH');
+            const v=await request('/v1/appStoreVersions/'+version);
+            if(v.data?.attributes?.versionString!=='1.56'||v.data?.attributes?.platform!=='IOS')throw Error('DEMO_VERSION_MISMATCH');
+            const detail=await request('/v1/appStoreVersions/'+version+'/appStoreReviewDetail');
+            const a=detail.data?.attributes;
+            if(a?.demoAccountName!==username||typeof a.demoAccountPassword!=='string'||!a.demoAccountPassword)throw Error('DEMO_CREDENTIALS_UNAVAILABLE');
+            const old=decryptReviewPayload(JSON.parse(readFileSync('review-ops/review-details.enc.json','utf8')),process.env.ASC_PRIVATE_KEY);
+            const result={appId:app,version:'1.56',demoAccountName:username,credentialsPresent:true,reviewPasswordMatchesPreparedRecord:old.password===a.demoAccountPassword,credentialChangesPerformed:false,reviewMetadataChanged:false,reviewSubmitted:false};
+            const login=await fetch(config.supabaseUrl+'/functions/v1/manee-login',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:config.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({username,password:a.demoAccountPassword,role:'owner'})});
+            const response=await login.json();
+            result.loginHttpStatus=login.status;
+            result.normalOwnerLogin=login.ok&&response.ok===true&&response.session?.user?.id==='e659cb27-3f02-438c-9725-3eebf08dc1a5';
+            if(response.session?.access_token){
+              const logout=await fetch(config.supabaseUrl+'/auth/v1/logout?scope=local',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:config.publishableKey,Authorization:'Bearer '+response.session.access_token}});
+              result.testSessionLogout=logout.ok;
+            }
+            console.log(JSON.stringify({...result,checkedAt:new Date().toISOString()}));
+          }catch{console.error('MANEE_REVIEW_DEMO_LOGIN_AUDIT_FAILED');process.exitCode=1;}
+          JS
