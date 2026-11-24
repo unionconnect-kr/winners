@@ -26,9 +26,14 @@ function setup(role='storeOwner'){
  });vm.runInContext(feature,c);
  return {c,state,writes,u,get top(){return top;},setTop:t=>{top=t;},setAlive:v=>{alive=v;},dom};
 }
-test('owner guide renders only for the owner and falls back honestly to the provided channel',()=>{
- const h=setup();h.setTop({type:'owner-guide'});let html=h.c.renderSector4Sheet();assert.match(html,/사장님 사용법/);assert.match(html,/공식 채널에서 찾기/);
- assert.doesNotMatch(html,/youtu\.be\/undefined|watch\?v=/);h.state.role='staff';html=h.c.renderSector4Sheet();assert.doesNotMatch(html,/m157-guide-row/);
+test('owner guide opens ten verified videos directly and keeps the channel as a separate link',()=>{
+ const h=setup();h.setTop({type:'owner-guide'});let html=h.c.renderSector4Sheet();assert.match(html,/사장님 사용법/);assert.doesNotMatch(html,/공식 채널에서 찾기|월말 리포트 확인/);
+ const doc=new JSDOM(html).window.document,links=[...doc.querySelectorAll('a.m157-guide-row')];
+ assert.equal(links.length,10);assert.equal(new Set(links.map(a=>new URL(a.href).searchParams.get('v'))).size,10);
+ assert.equal(new URL(links.find(a=>a.textContent.includes('회원가입')).href).searchParams.get('v'),'7nJ2DIiPXlE');
+ assert.equal(new URL(links.find(a=>a.textContent.includes('매출 등록')).href).searchParams.get('v'),'Fo5V3UtxXAo');
+ h.c.window.MANEE_GUIDE_LINKS={sales:'https://youtube.com/@manee-official'};assert.match(h.c.renderSector4Sheet(),/Fo5V3UtxXAo/);
+ h.state.role='staff';html=h.c.renderSector4Sheet();assert.doesNotMatch(html,/m157-guide-row/);
  assert.equal(h.c.m157GuideUrl('javascript:alert(1)'),null);assert.equal(h.c.m157GuideUrl('https://youtube.com.attacker.example/watch?v=x'),null);
 });
 test('photo completion cannot write with an empty draft, and preserves a rejected draft',async()=>{

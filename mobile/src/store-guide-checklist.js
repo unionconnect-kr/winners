@@ -1,12 +1,23 @@
-  // Owner tutorials are separate from the employee help entry. No video ID is invented.
+  // Video titles and URLs were verified on the official channel, 2026-11-24.
   const M157_GUIDE_CHANNEL='https://youtube.com/@manee-official';
-  const M157_GUIDES=[['start','매장 설정과 시작하기','가입 후 처음 할 일'],['staff','직원 등록과 권한 설정','직원 · 매니저 초대와 관리'],['schedule','근무 일정과 급여 확인','근무표 등록부터 예상 급여까지'],['sales','매출 · 지출 등록','하루 매출과 비용 기록하기'],['report','월말 리포트 확인','매장 현황 확인과 자료 내보내기']];
-  function m157GuideUrl(value){try{const u=new URL(value);if(u.protocol==='https:'&&['youtube.com','www.youtube.com','youtu.be'].includes(u.hostname)&&!u.username&&!u.password)return u.href;}catch{}return null;}
+  const M157_GUIDES=[
+    ['start','회원가입과 첫 매장','처음 시작하는 사장님','https://www.youtube.com/watch?v=7nJ2DIiPXlE'],
+    ['staff','직원 등록과 연결 승인','직원 연결 요청 확인하기','https://www.youtube.com/watch?v=vqDjWxRdteE&pp=0gcJCTwIAYcqIYzv'],
+    ['schedule','스케줄 등록 및 수정','직원 근무 일정 관리하기','https://www.youtube.com/watch?v=OB4x_djMUD4'],
+    ['contract','근로계약서 작성과 PDF 저장','근로계약서 작성하기','https://www.youtube.com/watch?v=m2556VmxTGE'],
+    ['permissions','매니저 지정과 권한 설정','직원별 권한 설정하기','https://www.youtube.com/watch?v=4Wz25JWhzKI'],
+    ['sales','매출 등록 및 테스트','매출 기록하기','https://www.youtube.com/watch?v=Fo5V3UtxXAo'],
+    ['fixed','고정비 추가','매달 발생하는 비용 등록하기','https://www.youtube.com/watch?v=TRhGbigG8O4'],
+    ['reservation','예약 등록','매장 예약 기록하기','https://www.youtube.com/watch?v=DbANFdDYkV0'],
+    ['staff-join','직원 가입과 매장 연결','직원이 확인할 사용법','https://www.youtube.com/watch?v=eeiJxrjNRFE'],
+    ['attendance','출퇴근 기록','직원이 확인할 사용법','https://www.youtube.com/watch?v=B5nWZBWa6oU']
+  ];
+  function m157GuideUrl(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password)return null;const id=u.hostname==='youtu.be'?u.pathname.slice(1):['youtube.com','www.youtube.com'].includes(u.hostname)&&u.pathname==='/watch'?u.searchParams.get('v'):null;if(/^[A-Za-z0-9_-]{11}$/.test(id||''))return u.href;}catch{}return null;}
   function m157FindItem(id){return Object.values(state.items||{}).flatMap(c=>c||[]).flatMap(c=>c.items||[]).find(it=>it.id===id);}
   function m157Image(type,data){return ['image/jpeg','image/png','image/webp'].includes(type)&&typeof data==='string'&&data.length<=1398104&&/^[A-Za-z0-9+/]+={0,2}$/.test(data)?'data:'+type+';base64,'+data:null;}
   function m157Guide(){
     const links=window.MANEE_GUIDE_LINKS||{};
-    return '<p class="m157-guide-intro">궁금한 기능부터 골라 보세요.</p><div>'+M157_GUIDES.map(([key,title,desc])=>{const url=m157GuideUrl(links[key]);return '<a class="m157-guide-row" href="'+s4Escape(url||M157_GUIDE_CHANNEL)+'" target="_blank" rel="noopener noreferrer"><span><b>'+s4Escape(title)+'</b><small>'+s4Escape(desc)+(url?'':' · 공식 채널에서 찾기')+'</small></span><span aria-hidden="true">▷</span></a>';}).join('')+'</div><a class="m157-guide-channel" href="'+M157_GUIDE_CHANNEL+'" target="_blank" rel="noopener noreferrer">매니 공식 유튜브 채널 ↗</a>';
+    return '<p class="m157-guide-intro">궁금한 기능을 누르면 해당 영상이 바로 열려요.</p><div>'+M157_GUIDES.map(([key,title,desc,verified])=>{const url=m157GuideUrl(links[key])||verified;return '<a class="m157-guide-row" href="'+s4Escape(url)+'" target="_blank" rel="noopener noreferrer"><span><b>'+s4Escape(title)+'</b><small>'+s4Escape(desc)+'</small></span><span aria-hidden="true">▷</span></a>';}).join('')+'</div><a class="m157-guide-channel" href="'+M157_GUIDE_CHANNEL+'" target="_blank" rel="noopener noreferrer">매니 공식 유튜브 채널 ↗</a>';
   }
   const m157RenderChecklist=renderSector4Checklist;
   renderSector4Checklist=function(){
@@ -15,7 +26,7 @@
       if(!state.checks[id]||!meta.photo_id)continue;
       const p=state.checklistPhotoMeta?.[meta.photo_id],needle='data-id="'+s4Escape(id)+'"',start=html.indexOf(needle);if(start<0)continue;
       const end=html.indexOf('</button>',start)+9;if(end<9)continue;
-      html=html.slice(0,end)+'<div class="m157-evidence-row">'+s4Button('완료 사진 보기','check-photo',meta.photo_id)+'<small>'+(p?.reviewed_at?'사장님 확인 완료':'사장님 확인 대기')+'</small></div>'+html.slice(end);
+      html=html.slice(0,end)+'<div class="m157-evidence-row">'+s4Button('완료 사진 보기','check-photo',meta.photo_id)+'<small>'+(p?.reviewed_at?'사장님 확인 완료':state.checklistPhotoLoadFailed?'사진 확인 상태 불러오기 실패':'사장님 확인 대기')+'</small></div>'+html.slice(end);
     }
     return html;
   };

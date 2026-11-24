@@ -1,4 +1,4 @@
-name: MANEE 1.58 signed Android internal test
+name: MANEE 1.59 signed Android internal test
 on:
   push:
     branches: [codex/mobile-checklist-guide-20261124]
@@ -125,11 +125,11 @@ jobs:
           writeFileSync(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE,Buffer.from(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64,'base64'),{mode:0o600});
           writeFileSync('android/app/src/release/google-services.json',process.env.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON,{mode:0o600});
           JS
-          node scripts/build-release158.mjs android production
-          node scripts/verify-release158.mjs android
+          node scripts/build-release159.mjs android production
+          node scripts/verify-release159.mjs android
           npm run sync:android
           cd android
-          ./gradlew :app:bundleRelease :app:assembleRelease -PmaneeRelease158
+          ./gradlew :app:bundleRelease :app:assembleRelease -PmaneeRelease159
           cd ..
           node scripts/verify-android-aab.mjs --store-update
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
@@ -137,7 +137,7 @@ jobs:
           python3 - <<'PY'
           import os,pathlib
           report=(pathlib.Path(os.environ['RUNNER_TEMP'])/'manee157-apk-manifest.txt').read_text()
-          assert "package: name='kr.co.manee.app' versionCode='59' versionName='1.58'" in report
+          assert "package: name='kr.co.manee.app' versionCode='60' versionName='1.59'" in report
           assert "targetSdkVersion:'36'" in report
           assert "uses-permission: name='android.permission.POST_NOTIFICATIONS'" in report
           assert "uses-permission: name='com.android.vending.BILLING'" in report
@@ -147,7 +147,7 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: manee-android-1.58-internal-test
+          name: manee-android-1.59-internal-test
           path: |
             mobile/android/app/build/outputs/bundle/release/app-release.aab
             mobile/android/app/build/outputs/apk/release/app-release.apk
