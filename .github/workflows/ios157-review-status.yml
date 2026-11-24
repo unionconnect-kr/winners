@@ -1,0 +1,41 @@
+name: Read MANEE iOS 1.57 live review status
+on:
+  push:
+    branches: [codex/manee-ios157-review-20261124]
+    paths: ['.github/workflows/ios157-review-status.yml']
+permissions:
+  contents: read
+jobs:
+  status:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/manee-ios157-review-20261124'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read only the fixed MANEE app, version, build and review submission
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {makeToken} from './mobile/scripts/check-apple-connection.mjs';
+          const app='6820833544',version='0da5128c-d8b1-4a72-9900-d004b6be0ce2',submission='2882c187-333d-4d11-8a0f-264adc8b3976';
+          async function get(path){
+            const r=await fetch('https://api.appstoreconnect.apple.com'+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+makeToken(process.env),Accept:'application/json'}});
+            if(!r.ok)throw Error('STATUS_HTTP_'+r.status);return r.json();
+          }
+          try{
+            const identity=await get('/v1/apps/'+app+'?fields%5Bapps%5D=bundleId');
+            if(identity.data?.id!==app||identity.data.attributes?.bundleId!=='kr.co.manee.app')throw Error('STATUS_WRONG_APP');
+            const v=await get('/v1/appStoreVersions/'+version),owner=await get('/v1/appStoreVersions/'+version+'/relationships/app');
+            if(owner.data?.id!==app||v.data?.attributes?.platform!=='IOS'||v.data.attributes.versionString!=='1.57')throw Error('STATUS_WRONG_VERSION');
+            const [b,s]=await Promise.all([get('/v1/appStoreVersions/'+version+'/build'),get('/v1/reviewSubmissions/'+submission)]);
+            console.log(JSON.stringify({checkedAt:new Date().toISOString(),appId:app,version:v.data.attributes.versionString,build:b.data?.attributes?.version,state:v.data.attributes.appStoreState,releaseType:v.data.attributes.releaseType,submissionState:s.data?.attributes?.state,submittedDate:s.data?.attributes?.submittedDate,readOnly:true,writesPerformed:false}));
+          }catch(e){console.error(/^STATUS_[A-Z_0-9]+$/.test(e.message)?e.message:'STATUS_READ_FAILED');process.exitCode=1;}
+          JS
