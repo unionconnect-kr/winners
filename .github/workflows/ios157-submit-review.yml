@@ -1,0 +1,39 @@
+name: Submit MANEE iOS 1.57 build 157.8.1 for automatic release
+on:
+  push:
+    branches: [codex/manee-ios157-review-20261124]
+    paths: ['.github/workflows/ios157-submit-review.yml', '.github/scripts/manee-submit157.mjs', '.github/scripts/manee-submit157.test.mjs']
+permissions:
+  contents: read
+concurrency:
+  group: manee-ios157-review-submit
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/manee-ios157-review-20261124' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify submission scope and idempotency
+        run: node --test .github/scripts/manee-submit157.test.mjs
+      - name: Submit only the requested MANEE version and processed build
+        env:
+          MANEE_SUBMIT_REVIEW: ios-1.57-157.8.1-auto-release
+          MANEE_REVIEW_STATUS_FILE: ${{ runner.temp }}/manee157-store-review.json
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: node .github/scripts/manee-submit157.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manee-ios157-store-review-status
+          path: ${{ runner.temp }}/manee157-store-review.json
+          if-no-files-found: ignore
+          retention-days: 14
