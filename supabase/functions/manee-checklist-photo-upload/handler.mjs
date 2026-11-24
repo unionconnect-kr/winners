@@ -1,11 +1,29 @@
 const bucket='manee-checklist-evidence';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json'}});
-function jpeg(value,max){
+function jpeg(value,max,maxSide){
  if(typeof value!=='string'||value.length>Math.ceil(max/3)*4||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))throw Error('INVALID_IMAGE');
  const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));
  if(bytes.length>max||bytes.length<5||bytes[0]!==255||bytes[1]!==216||bytes[2]!==255||bytes.at(-2)!==255||bytes.at(-1)!==217)throw Error('INVALID_IMAGE');
- return bytes;
+ // Validate dimensions before anyone's device decodes the image. Canvas uploads
+ // use baseline JPEG; progressive JPEG is also safe within the same bounds.
+ let offset=2,frame=false;
+ while(offset<bytes.length-2){
+  if(bytes[offset++]!==255)throw Error('INVALID_IMAGE');
+  while(bytes[offset]===255)offset++;
+  const marker=bytes[offset++];
+  if(marker===0||marker===216||marker===217||marker>=208&&marker<=215)throw Error('INVALID_IMAGE');
+  const length=(bytes[offset]<<8)|bytes[offset+1];
+  if(length<2||offset+length>bytes.length-2)throw Error('INVALID_IMAGE');
+  if(marker===218){if(!frame||length<6||offset+length>=bytes.length-2)throw Error('INVALID_IMAGE');return bytes;}
+  if(marker>=192&&marker<=207&&![196,200,204].includes(marker)){
+   const height=(bytes[offset+3]<<8)|bytes[offset+4],width=(bytes[offset+5]<<8)|bytes[offset+6],components=bytes[offset+7];
+   if(frame||![192,194].includes(marker)||bytes[offset+2]!==8||![1,3].includes(components)||length!==8+3*components||width<1||height<1||width>maxSide||height>maxSide)throw Error('INVALID_IMAGE');
+   frame=true;
+  }
+  offset+=length;
+ }
+ throw Error('INVALID_IMAGE');
 }
 async function body(req){
  const reader=req.body?.getReader();if(!reader)throw Error('INVALID_REQUEST');const chunks=[];let size=0;
@@ -20,7 +38,7 @@ export function createPhotoUploadHandler({createClient,env}){
   try{
    const data=await body(req);
    if(!Number.isInteger(data.index)||data.index<0||data.index>=data.count||!Number.isInteger(data.count)||data.count<1||data.count>4)throw Error('INVALID_REQUEST');
-   const image=jpeg(data.image,358400),thumbnail=jpeg(data.thumbnail,32768);
+   const image=jpeg(data.image,358400,1280),thumbnail=jpeg(data.thumbnail,32768,160);
    const user=createClient(env('SUPABASE_URL'),env('SUPABASE_ANON_KEY'),{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});
    const identity=await user.auth.getUser();if(identity.error||!identity.data?.user?.id)return json({code:'AUTH_REQUIRED'},401);
    // RPC enforces live session, membership, entitlement, business date, template CAS,
