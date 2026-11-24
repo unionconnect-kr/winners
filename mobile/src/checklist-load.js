@@ -7,13 +7,13 @@
       catch(e){templateError=e;}
       if(!alive())return;
       if(!templateError){
-        try{const r=await db.from('checklist_checks').select('item_id,checked_at,checked_by,photo_id').eq('store_id',storeId).eq('date',d).eq('checked',true);if(r.error)throw r.error;for(const row of r.data||[]){checks[row.item_id]=true;meta[row.item_id]=row;}}
+        try{const r=await db.from('checklist_checks').select('item_id,checked_at,checked_by,photo_id,photo_ids').eq('store_id',storeId).eq('date',d).eq('checked',true);if(r.error)throw r.error;for(const row of r.data||[]){checks[row.item_id]=true;meta[row.item_id]=row;}}
         catch(e){checkError=e;}
       }
       if(!alive())return;
-      const photoIds=[...new Set(Object.values(meta).map(r=>r.photo_id).filter(Boolean))];
+      const photoIds=[...new Set(Object.values(meta).flatMap(r=>r.photo_ids?.length?r.photo_ids:[r.photo_id]).filter(Boolean))];
       if(photoIds.length){
-        try{const r=await db.from('manee_checklist_photos').select('id,item_id,created_at,reviewed_at,reviewed_by').eq('store_id',storeId).eq('date',d).in('id',photoIds);if(r.error)throw r.error;photos=Object.fromEntries((r.data||[]).map(p=>[p.id,p]));}
+        try{const r=await db.from('manee_checklist_photos').select('id,item_id,created_at,reviewed_at,reviewed_by,object_path,thumbnail_path').eq('store_id',storeId).eq('date',d).in('id',photoIds);if(r.error)throw r.error;photos=Object.fromEntries((r.data||[]).map(p=>[p.id,p]));}
         catch(e){photoError=e;}
       }
     }

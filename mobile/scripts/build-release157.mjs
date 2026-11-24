@@ -11,4 +11,4 @@ const out=new URL('../www/',import.meta.url);
 writeFileSync(new URL('index.html',out),installStoreGuideChecklist(readFileSync(new URL('index.html',out),'utf8')));
 copyFileSync(new URL('../src/store-guide-checklist.css',import.meta.url),new URL('store-guide-checklist.css',out));
 const info=JSON.parse(readFileSync(new URL('build-info.json',out),'utf8'));
-writeFileSync(new URL('build-info.json',out),JSON.stringify({...info,versionName:'1.57',versionCode:58,releaseVersion:'1.57',sourceVersion:'1.56',checklistPhotos:true,checklistThumbnails:true,ownerGuide:true},null,2)+'\n');
+writeFileSync(new URL('build-info.json',out),JSON.stringify({...info,versionName:'1.57',versionCode:58,releaseVersion:'1.57',sourceVersion:'1.56',checklistPhotos:true,checklistThumbnails:true,ownerGuide:true,maxChecklistPhotos:4,privatePhotoStorage:true,mandatoryUpdate:true,releaseNotes:true,managerPayHelp:true,employmentPermissionsSeparated:true},null,2)+'\n');

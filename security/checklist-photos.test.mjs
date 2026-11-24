@@ -48,5 +48,64 @@ test('checklist photo database contracts use the actual migration and PostgreSQL
  await t.test('expired accounts cannot upload or approve evidence',async()=>{await db.query("select set_config('app.billing','no',false)");await assert.rejects(rpc('review-photo',{photo_id:photo}),e=>e.code==='P4402');await assert.rejects(rpc('check',{item_id:'photo',checked:true,photo:{type:'image/png',data:png}}),e=>e.code==='P4402');await uid(owner);});
  await t.test('closing and resetting keep historical evidence readable',async()=>{await rpc('close',{reason:'remaining task',expected_items:templates});assert.equal((await db.query('select photos from checklist_history')).rows[0].photos.photo,photo);await rpc('reopen');await rpc('reset');assert.equal((await db.query('select count(*)::int as n from checklist_checks')).rows[0].n,0);assert.equal((await db.query('select public.manee_checklist_photo($1,$2) as p',[store,photo])).rows[0].p.id,photo);});
  await t.test('a revoked session cannot read old evidence',async()=>{await db.query("select set_config('app.live','no',false)");await assert.rejects(db.query('select public.manee_checklist_photo($1,$2)',[store,photo]),/Membership/);});
+ await db.exec(`create schema storage;
+ create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+ create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text unique,owner_id text,metadata jsonb);
+ alter table storage.objects enable row level security;
+ grant usage on schema storage to authenticated;
+ grant select,insert,delete on storage.objects to authenticated;
+ create function private.manee_store_write_entitled(s uuid) returns boolean language sql stable as $$select current_setting('app.billing',true)<>'no'$$;`);
+ const multi=readdirSync(new URL('../supabase/migrations',import.meta.url)).find(f=>f.endsWith('_checklist_multi_photo_storage.sql'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/'+multi,import.meta.url),'utf8'));
+ await uid(staff);
+ const prepare=async(count=4,sid=store,item='photo',request=crypto.randomUUID())=>(await db.query('select public.manee_checklist_prepare_photos($1,$2,$3,$4,$5,$6) as r',[sid,date,item,count,request,templates])).rows[0].r.photos;
+ const upload=async tickets=>{
+  // The Edge Function's service client creates store-owned objects (no user owner_id).
+  for(const ticket of tickets)for(const path of [ticket.object_path,ticket.thumbnail_path])await db.query("insert into storage.objects(bucket_id,name,owner_id,metadata) values('manee-checklist-evidence',$1,null,$2)",[path,{mimetype:'image/jpeg',size:100}]);
+ };
+ let tickets;
+ await t.test('multi-photo reservation rejects a fifth picture, wrong store and disabled collection',async()=>{
+  await assert.rejects(prepare(5),/1~4장/);await assert.rejects(prepare(1,other),/Membership/);await assert.rejects(prepare(1,store,'off'),/사진을 받는/);
+  tickets=await prepare();assert.equal(tickets.length,4);assert.equal(new Set(tickets.map(p=>p.id)).size,4);
+ });
+ await t.test('customers cannot directly upload arbitrary or reserved files to the private bucket',async()=>{
+  await db.exec('set role authenticated');try{
+   await assert.rejects(db.query("insert into storage.objects(bucket_id,name,owner_id,metadata) values('manee-checklist-evidence','arbitrary/file.jpg',$1,$2)",[staff,{mimetype:'image/jpeg',size:100}]),/row-level security/);
+   await assert.rejects(db.query("insert into storage.objects(bucket_id,name,owner_id,metadata) values('manee-checklist-evidence',$1,$2,$3)",[tickets[0].thumbnail_path,staff,{mimetype:'image/jpeg',size:40000}]),/row-level security/);
+  }finally{await db.exec('reset role');}
+  await upload(tickets);
+ });
+ await t.test('four pictures and completion commit together; duplicate IDs and incomplete uploads do not',async()=>{
+  await assert.rejects(rpc('check',{item_id:'photo',checked:true,photos:[tickets[0].id,tickets[0].id]}),/중복/);
+  const missing=await prepare(1);await assert.rejects(rpc('check',{item_id:'photo',checked:true,photos:missing.map(p=>p.id)}),/완료되지/);
+  const ids=tickets.map(p=>p.id);await rpc('check',{item_id:'photo',checked:true,photos:ids,expected_items:templates});
+  const row=(await db.query("select photo_id,photo_ids from checklist_checks where item_id='photo'")).rows[0];assert.deepEqual(row.photo_ids,ids);assert.equal(row.photo_id,ids[0]);
+  assert.equal((await db.query('select count(*)::int as n from manee_checklist_photos where object_path is not null and image_base64 is null')).rows[0].n,4);
+  await rpc('check',{item_id:'photo',checked:true,photos:ids,expected_items:templates});
+ });
+ await t.test('committed files are readable to members and cannot be removed by upload cleanup',async()=>{
+  await db.exec('set role authenticated');try{
+   assert.equal((await db.query('select * from storage.objects')).rows.length,8);
+   assert.equal((await db.query('delete from storage.objects where name=$1 returning id',[tickets[0].object_path])).rows.length,0);
+   await assert.rejects(db.query('select * from private.manee_checklist_uploads'),/permission denied/);
+  }finally{await db.exec('reset role');}
+  await uid(outsider);await db.exec('set role authenticated');try{assert.equal((await db.query('select * from storage.objects')).rows.length,0);}finally{await db.exec('reset role');}
+  await uid(staff);await db.query("select set_config('app.live','no',false)");await db.exec('set role authenticated');try{assert.equal((await db.query('select * from storage.objects')).rows.length,0);}finally{await db.exec('reset role');}await uid(owner);
+ });
+ await t.test('multi-photo history keeps ordered IDs and legacy inline evidence remains readable',async()=>{
+  await rpc('close',{reason:'remaining tasks'});const latest=(await db.query('select photos,photo_sets from checklist_history order by revision desc limit 1')).rows[0];
+  assert.deepEqual(latest.photo_sets.photo,tickets.map(p=>p.id));assert.equal(latest.photos.photo,tickets[0].id);
+  assert.equal((await db.query('select public.manee_checklist_photo($1,$2) as p',[store,photo])).rows[0].p.image_base64,png);
+ });
+ const versionFile=readdirSync(new URL('../supabase/migrations',import.meta.url)).find(f=>f.endsWith('_mobile_update_policy.sql'));
+ await db.exec(readFileSync(new URL('../supabase/migrations/'+versionFile,import.meta.url),'utf8'));
+ await t.test('update policy defaults off and is readable but not editable by app users',async()=>{
+  for(const role of ['anon','authenticated']){await db.exec('set role '+role);try{const rows=(await db.query('select * from manee_mobile_update_policy')).rows;assert.equal(rows.length,2);assert.ok(rows.every(r=>r.enabled===false));await assert.rejects(db.query("update manee_mobile_update_policy set enabled=true"),/permission denied/);}finally{await db.exec('reset role');}}
+  await assert.rejects(db.query("update manee_mobile_update_policy set enabled=true where platform='android'"),/check constraint/);
+ });
+ await t.test('store-owned evidence remains available when the uploading staff account is deleted',async()=>{
+  await uid(owner);await db.query('delete from auth.users where id=$1',[staff]);assert.equal((await db.query('select uploaded_by from manee_checklist_photos where id=$1',[tickets[0].id])).rows[0].uploaded_by,null);
+  await db.exec('set role authenticated');try{assert.equal((await db.query('select * from storage.objects')).rows.length,8);assert.equal((await db.query('select public.manee_checklist_photo($1,$2) as p',[store,tickets[0].id])).rows[0].p.id,tickets[0].id);}finally{await db.exec('reset role');}
+ });
  }finally{await db.close();}
 });

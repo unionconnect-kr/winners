@@ -15,3 +15,8 @@ for(const marker of ['m160-photo-thumb','m160ThumbnailScope','m160-photo-large']
 for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
 assert.ok(existsSync(new URL('store-guide-checklist.css',out)));
 console.log('Verified MANEE 1.57 production assets, feature hooks and complete scripts for '+platform+'.');
+
+assert.equal(info.maxChecklistPhotos,4);
+for(const flag of ['privatePhotoStorage','mandatoryUpdate','releaseNotes','managerPayHelp','employmentPermissionsSeparated'])assert.equal(info[flag],true);
+for(const marker of ['manee-checklist-photo-upload','photo_ids','시급·월급 설정','월별 급여 정산','m161-pay-help'])assert.ok(html.includes(marker),marker);
+assert.match(readFileSync(new URL('native.js',out),'utf8'),/manee_mobile_update_policy/);

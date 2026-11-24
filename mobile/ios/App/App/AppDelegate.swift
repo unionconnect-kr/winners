@@ -63,6 +63,7 @@ class ManeeBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(ManeeReportFilesPlugin())
         bridge?.registerPluginInstance(ManeeSecureAuthPlugin())
         bridge?.registerPluginInstance(ManeeAppleSignInPlugin())
+        bridge?.registerPluginInstance(ManeeAppUpdatePlugin())
     }
 }
 
@@ -448,5 +449,23 @@ public class ManeeSecureAuthPlugin: CAPPlugin, CAPBridgedPlugin {
             guard status == errSecSuccess || status == errSecItemNotFound else {throw NSError(domain:"SecureAuth",code:6)}
             call.resolve()
         } catch { call.reject("Secure auth storage unavailable") }
+    }
+}
+
+@objc(ManeeAppUpdatePlugin)
+public class ManeeAppUpdatePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ManeeAppUpdatePlugin"
+    public let jsName = "ManeeAppUpdate"
+    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "openStore", returnType: CAPPluginReturnPromise)]
+    @objc func openStore(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let url = URL(string: "itms-apps://itunes.apple.com/app/id6820833544") else {
+                call.reject("스토어 주소를 확인하지 못했어요.")
+                return
+            }
+            UIApplication.shared.open(url, options: [:]) { opened in
+                if opened { call.resolve() } else { call.reject("스토어를 열지 못했어요.") }
+            }
+        }
     }
 }

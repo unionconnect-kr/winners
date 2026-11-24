@@ -41,11 +41,12 @@
       m160ThumbActive++;
       (async()=>{
         try{
-          const r=await db.rpc('manee_checklist_photo',{p_store_id:scope.sid,p_photo_id:id});
+          const meta=state.checklistPhotoMeta?.[id];
+          const r=meta?.thumbnail_path?{data:meta}:await db.rpc('manee_checklist_photo',{p_store_id:scope.sid,p_photo_id:id});
           if(!m160ThumbnailLive(scope,id))return null;
-          const url=!r.error&&r.data?.id===id?m157Image(r.data.image_type,r.data.image_base64):null;
+          const url=!r.error&&r.data?.id===id?await m161ReadEvidence(r.data,!!r.data.thumbnail_path):null;
           if(!url)throw Error('photo unavailable');
-          const thumb=await m160ResizeThumbnail(url);
+          const thumb=r.data.thumbnail_path?url:await m160ResizeThumbnail(url);
           if(!m160ThumbnailLive(scope,id))return null;
           scope.cache.set(id,thumb);
           while(scope.cache.size>40)scope.cache.delete(scope.cache.keys().next().value);
@@ -70,10 +71,10 @@
       if(pos<0)continue;
       const start=html.lastIndexOf('<button',pos),end=html.indexOf('</button>',pos)+9;
       if(start<0||end<9)continue;
-      const p=state.checklistPhotoMeta?.[meta.photo_id],thumb=scope.cache.get(meta.photo_id);
-      const status=p?.reviewed_at?'사장님 확인 완료':state.checklistPhotoLoadFailed?'사진 확인 상태 불러오기 실패':'사진 첨부 · 확인 대기';
+      const p=state.checklistPhotoMeta?.[meta.photo_id],thumb=scope.cache.get(meta.photo_id),ids=meta.photo_ids?.length?meta.photo_ids:[meta.photo_id],reviewed=ids.filter(pid=>state.checklistPhotoMeta?.[pid]?.reviewed_at).length;
+      const status=reviewed===ids.length?'사장님 확인 완료':state.checklistPhotoLoadFailed?'사진 확인 상태 불러오기 실패':'사진 첨부 · 확인 대기'+(ids.length>1?' ('+reviewed+'/'+ids.length+')':'');
       const row=html.slice(start,end).replace('</small>','<span class="m160-review-status">'+status+'</span></small>');
-      const button='<button type="button" class="m160-photo-thumb" data-s4="check-photo" data-id="'+s4Escape(meta.photo_id)+'" data-photo-thumb="'+s4Escape(meta.photo_id)+'" aria-label="'+s4Escape((m157FindItem(id)?.label||'체크리스트')+' 완료 사진 크게 보기')+'">'+(thumb?'<img src="'+thumb+'" alt="" width="56" height="56">':'<span aria-hidden="true">사진<br>보기</span>')+'</button>';
+      const button='<button type="button" class="m160-photo-thumb" data-s4="check-photo" data-id="'+s4Escape(meta.photo_id)+'" data-photo-thumb="'+s4Escape(meta.photo_id)+'" aria-label="'+s4Escape((m157FindItem(id)?.label||'체크리스트')+' 완료 사진 크게 보기')+'"><span class="m161-thumb-image">'+(thumb?'<img src="'+thumb+'" alt="" width="56" height="56">':'<span aria-hidden="true">사진<br>보기</span>')+'</span>'+(ids.length>1?'<b class="m161-photo-count">'+ids.length+'장</b>':'')+'</button>';
       html=html.slice(0,start)+'<div class="m160-check-photo-row">'+row+button+'</div>'+html.slice(end);
     }
     return html;
@@ -86,7 +87,7 @@
       const id=button.dataset.photoThumb;
       m160Thumbnail(scope,id).then(thumb=>{
         if(!thumb||!button.isConnected||!m160ThumbnailLive(scope,id))return;
-        const img=document.createElement('img');img.src=thumb;img.alt='';img.width=56;img.height=56;button.replaceChildren(img);
+        const img=document.createElement('img');img.src=thumb;img.alt='';img.width=56;img.height=56;button.querySelector('.m161-thumb-image')?.replaceChildren(img);
       });
     };
     if(typeof IntersectionObserver==='function'){

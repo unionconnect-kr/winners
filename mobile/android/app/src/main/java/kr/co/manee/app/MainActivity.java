@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ManeeReportFilesPlugin.class);
         registerPlugin(ManeeSecureAuthPlugin.class);
         registerPlugin(ManeePlayBillingPlugin.class);
+        registerPlugin(ManeeAppUpdatePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

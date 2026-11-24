@@ -3,6 +3,9 @@ import {App} from '@capacitor/app';
 import {Browser} from '@capacitor/browser';
 import {createSocialNative} from './ios-social.js';
 import {guardAndroidSocial} from './android-social-guard.js';
+import {registerPlugin} from '@capacitor/core';
+import {installNativeUpdatePolicy} from './update-policy.mjs';
+installNativeUpdatePolicy({App,native:window.MANEE_NATIVE,platform:'android',store:registerPlugin('ManeeAppUpdate')});
 
 // Source-built replacement for the archived Android bridge: retain all native
 // capabilities while packaging the current billing clients and offer validation.

@@ -102,3 +102,9 @@ test('thumbnail failures leave a working full-photo action and do not fail the c
 test('preview cache is bounded and is cleared when the account changes',async()=>{
  const h=await photoHarness(42);h.c.db.rpc=async(_,args)=>({data:{id:args.p_photo_id,image_type:'image/jpeg',image_base64:'AAAA'}});const scope=h.c.m160ThumbnailScope();await Promise.all(Array.from({length:42},(_,i)=>h.c.m160Thumbnail(scope,'p'+i)));assert.equal(scope.cache.size,40);h.state.authProfile.user_id='other';const fresh=h.c.m160ThumbnailScope();assert.notEqual(fresh,scope);assert.equal(scope.cache.size,0);assert.equal(fresh.cache.size,0);
 });
+test('new photo thumbnails fetch only the small authenticated Storage object',async()=>{
+ const h=await photoHarness(),sid='20000000-0000-4000-8000-000000000001',uid='10000000-0000-4000-8000-000000000001',id='30000000-0000-4000-8000-000000000001',base=sid+'/2026-11-24/'+uid+'/'+id;
+ h.c.currentStoreId=()=>sid;h.c.FileReader=h.dom.window.FileReader;h.c.AbortSignal=AbortSignal;h.state.checkMeta.i0={photo_id:id,photo_ids:[id,'other-photo']};h.state.checklistPhotoMeta={[id]:{id,thumbnail_path:base+'/thumb.jpg',object_path:base+'/image.jpg'}};
+ const downloads=[];h.c.db.rpc=()=>{throw Error('full image RPC must not run for a new thumbnail');};h.c.db.storage={from:bucket=>({download:async path=>{downloads.push({bucket,path});return {data:new h.dom.window.Blob(['test-jpeg'],{type:'image/jpeg'})};}})};
+ h.c.render();await new Promise(r=>setTimeout(r,40));assert.deepEqual(downloads,[{bucket:'manee-checklist-evidence',path:base+'/thumb.jpg'}]);assert.ok(h.app.querySelector('.m160-photo-thumb img'));assert.equal(h.app.querySelector('.m161-photo-count').textContent,'2장');
+});
