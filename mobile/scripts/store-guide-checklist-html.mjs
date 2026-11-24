@@ -33,7 +33,7 @@ export function installStoreGuideChecklist(source) {
     else if(action==='check-photo-review')return m157ReviewPhoto(id);
     else if(action==='check-photo-save')return m157SubmitPhoto();`);
   // Wrap existing sheet and checklist rendering inside the existing authenticated app scope.
-  once('  initializeSocialLogin();',readFileSync(new URL('../src/store-guide-checklist.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../src/checklist-editor.js',import.meta.url),'utf8')+'\n  initializeSocialLogin();');
+  once('  initializeSocialLogin();',readFileSync(new URL('../src/store-guide-checklist.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../src/checklist-thumbnails.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../src/checklist-editor.js',import.meta.url),'utf8')+'\n  initializeSocialLogin();');
   once('</head>','<link rel="stylesheet" href="/store-guide-checklist.css">\n</head>');
   return html;
 }

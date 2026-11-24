@@ -3,7 +3,7 @@ name: MANEE 1.57 TestFlight verification
 on:
   push:
     branches: [codex/mobile-checklist-guide-20261124]
-    paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**', '!mobile/android/**', '!mobile/scripts/*android*', '!mobile/scripts/build-release158.mjs', '!mobile/scripts/verify-release158.mjs', '!mobile/scripts/build-release159.mjs', '!mobile/scripts/verify-release159.mjs']
+    paths: ['.github/workflows/ios-signed-build.yml', 'mobile/**', 'index.html', 'icons/**', 'config/**', 'owner-ui.css', 'report-assets/**', '!mobile/android/**', '!mobile/scripts/*android*', '!mobile/scripts/build-release158.mjs', '!mobile/scripts/verify-release158.mjs', '!mobile/scripts/build-release159.mjs', '!mobile/scripts/verify-release159.mjs', '!mobile/scripts/build-release160.mjs', '!mobile/scripts/verify-release160.mjs']
   workflow_dispatch:
     inputs:
       upload_testflight:
