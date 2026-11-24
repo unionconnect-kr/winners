@@ -1,0 +1,14 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,copyFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {installStoreGuideChecklist} from './store-guide-checklist-html.mjs';
+const mobile=fileURLToPath(new URL('..',import.meta.url));
+const platform=process.argv[2];
+if(!['ios','android'].includes(platform)||process.argv[3]!=='production')throw Error('Specify ios|android production');
+execFileSync(process.execPath,['scripts/'+(platform==='ios'?'build-ios-release156.mjs':'build-release156.mjs'),platform,'production'],{cwd:mobile,stdio:'inherit'});
+execFileSync(process.execPath,['scripts/verify-store-assets.mjs',platform==='ios'?'--ios-release156':'--release156'],{cwd:mobile,stdio:'inherit'});
+const out=new URL('../www/',import.meta.url);
+writeFileSync(new URL('index.html',out),installStoreGuideChecklist(readFileSync(new URL('index.html',out),'utf8')));
+copyFileSync(new URL('../src/store-guide-checklist.css',import.meta.url),new URL('store-guide-checklist.css',out));
+const info=JSON.parse(readFileSync(new URL('build-info.json',out),'utf8'));
+writeFileSync(new URL('build-info.json',out),JSON.stringify({...info,versionName:'1.57',versionCode:58,releaseVersion:'1.57',sourceVersion:'1.56',checklistPhotos:true,ownerGuide:true},null,2)+'\n');

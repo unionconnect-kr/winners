@@ -31,7 +31,8 @@ export async function uploadTestFlight(env, ipa, {
     (env.GITHUB_REF === 'refs/heads/codex/ios-final-156-20261109' || env.GITHUB_REF === 'refs/heads/codex/ios-review-fix-20261111' ||
      env.GITHUB_REF === 'refs/heads/codex/ios-purchase-account-testflight-20261123') &&
     env.GITHUB_WORKFLOW_REF === `unionconnect-kr/winners/.github/workflows/ios-signed-build.yml@${env.GITHUB_REF}`;
-  if ((!manual && !matched143 && !feedback144 && !release145 && !release146 && !release147 && !release148 && !release149 && !release150 && !release152 && !release156) ||
+  const release157=env.GITHUB_EVENT_NAME==='push'&&env.GITHUB_REF==='refs/heads/codex/mobile-checklist-guide-20261124'&&env.GITHUB_WORKFLOW_REF==='unionconnect-kr/winners/.github/workflows/ios157-testflight.yml@refs/heads/codex/mobile-checklist-guide-20261124';
+  if ((!manual && !matched143 && !feedback144 && !release145 && !release146 && !release147 && !release148 && !release149 && !release150 && !release152 && !release156 && !release157) ||
       env.MANEE_UPLOAD_TESTFLIGHT !== 'true' || env.GITHUB_REPOSITORY !== 'unionconnect-kr/winners') {
     throw Error('UPLOAD_NOT_REQUESTED');
   }
