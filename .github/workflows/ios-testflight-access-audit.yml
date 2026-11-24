@@ -1,0 +1,53 @@
+name: Audit MANEE TestFlight access
+on:
+  push:
+    branches: [codex/ios-purchase-account-testflight-20261123]
+    paths: ['.github/workflows/ios-testflight-access-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-testflight-20261123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read fixed app tester access without changing accounts or invitations
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {makeToken} from './mobile/scripts/check-apple-connection.mjs';
+          const app='6820833544',group='b5982888-0280-4513-8f78-74ca63dcd342';
+          const branch='refs/heads/codex/ios-purchase-account-testflight-20261123';
+          if(process.env.GITHUB_REPOSITORY!=='unionconnect-kr/winners'||process.env.GITHUB_REF!==branch||process.env.GITHUB_EVENT_NAME!=='push'||process.env.GITHUB_WORKFLOW_REF!==`unionconnect-kr/winners/.github/workflows/ios-testflight-access-audit.yml@${branch}`)throw Error('AUDIT_NOT_REQUESTED');
+          const token=makeToken(process.env);
+          async function get(path){
+            const r=await fetch('https://api.appstoreconnect.apple.com'+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
+            if(!r.ok)throw Error('AUDIT_HTTP_'+r.status);
+            return r.json();
+          }
+          try{
+            const identity=await get('/v1/apps/'+app+'?fields%5Bapps%5D=bundleId');
+            if(identity.data?.id!==app||identity.data.attributes?.bundleId!=='kr.co.manee.app')throw Error('AUDIT_WRONG_APP');
+            const groups=await get('/v1/apps/'+app+'/betaGroups?limit=50');
+            if(!groups.data?.some(x=>x.id===group&&x.attributes?.isInternalGroup===true&&x.attributes?.name==='MANEE 내부 QA'))throw Error('AUDIT_WRONG_GROUP');
+            const members=await get('/v1/betaGroups/'+group+'/relationships/betaTesters?limit=200');
+            if(members.links?.next)throw Error('AUDIT_PAGINATION_REQUIRED');
+            const checks=[];
+            for(const [label,email] of [['purchase-account','hi3890102@gmail.com'],['company-admin','union713@manee.co.kr']]){
+              const result=await get('/v1/betaTesters?filter%5Bemail%5D='+encodeURIComponent(email)+'&limit=10');
+              checks.push({label,matches:result.data?.length??0,testers:(result.data||[]).map(x=>({id:x.id,state:x.attributes?.state,inviteType:x.attributes?.inviteType,inInternalGroup:members.data?.some(m=>m.id===x.id)===true}))});
+            }
+            const builds=await get('/v1/builds?filter%5Bapp%5D='+app+'&filter%5Bversion%5D=156.24.1&limit=10');
+            const groupBuilds=await get('/v1/betaGroups/'+group+'/relationships/builds?limit=200');
+            console.log(JSON.stringify({appId:app,readOnly:true,checks,latestBuild:builds.data?.map(x=>({id:x.id,version:x.attributes?.version,processingState:x.attributes?.processingState,inInternalGroup:groupBuilds.data?.some(b=>b.id===x.id)===true})),appleAccountBindingNotExposed:true,invitationSent:false,reviewSubmitted:false}));
+          }catch(error){console.error(/^AUDIT_[A-Z_]+(?:_\d{3})?$/.test(error.message)?error.message:'AUDIT_FAILED');process.exitCode=1;}
+          JS

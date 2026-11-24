@@ -25,6 +25,7 @@ function fixture(overrides={},access=null){
  const window={};const c={userId:'owner',storeId:'store',role:'storeOwner',db:{rpc:async()=>({data:access})}};
  const context=createContext({window,document,localStorage:{},registerPlugin:()=>({addListener:()=>{}}),Geolocation:{},PushNotifications:{},
   createBillingClient:()=>billing,createAndroidGeolocation:()=>({}),createNativeGeolocation:()=>({}),createIosPush:()=>({}),createNotificationNavigation:()=>({start:async()=>{},flush:async()=>{}}),createSignupCheckout:()=>()=>{},
+  createModalScrollLock:()=>()=>()=>{},
   createSubscriptionSheet,subscriptionButton,setSubscriptionOffer,createSubscriptionStatusSheet,subscriptionView,purchaseAccountMessage});
  new Script(readFileSync(new URL('../src/native.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'')).runInContext(context);
  window.MANEE_NATIVE.configure(()=>c);
@@ -139,4 +140,22 @@ test('product loading cannot re-enable checkout after restore reports an account
  const opening=f.native.openSettings();await settle();await f.button('기존 구독 복원').onclick();
  resolveProduct({monthly:true,priceApproved:true,price:'9,900원',twoMonthsFree:true});await opening;
  assert.equal(f.button('월 구독 시작').hidden,true);assert.doesNotMatch(f.text(),/2개월 무료체험/);
+});
+
+test('iOS subscription management calls the native sheet and reloads status after dismissal without purchasing',async()=>{
+ let active=true,managed=0,checks=0;
+ const f=fixture({status:async()=>{checks++;return {ready:true,appAccountToken:'token',subscriptions:active?[{testActive:true}]:[]};},manage:async()=>{managed++;active=false;}});
+ await f.native.openSettings();assert.match(f.text(),/테스트 구독 이용 중/);
+ await f.button('구독 관리').onclick();
+ assert.equal(managed,1);assert.equal(checks,2);assert.equal(f.purchases(),0);
+ assert.doesNotMatch(f.text(),/테스트 구독 이용 중/);
+ assert.equal(f.button('무료체험 없는 구독 요금 확인').hidden,false);
+});
+
+test('iOS subscription management failure keeps the current dialog and shows a retryable message',async()=>{
+ const f=fixture({manage:async()=>{throw Error('Apple 구독 관리 화면을 열지 못했어요.');}});
+ await f.native.openSettings();await f.button('구독 관리').onclick();
+ assert.match(f.text(),/Apple 구독 관리 화면을 열지 못/);
+ assert.ok(f.button('닫기'));assert.equal(f.purchases(),0);
+ assert.equal(f.button('구독 관리').disabled,false);
 });

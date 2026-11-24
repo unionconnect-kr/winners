@@ -26,6 +26,7 @@ export function createBillingClient({storeKit,request,getContext}) {
    return status;
   },
   async products(productId='manee.store1.monthly'){return storeKit.products({productId});},
+  manage:()=>run(async c=>{await storeKit.manageSubscriptions();unchanged(c);}),
   purchase:(selection)=>run(async c=>{
    const checkoutId=globalThis.crypto.randomUUID();
    const status=await request(c,'ios-billing',{action:'prepare',checkoutId});unchanged(c);

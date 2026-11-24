@@ -1,0 +1,55 @@
+name: MANEE Apple product catalog audit
+on:
+  push:
+    branches: [codex/ios-purchase-account-testflight-20261123]
+    paths: ['.github/workflows/ios-product-catalog-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manee-apple-product-catalog-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/ios-purchase-account-testflight-20261123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read fixed MANEE product metadata without changing products or purchases
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {makeToken} from './.github/scripts/ios-qa-connection.mjs';
+          const app='6820833544',origin='https://api.appstoreconnect.apple.com';
+          const id=v=>{if(!/^[a-zA-Z0-9-]+$/.test(v||''))throw Error('CATALOG_INVALID_ID');return v;};
+          async function get(path){
+            if(!path.startsWith('/v1/')||path.includes('://'))throw Error('CATALOG_INVALID_PATH');
+            const r=await fetch(origin+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+makeToken(process.env),Accept:'application/json'}});
+            if(!r.ok)return {httpStatus:r.status,data:[],complete:false};
+            const body=await r.json();return {httpStatus:r.status,...body,complete:!body.links?.next};
+          }
+          try{
+            const identity=await get('/v1/apps/'+app+'?fields%5Bapps%5D=bundleId');
+            if(identity.data?.id!==app||identity.data?.attributes?.bundleId!=='kr.co.manee.app')throw Error('CATALOG_APP_MISMATCH');
+            const groups=await get('/v1/apps/'+app+'/subscriptionGroups?limit=200');
+            if(groups.httpStatus!==200||!groups.complete)throw Error('CATALOG_GROUPS_INCOMPLETE');
+            const subscriptions=[];
+            for(const group of groups.data){
+              const rows=await get('/v1/subscriptionGroups/'+id(group.id)+'/subscriptions?limit=200');
+              if(rows.httpStatus!==200||!rows.complete)throw Error('CATALOG_SUBSCRIPTIONS_INCOMPLETE');
+              for(const row of rows.data){const a=row.attributes||{};subscriptions.push({id:row.id,groupId:group.id,groupName:group.attributes?.referenceName,name:a.name,productId:a.productId,state:a.state,period:a.subscriptionPeriod});}
+            }
+            const purchases=await get('/v1/apps/'+app+'/inAppPurchasesV2?limit=200');
+            const inAppPurchases=(purchases.data||[]).map(row=>({id:row.id,name:row.attributes?.name,productId:row.attributes?.productId,state:row.attributes?.state,type:row.attributes?.inAppPurchaseType}));
+            console.log(JSON.stringify({appId:app,checkedAt:new Date().toISOString(),readOnly:true,writesPerformed:false,subscriptionGroupCount:groups.data.length,subscriptions,inAppPurchasesHttpStatus:purchases.httpStatus,inAppPurchasesComplete:purchases.complete,inAppPurchases}));
+          }catch{console.error('MANEE_PRODUCT_CATALOG_AUDIT_FAILED');process.exitCode=1;}
+          JS

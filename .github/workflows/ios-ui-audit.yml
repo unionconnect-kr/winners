@@ -36,6 +36,11 @@ jobs:
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
           IOS_UI_AUDIT_OUT="$RUNNER_TEMP/manee-page-results" \
           node mobile/scripts/audit-ios-pages.mjs
+      - name: Verify modal background locking and dialog scroll in WebKit
+        run: |
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/manee-playwright/node_modules/playwright" \
+          IOS_UI_AUDIT_OUT="$RUNNER_TEMP/manee-page-results" \
+          node mobile/scripts/audit-ios-modal-scroll.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

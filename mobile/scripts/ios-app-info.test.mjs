@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Script} from 'node:vm';
 import {JSDOM} from 'jsdom';
 import {purchaseAccountMessage} from '../src/billing.mjs';
+import {createModalScrollLock} from '../src/modal-scroll-lock.mjs';
 
 const nativeScript = new Script(readFileSync(new URL('../src/native.js', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, ''));
@@ -11,6 +12,7 @@ const nativeScript = new Script(readFileSync(new URL('../src/native.js', import.
 function fixture(getInfo) {
   const dom = new JSDOM('<!doctype html><body></body>', {url:'https://localhost/', runScripts:'outside-only'});
   const {window} = dom;
+  window.scrollTo=()=>{};
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   window.HTMLDialogElement.prototype.close = function () {
     this.open = false;
@@ -18,6 +20,7 @@ function fixture(getInfo) {
   };
   Object.assign(window, {
     purchaseAccountMessage,
+    createModalScrollLock,
     App:{getInfo},
     registerPlugin:()=>({addListener(){}}),
     createNativeGeolocation:()=>({}), Geolocation:{}, PushNotifications:{},

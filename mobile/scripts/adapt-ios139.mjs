@@ -11,6 +11,17 @@ export function adaptIos139(source, platform = 'ios', {appleLogin = false} = {})
   }
   // CSS owns safe-area spacing, including fixed banners and sheets.
   if(ios)once('viewport-fit=contain', 'viewport-fit=cover');
+  if(ios)once("showToast('매니 구독을 확인해 주세요. 사장님께 문의해 주세요.');",
+    "showToast(state.role==='storeOwner'?'매니 구독을 확인해 주세요. 더보기에서 구독 상태를 확인할 수 있어요.':'매니 구독을 확인해 주세요. 사장님께 문의해 주세요.');");
+  // Sales uses its own save/RPC path rather than checkedBusinessMutation.
+  // Keep failed drafts and context guards, but explain a billing refusal.
+  if(ios)once('    }catch(e){if(alive())showToast("매출보고 저장에 실패했어요. 입력 내용과 연결 상태를 확인해 주세요.");return;}',
+    `    }catch(e){if(alive()){
+      if(e?.code==='P4402'){
+        if(state.role==='storeOwner')window.MANEE_NATIVE.subscriptionDenied();
+        businessError(e);
+      }else showToast("매출보고 저장에 실패했어요. 입력 내용과 연결 상태를 확인해 주세요.");
+    }return;}`);
   once('<link rel="stylesheet" href="/owner-ui.css">', '<link rel="stylesheet" href="/owner-ui.css">\n<link rel="stylesheet" href="/'+(ios?'ios':'android')+'-ui.css">');
   once('<div role="status" style="position:fixed;top:0;left:0;right:0;z-index:99999;text-align:center;background:#fef3c7;color:#713f12;font-size:12px;padding:3px;pointer-events:none">', '<div role="status" class="'+(ios?'ios':'android')+'-test-banner">');
   once('매니 1.39 테스트 · 테스트 데이터만 입력해 주세요',ios?'매니 1.39 iPhone 테스트 · 테스트 데이터만 입력해 주세요':'매니 1.40 테스트 · 테스트 데이터만 입력해 주세요');

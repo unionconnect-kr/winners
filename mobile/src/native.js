@@ -13,6 +13,8 @@ import { createIosPush } from './ios-push.js';
 import { createNotificationNavigation } from './android-notification-navigation.js';
 import { subscriptionView } from './store-subscription.mjs';
 import {createSignupCheckout} from './signup-checkout.mjs';
+import {createModalScrollLock} from './modal-scroll-lock.mjs';
+const lockSheet=createModalScrollLock(window);
 const storeKit=registerPlugin('ManeeStoreKit');
 const reportFiles=registerPlugin('ManeeReportFiles');
 let getContext=()=>null,dialog=null,closing=false,refreshed=null;
@@ -45,11 +47,15 @@ const navigation=createNotificationNavigation({allowedRoles:['storeOwner','staff
 void navigation.start().catch(()=>{});
 function element(tag,text,parent){const el=document.createElement(tag);if(text)el.textContent=text;parent?.append(el);return el;}
 function showSheet(sheet){
- if(typeof sheet.showModal==='function')sheet.showModal();
- else{
-  sheet.style.cssText+=';display:block;position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);z-index:10000';
-  sheet.close=()=>sheet.dispatchEvent(new Event('close'));
- }
+ const unlock=lockSheet(sheet);
+ try{
+  if(typeof sheet.showModal==='function')sheet.showModal();
+  else{
+   sheet.style.cssText+=';display:block;position:fixed;left:50%;top:50%;margin:0;transform:translate(-50%,-50%);z-index:10000';
+   sheet.open=true;
+   sheet.close=()=>{sheet.open=false;sheet.dispatchEvent(new Event('close'));};
+  }
+ }catch(error){unlock();throw error;}
 }
 async function openAppInfo() {
  if (document.getElementById('manee-ios-info')) return;
@@ -113,7 +119,7 @@ function openSubscriptionStatus(){
   title.textContent=view.testActive?'Apple 테스트 구독 이용 중':view.title;
   message.textContent=view.testActive&&access?.enforced===true&&access.canWrite!==true
    ?'기존 기록은 조회할 수 있어요. 출퇴근을 포함한 업무 입력·수정에는 정식 매장 이용권이 필요해요.'
-   :view.message;
+   :view.message.replace('사장님이 구독 상태를 확인해 주세요.','더보기에서 구독 상태를 확인해 주세요.');
   restore.textContent=active||view.testActive||access?.canWrite===true?'구독 관리·복원':'구독 확인';
   restore.hidden=!info?.appAccountToken;refresh.disabled=false;
  }
@@ -169,7 +175,7 @@ async function openSettings(){
   displayResult(await billing.purchase({twoMonthsFree:trialSelected,price:storePrice}));
  });buy.hidden=true;buy.style.display='none';
  button('기존 구독 복원',async()=>displayResult(await billing.restore()),'link');
- button('구독 관리',()=>{window.open('https://apps.apple.com/account/subscriptions','_system');},'link');
+ button('구독 관리',async()=>{await billing.manage();if(!sameContext(c)||dialog!==sheet)return;sheet.close();await openSettings();},'link');
  const notificationDetails=element('details',null,view.details);element('summary','매장 알림 설정',notificationDetails);
  const notificationActions=[['이 매장 알림 켜기','enable']];
  if(typeof IOS_PUBLIC_RELEASE==='undefined'||!IOS_PUBLIC_RELEASE)notificationActions.push(['알림 테스트','test']);
