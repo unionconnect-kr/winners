@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 export function installStoreGuideChecklist(source) {
   let html=source;
   const once=(a,b)=>{if(html.split(a).length!==2)throw Error('1.57 update anchor changed: '+a.slice(0,100));html=html.replace(a,()=>b);};
+  once('<button type="button" class="ml-id-login" data-auth-view="password">아이디로 로그인</button>', '<button type="button" class="ml-id-login" data-auth-view="password"><span class="m159-login-icon" aria-hidden="true">\'+loginIcon(\'user\')+\'</span><span>아이디로 로그인하기</span></button>');
   once("<h4>'+esc+'</h4>","<h4><span class=\"m157-store-icon\" aria-hidden=\"true\">'+navIcon('store')+'</span>'+esc+'</h4>");
   once('    html+=renderOwnerWork();', '    html+=renderOwnerWork();\n    html+=\'<section class="oh-card m157-home-guide">\'+s4Line(\'사장님 사용법\',\'필요한 기능을 영상으로 확인하세요\',\'owner-guide\')+\'</section>\';');
   once("<h3 class=\"s4-section-label\">도움말</h3><div class=\"owner-menu\">'", "<h3 class=\"s4-section-label\">도움말</h3><div class=\"owner-menu\">'+s4Line('사장님 사용법','기능별 영상 안내 · 매니 공식 유튜브','owner-guide')");
