@@ -70,8 +70,10 @@ export function installNativeUpdatePolicy({App,native,platform,store}){
   showRequired:({version,update,retry})=>show({title:'업데이트가 필요해요',message:'매니 '+version+' 버전으로 업데이트한 뒤 이용해 주세요.',buttons:[['업데이트하기',update],['업데이트 확인',retry,true]],mandatory:true}),
   showNotes:({version,notes,confirm})=>show({title:'매니가 업데이트됐어요',message:version+' 버전의 변경 내용을 확인해 주세요.',notes,buttons:[['확인',confirm]]})
  });
- const check=(force=false)=>{if(!context()?.db||!document.body||!force&&Date.now()-lastCheck<30000)return;lastCheck=Date.now();void controller.check();};
- native.configure=function(get,...args){context=get;originalConfigure.call(native,get,...args);check(true);};
+ const check=(force=false)=>{let db;try{db=context()?.db;}catch{return;}if(!db||!document.body||!force&&Date.now()-lastCheck<30000)return;lastCheck=Date.now();void controller.check();};
+ // The compiled app configures the bridge before its `let state` initializer.
+ // Read that closure only after the current application script has completed.
+ native.configure=function(get,...args){context=get;originalConfigure.call(native,get,...args);void Promise.resolve().then(()=>check(true));};
  native.refresh=function(...args){check();return originalRefresh?.apply(native,args);};
  void App.addListener('appStateChange',({isActive})=>{if(isActive)check(true);}).catch(()=>{});
  document.addEventListener('DOMContentLoaded',()=>check(true),{once:true});

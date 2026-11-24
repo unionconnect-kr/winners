@@ -27,7 +27,11 @@ test('runtime blocks and rechecks on foreground without requiring AbortSignal.ti
  let foreground,checks=0,opened=0,work=0;const native={configure(){},refresh(){}};
  const q={select:()=>q,eq:()=>q,single:()=>q,abortSignal:async()=>{checks++;return {data:policy()};}};
  try{
-  installNativeUpdatePolicy({App:{getInfo:async()=>({version:'1.60',build:'61'}),addListener:async(_,fn)=>{foreground=fn;}},native,platform:'android',store:{openStore:async()=>{opened++;}}});native.configure(()=>({db:{from:()=>q}}));await new Promise(r=>setImmediate(r));
+  installNativeUpdatePolicy({App:{getInfo:async()=>({version:'1.60',build:'61'}),addListener:async(_,fn)=>{foreground=fn;}},native,platform:'android',store:{openStore:async()=>{opened++;}}});
+  // Match the compiled app's order: configure() precedes `let state = ...`.
+  native.configure(()=>({db:{from:()=>q},storeId:bootState.storeId}));
+  let bootState={storeId:'store'};
+  await new Promise(r=>setImmediate(r));
   const dialog=w.document.getElementById('manee-update-dialog');assert.ok(dialog);const cancel=new w.Event('cancel',{cancelable:true});dialog.dispatchEvent(cancel);assert.equal(cancel.defaultPrevented,true);
   w.document.getElementById('work').onclick=()=>{work++;};w.document.getElementById('work').click();assert.equal(work,0);
   [...dialog.querySelectorAll('button')].find(b=>b.textContent==='업데이트하기').click();await new Promise(r=>setImmediate(r));assert.equal(opened,1);
