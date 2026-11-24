@@ -51,7 +51,7 @@ jobs:
             const login=await fetch(config.supabaseUrl+'/functions/v1/manee-login',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:config.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({username,password:a.demoAccountPassword,role:'owner'})});
             const response=await login.json();
             result.loginHttpStatus=login.status;
-            result.normalOwnerLogin=login.ok&&response.ok===true&&response.session?.user?.id==='e659cb27-3f02-438c-9725-3eebf08dc1a5';
+            result.normalOwnerLogin=login.ok&&response.ok===true&&response.user?.id==='e659cb27-3f02-438c-9725-3eebf08dc1a5'&&!!response.session?.access_token;
             if(response.session?.access_token){
               const logout=await fetch(config.supabaseUrl+'/auth/v1/logout?scope=local',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:config.publishableKey,Authorization:'Bearer '+response.session.access_token}});
               result.testSessionLogout=logout.ok;
