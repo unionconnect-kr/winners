@@ -29,7 +29,8 @@
   async function m161ReadEvidence(photo,thumbnail=false){
     if(photo.image_base64)return m157Image(photo.image_type,photo.image_base64);
     const path=thumbnail?photo.thumbnail_path:photo.object_path;if(!m161PhotoPath(path,photo.id,thumbnail))throw Error('사진 경로를 확인하지 못했어요.');
-    const r=await db.storage.from(M161_PHOTO_BUCKET).download(path,{}, {signal:AbortSignal.timeout(15000)});
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);let r;
+    try{r=await db.storage.from(M161_PHOTO_BUCKET).download(path,{}, {signal:controller.signal});}finally{clearTimeout(timer);}
     if(r.error||!r.data||r.data.type!=='image/jpeg'||r.data.size>(thumbnail?32768:358400))throw Error('사진을 불러오지 못했어요.');
     return m161BlobURL(r.data);
   }

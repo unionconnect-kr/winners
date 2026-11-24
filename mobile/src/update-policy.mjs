@@ -65,7 +65,7 @@ export function installNativeUpdatePolicy({App,native,platform,store}){
  }
  controller=createUpdateController({platform,storage:window.localStorage,getInfo:()=>App.getInfo(),
   showChecking:()=>show({title:'앱 버전을 확인하고 있어요',message:'잠시만 기다려 주세요.',buttons:[]}),
-  async readPolicy(p){const db=context()?.db;if(!db)throw Error('Not configured');const r=await db.from('manee_mobile_update_policy').select('platform,enabled,minimum_version,minimum_build,available_version,available_build,published_at').eq('platform',p).single().abortSignal(AbortSignal.timeout(6000));if(r.error)throw r.error;return r.data;},
+  async readPolicy(p){const db=context()?.db;if(!db)throw Error('Not configured');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);try{const r=await db.from('manee_mobile_update_policy').select('platform,enabled,minimum_version,minimum_build,available_version,available_build,published_at').eq('platform',p).single().abortSignal(controller.signal);if(r.error)throw r.error;return r.data;}finally{clearTimeout(timer);}},
   openStore:()=>store.openStore(),hide,
   showRequired:({version,update,retry})=>show({title:'업데이트가 필요해요',message:'매니 '+version+' 버전으로 업데이트한 뒤 이용해 주세요.',buttons:[['업데이트하기',update],['업데이트 확인',retry,true]],mandatory:true}),
   showNotes:({version,notes,confirm})=>show({title:'매니가 업데이트됐어요',message:version+' 버전의 변경 내용을 확인해 주세요.',notes,buttons:[['확인',confirm]]})

@@ -20,9 +20,9 @@ test('new app shows release notes once and records acknowledgement only on confi
 });
 test('disabling the server policy can release an older cached mandatory gate',async()=>{const h=harness({cached:policy(),row:policy({enabled:false})});await h.c.check();assert.equal(h.c.isBlocked(),false);assert.ok(h.events.find(e=>e.type==='notes'));});
 test('parallel foreground checks use one server request',async()=>{let n=0,resolve;const c=createUpdateController({platform:'android',getInfo:async()=>({version:'1.60',build:'61'}),readPolicy:()=>{n++;return new Promise(r=>{resolve=r;});},storage:{getItem:()=>null,setItem(){}},hide(){},showRequired(){},showNotes(){},openStore(){}});const a=c.check(),b=c.check();await new Promise(r=>setImmediate(r));assert.equal(n,1);resolve(policy());await Promise.all([a,b]);});
-test('runtime uses a non-dismissible dialog and checks again on foreground',async()=>{
+test('runtime blocks and rechecks on foreground without requiring AbortSignal.timeout',async()=>{
  const dom=new JSDOM('<body><main id="app"><button id="work">저장</button></main></body>',{url:'https://manee.example'}),w=dom.window;
- const beforeWindow=globalThis.window,beforeDocument=globalThis.document;globalThis.window=w;globalThis.document=w.document;
+ const beforeWindow=globalThis.window,beforeDocument=globalThis.document,beforeSignal=globalThis.AbortSignal;globalThis.window=w;globalThis.document=w.document;globalThis.AbortSignal=undefined;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  let foreground,checks=0,opened=0,work=0;const native={configure(){},refresh(){}};
  const q={select:()=>q,eq:()=>q,single:()=>q,abortSignal:async()=>{checks++;return {data:policy()};}};
@@ -32,5 +32,5 @@ test('runtime uses a non-dismissible dialog and checks again on foreground',asyn
   w.document.getElementById('work').onclick=()=>{work++;};w.document.getElementById('work').click();assert.equal(work,0);
   [...dialog.querySelectorAll('button')].find(b=>b.textContent==='업데이트하기').click();await new Promise(r=>setImmediate(r));assert.equal(opened,1);
   foreground({isActive:true});await new Promise(r=>setImmediate(r));assert.ok(checks>=2);
- }finally{globalThis.window=beforeWindow;globalThis.document=beforeDocument;dom.window.close();}
+ }finally{globalThis.window=beforeWindow;globalThis.document=beforeDocument;globalThis.AbortSignal=beforeSignal;dom.window.close();}
 });

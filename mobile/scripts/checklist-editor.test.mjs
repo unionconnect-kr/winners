@@ -17,7 +17,7 @@ function harness(){
  const dom=new JSDOM('<main id="app"></main>'),document=dom.window.document,app=document.getElementById('app');dom.window.scrollTo=()=>{};
  const state={role:'storeOwner',authProfile:{user_id:'owner'},store:'A',storeIdMap:{A:'s1',B:'s2'},tab:'morning',items:{},checks:{},checkMeta:{},checklistViewDate:'2026-11-24',checklistLogMonth:'2026-11',checklistLog:{}};
  const u={key:'owner-A',stack:[],busy:false,filter:'all'},calls=[],reads=[],messages=[];let templates=[],checks=[],photos=[],rejection=null,photoReadError=false,deferred=null,sequence=0,denied=0;
- const c=vm.createContext({state,window:dom.window,document,app,URL,FormData:dom.window.FormData,structuredClone,Date,
+ const c=vm.createContext({state,window:dom.window,document,app,URL,FormData:dom.window.FormData,structuredClone,Date,AbortController,clearTimeout,
   TABS:[{id:'morning',label:'오픈'},{id:'afternoon',label:'마감'},{id:'routine',label:'정기 체크'}],
   sector4:()=>u,s4Top:()=>u.stack.at(-1),s4Uuid:()=>String(++sequence),s4Escape:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),s4Hint:s=>'<p>'+s+'</p>',
   currentStoreId:()=>state.storeIdMap[state.store],bizToday:()=> '2026-11-24',formatDateLabel:()=> '11월 24일',canEditChecklistItems:()=>state.role==='storeOwner',
@@ -104,7 +104,7 @@ test('preview cache is bounded and is cleared when the account changes',async()=
 });
 test('new photo thumbnails fetch only the small authenticated Storage object',async()=>{
  const h=await photoHarness(),sid='20000000-0000-4000-8000-000000000001',uid='10000000-0000-4000-8000-000000000001',id='30000000-0000-4000-8000-000000000001',base=sid+'/2026-11-24/'+uid+'/'+id;
- h.c.currentStoreId=()=>sid;h.c.FileReader=h.dom.window.FileReader;h.c.AbortSignal=AbortSignal;h.state.checkMeta.i0={photo_id:id,photo_ids:[id,'other-photo']};h.state.checklistPhotoMeta={[id]:{id,thumbnail_path:base+'/thumb.jpg',object_path:base+'/image.jpg'}};
+ h.c.currentStoreId=()=>sid;h.c.FileReader=h.dom.window.FileReader;h.state.checkMeta.i0={photo_id:id,photo_ids:[id,'other-photo']};h.state.checklistPhotoMeta={[id]:{id,thumbnail_path:base+'/thumb.jpg',object_path:base+'/image.jpg'}};
  const downloads=[];h.c.db.rpc=()=>{throw Error('full image RPC must not run for a new thumbnail');};h.c.db.storage={from:bucket=>({download:async path=>{downloads.push({bucket,path});return {data:new h.dom.window.Blob(['test-jpeg'],{type:'image/jpeg'})};}})};
  h.c.render();await new Promise(r=>setTimeout(r,40));assert.deepEqual(downloads,[{bucket:'manee-checklist-evidence',path:base+'/thumb.jpg'}]);assert.ok(h.app.querySelector('.m160-photo-thumb img'));assert.equal(h.app.querySelector('.m161-photo-count').textContent,'2장');
 });
