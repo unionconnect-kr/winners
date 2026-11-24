@@ -24,3 +24,22 @@ test('authorized image and thumbnail use canonical server paths without user-own
  const h=setup(),r=await h.run();assert.equal(r.status,200);assert.deepEqual(await r.json(),{ok:true,photo_id:pid});assert.equal(h.writes.length,2);assert.deepEqual(h.writes.map(w=>w.path),[base+'/image.jpg',base+'/thumb.jpg']);assert.ok(h.writes.every(w=>w.options.upsert===false&&w.options.contentType==='image/jpeg'));assert.equal(h.clients.find(c=>c.key==='SUPABASE_SERVICE_ROLE_KEY').options.global,undefined);assert.equal(h.rpcCalls[0].name,'manee_checklist_prepare_photos');
 });
 test('a partial storage failure cannot return a successful completion',async()=>{const h=setup({uploadError:true}),r=await h.run();assert.equal(r.status,400);assert.equal((await r.json()).code,'UPLOAD_FAILED');});
+test('already delivered clients can upload width-resized portrait photos and thumbnails',async()=>{
+ for(const [width,height] of [[900,1200],[1080,1920]]){
+  const input=sharp({create:{width,height,channels:3,background:'#88aa77'}});
+  const full=await input.clone().resize({width:1280,withoutEnlargement:true}).jpeg().toBuffer();
+  const thumbnail=await input.clone().resize({width:160,withoutEnlargement:true}).jpeg().toBuffer();
+  const h=setup(),r=await h.run({image:full.toString('base64'),thumbnail:thumbnail.toString('base64')});
+  assert.equal(r.status,200,JSON.stringify(await r.clone().json()));assert.equal(h.writes.length,2);
+ }
+});
+test('portrait compatibility keeps strict decode, byte, ownership and reservation bounds',async()=>{
+ const tooTall=await sharp({create:{width:160,height:321,channels:3,background:'#fff'}}).jpeg().toBuffer();
+ const tooWide=await sharp({create:{width:161,height:100,channels:3,background:'#fff'}}).jpeg().toBuffer();
+ for(const thumbnail of [tooTall,tooWide]){
+  const h=setup(),r=await h.run({thumbnail:thumbnail.toString('base64')});assert.equal(r.status,400);assert.equal((await r.json()).code,'INVALID_IMAGE');assert.equal(h.rpcCalls.length,0);assert.equal(h.writes.length,0);
+ }
+ const input=sharp({create:{width:900,height:1200,channels:3,background:'#fff'}});
+ const image=(await input.clone().jpeg().toBuffer()).toString('base64'),thumbnail=(await input.clone().resize({width:160}).jpeg().toBuffer()).toString('base64');
+ for(const cfg of [{unauthorized:true},{denied:true},{badPath:true}]){const h=setup(cfg),r=await h.run({image,thumbnail});assert.ok(r.status>=400);assert.equal(h.writes.length,0);}
+});

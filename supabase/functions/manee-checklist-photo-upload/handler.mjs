@@ -18,7 +18,10 @@ function jpeg(value,max,maxSide){
   if(marker===218){if(!frame||length<6||offset+length>=bytes.length-2)throw Error('INVALID_IMAGE');return bytes;}
   if(marker>=192&&marker<=207&&![196,200,204].includes(marker)){
    const height=(bytes[offset+3]<<8)|bytes[offset+4],width=(bytes[offset+5]<<8)|bytes[offset+6],components=bytes[offset+7];
-   if(frame||![192,194].includes(marker)||bytes[offset+2]!==8||![1,3].includes(components)||length!==8+3*components||width<1||height<1||width>maxSide||height>maxSide)throw Error('INVALID_IMAGE');
+   // 1.61 clients resize by width, so portrait thumbnails can legitimately be
+   // 160x213 (and full images 1280x1707). Accept that existing format within a
+   // strict 2:1 portrait envelope; byte limits and JPEG validation still apply.
+   if(frame||![192,194].includes(marker)||bytes[offset+2]!==8||![1,3].includes(components)||length!==8+3*components||width<1||height<1||width>maxSide||height>maxSide*2)throw Error('INVALID_IMAGE');
    frame=true;
   }
   offset+=length;
@@ -54,6 +57,11 @@ export function createPhotoUploadHandler({createClient,env}){
     if(uploaded.error)throw Error('UPLOAD_FAILED');
    }
    return json({ok:true,photo_id:ticket.id});
-  }catch(error){return json({code:['INVALID_IMAGE','INVALID_REQUEST','PAYLOAD_TOO_LARGE'].includes(error.message)?error.message:'UPLOAD_FAILED',message:'사진을 저장하지 못했어요. 입력 내용은 유지됩니다. 다시 시도해 주세요.'},400);}
+  }catch(error){
+   const code=['INVALID_IMAGE','INVALID_REQUEST','PAYLOAD_TOO_LARGE'].includes(error.message)?error.message:'UPLOAD_FAILED';
+   // Never log image bytes, identity, request bodies, authorization or paths.
+   console.warn(JSON.stringify({event:'checklist_photo_upload_failed',code}));
+   return json({code,message:'사진을 저장하지 못했어요. 입력 내용은 유지됩니다. 다시 시도해 주세요.'},400);
+  }
  };
 }

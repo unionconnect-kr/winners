@@ -28,6 +28,16 @@ function setup(role='storeOwner'){
  });vm.runInContext(feature,c);
  return {c,state,writes,uploads,removals,u,get top(){return top;},setTop:t=>{top=t;},setAlive:v=>{alive=v;},dom};
 }
+test('checklist compression bounds the longest side for landscape, portrait and tall photos',async()=>{
+ for(const [width,height] of [[1600,900],[900,1600],[900,2700],[80,120]]){
+  const h=setup(),canvases=[];
+  h.c.FileReader=class{readAsDataURL(){this.result='data:image/jpeg;base64,AAAA';this.onload();}};
+  h.c.Image=class{constructor(){this.width=width;this.height=height;}set src(_){this.onload();}};
+  const create=h.c.document.createElement.bind(h.c.document);
+  h.c.document.createElement=name=>{if(name!=='canvas')return create(name);const canvas={getContext:()=>({drawImage(){}}),toDataURL:(type,quality)=>{assert.equal(type,'image/jpeg');assert.ok(quality>0&&quality<1);return 'data:image/jpeg;base64,AAAA';}};canvases.push(canvas);return canvas;};
+  for(const side of [1280,160]){await h.c.m161CompressImage({},side,.6);const canvas=canvases.at(-1);assert.ok(canvas.width<=side&&canvas.height<=side);assert.ok(canvas.width<=width&&canvas.height<=height);assert.ok(Math.abs(canvas.width/canvas.height-width/height)<.02);}
+ }
+});
 test('owner guide opens ten verified videos directly and keeps the channel as a separate link',()=>{
  const h=setup();h.setTop({type:'owner-guide'});let html=h.c.renderSector4Sheet();assert.match(html,/사장님 사용법/);assert.doesNotMatch(html,/공식 채널에서 찾기|월말 리포트 확인/);
  const doc=new JSDOM(html).window.document,links=[...doc.querySelectorAll('a.m157-guide-row')];

@@ -16,6 +16,17 @@
   function m157FindItem(id){return Object.values(state.items||{}).flatMap(c=>c||[]).flatMap(c=>c.items||[]).find(it=>it.id===id);}
   function m157Image(type,data){return ['image/jpeg','image/png','image/webp'].includes(type)&&typeof data==='string'&&data.length<=1398104&&/^[A-Za-z0-9+/]+={0,2}$/.test(data)?'data:'+type+';base64,'+data:null;}
   const M161_PHOTO_BUCKET='manee-checklist-evidence';
+  function m161CompressImage(file,maxSide,quality){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();reader.onerror=()=>reject(Error('사진을 읽지 못했어요.'));
+      reader.onload=()=>{const img=new Image();img.onerror=()=>reject(Error('사진을 읽지 못했어요.'));img.onload=()=>{
+        try{const ratio=Math.min(1,maxSide/Math.max(img.width,img.height));if(!Number.isFinite(ratio)||ratio<=0)throw Error('사진 크기를 확인해 주세요.');
+          const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*ratio));canvas.height=Math.max(1,Math.round(img.height*ratio));
+          const ctx=canvas.getContext('2d');if(!ctx)throw Error('사진을 변환하지 못했어요.');ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',quality));
+        }catch(e){reject(e);}
+      };img.src=reader.result;};reader.readAsDataURL(file);
+    });
+  }
   function m161PhotoIds(id){
     for(const meta of Object.values(state.checkMeta||{})){const ids=meta.photo_ids?.length?meta.photo_ids:[meta.photo_id];if(ids.includes(id))return ids.slice(0,4);}
     for(const row of sector4().history||[])for(const ids of Object.values(row.photo_sets||{}))if(Array.isArray(ids)&&ids.includes(id))return ids.slice(0,4);
@@ -66,8 +77,8 @@
         const photos=[];
         for(const f of files){
           if(!f.type.startsWith('image/')||f.type==='image/svg+xml'||f.size>20*1024*1024)throw Error('20MB 이하의 사진을 선택해 주세요.');
-          let data;for(const [size,quality] of [[1280,.72],[1280,.55],[960,.5]]){data=(await compressImage(f,size,quality)).split(',')[1];if(data&&data.length<=477864)break;}
-          const thumbnail=(await compressImage(f,160,.6)).split(',')[1];
+          let data;for(const [size,quality] of [[1280,.72],[1280,.55],[960,.5]]){data=(await m161CompressImage(f,size,quality)).split(',')[1];if(data&&data.length<=477864)break;}
+          const thumbnail=(await m161CompressImage(f,160,.6)).split(',')[1];
           if(!data||data.length>477864||!thumbnail||thumbnail.length>43688)throw Error('사진 용량이 커요. 작은 사진으로 다시 시도해 주세요.');
           photos.push({type:'image/jpeg',data,thumbnail});
         }
