@@ -30,7 +30,7 @@ test('paid pilot assets have a distinct purpose and cannot pass the internal gua
 test('debug variant cannot package production assets',()=>{
   assert.throws(()=>verifyAndroidAssets({...production(),environment:'staging'}));
 });
-for(const [versionName,versionCode] of [['1.52',53],['1.53',54],['1.54',55],['1.55',56],['1.56',57]])test(`${versionName} store update requires its exact version and all production services`,()=>{
+for(const [versionName,versionCode] of [['1.52',53],['1.53',54],['1.54',55],['1.55',56],['1.56',57],['1.63',64]])test(`${versionName} store update requires its exact version and all production services`,()=>{
   const input=production();input.releasePurpose='store-update';
   Object.assign(input.info,{releasePurpose:'store-update',billingEnabled:true,versionName,versionCode,
     usernameRecoveryEnabled:true,smsResendSeconds:30,pushEnabled:true,signupCheckoutEnabled:true,nativeAuthStorage:'keystore-v1'});
