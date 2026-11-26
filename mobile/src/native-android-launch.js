@@ -17,3 +17,6 @@ if(!ANDROID_PRODUCTION){
   window.MANEE_NATIVE.openSubscriptionStatus=()=>window.MANEE_NATIVE.openSettings();
   window.MANEE_NATIVE.subscriptionDenied=()=>window.MANEE_NATIVE.openSettings();
 }
+
+import {installVersionReporter} from './client-version.mjs';
+installVersionReporter({App,native:window.MANEE_NATIVE,platform:'android'});

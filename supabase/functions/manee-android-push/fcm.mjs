@@ -31,7 +31,7 @@ export function createFcmSender(credentials, fetcher = fetch, packageName = 'kr.
   }
   return async function send(token, storeId, event) {
     if (!/^[A-Za-z0-9_:\-]{20,4096}$/.test(token || '')) throw Error('invalid_device');
-    const messages = {
+    const messages = {notice:['매니 · 업무 변경','매장에 확인할 새 알림이 있어요.'],
       attendance_in: ['매니 · 출근', '새 출근 기록이 있어요. 앱에서 확인해 주세요.'],
       attendance_out: ['매니 · 퇴근', '새 퇴근 기록이 있어요. 앱에서 확인해 주세요.'],
       reservation_created: ['매니 · 예약 등록', '새 예약이 등록됐어요. 앱에서 확인해 주세요.'],
@@ -42,7 +42,8 @@ export function createFcmSender(credentials, fetcher = fetch, packageName = 'kr.
       monthly_costs: ['매니 · 월말 비용 확인', '월말 보고서 비용 확인이 필요해요. 앱에서 확인해 주세요.'],
     };
     if (event && (!Object.hasOwn(messages,event.kind) || !/^[0-9a-f-]{36}$/.test(event.id || '') || !Number.isFinite(event.ttl) || event.ttl<1)) throw Error('invalid_event');
-    const [title,body]=event?messages[event.kind]:[packageName === 'kr.co.manee.app' ? '매니 · 알림 연결' : '매니 테스트','안드로이드 알림이 연결됐어요.'];
+    const [title,defaultBody]=event?messages[event.kind]:[packageName === 'kr.co.manee.app' ? '매니 · 알림 연결' : '매니 테스트','안드로이드 알림이 연결됐어요.'];
+    const body=event?.kind==='notice'&&typeof event.message==='string'?event.message.slice(0,300):defaultBody;
     const access = await accessToken();
     const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${credentials.project}/messages:send`, {
       method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8000),

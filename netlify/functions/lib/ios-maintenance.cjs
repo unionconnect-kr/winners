@@ -25,7 +25,7 @@ function maintenanceHandler({mode,db,env=process.env,send=sendApns,apiFactory=ap
       if(live.error)throw Error('targets_failed');
       if(!live.data?.some(t=>t.token===job.token)||Date.parse(job.expires_at)<=Date.now())result='skipped';
       else{
-       const delivered=await send(job.token,{storeId:job.store_id,kind:job.kind,eventId:job.id,monthKey:job.month_key,eventDate:job.event_date},env);
+       const delivered=await send(job.token,{storeId:job.store_id,kind:job.kind,eventId:job.id,monthKey:job.month_key,eventDate:job.event_date,message:job.message},env);
        result=delivered.sent?'sent':delivered.expired?'expired':'retry';
       }
      }catch{}

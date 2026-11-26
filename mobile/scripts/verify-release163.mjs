@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const platform=process.argv[2];assert.ok(['ios','android'].includes(platform));
+const info=JSON.parse(readFileSync(new URL('../www/build-info.json',import.meta.url),'utf8')),html=readFileSync(new URL('../www/index.html',import.meta.url),'utf8');
+assert.equal(info.versionName,platform==='ios'?'1.58':'1.63');assert.equal(info.versionCode,64);assert.equal(info.environment,'production');assert.equal(info.projectRef,'bhwuuxcrzxespkjlmqxr');assert.equal(info.storeTitle,'매니 - 우리가게 매니저');
+for(const flag of ['managerWorkConfirmation','payrollHalfHourApproval','ownerChangeNotifications','clientVersions','quietStartup','clockConfirmation','retiredPayrollSeparated','privatePhotoStorage'])assert.equal(info[flag],true);
+for(const marker of ['m163WorkRows(dateStr)','m163ClockSheet','manee_manager_write_v2','manee_owner_activity_read','pay_check_in','퇴사자 급여·최종 정산','manee_checklist_prepare_photos'])assert.ok(html.includes(marker),marker);
+for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+const native=readFileSync(new URL('../www/native.js',import.meta.url),'utf8');assert.ok(native.includes('manee_report_client_version'));assert.ok(!native.includes('앱 버전을 확인하고 있어요'));
+console.log('Verified next '+platform+' app features, production identity, native reporter, quiet startup and script syntax.');

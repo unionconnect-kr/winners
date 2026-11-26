@@ -18,7 +18,7 @@ export function createDeliveryHandler({deployment,credentials,client,send,now=Da
     try {
      const ttl=Math.floor((Date.parse(job.expires_at)-now())/1000);
      if(ttl>0){
-      const response=await send(job.token,job.store_id,{id:job.id,kind:job.kind,ttl,monthKey:job.month_key,eventDate:job.event_date});
+      const response=await send(job.token,job.store_id,{id:job.id,kind:job.kind,ttl,monthKey:job.month_key,eventDate:job.event_date,message:job.message});
       result=response.sent?'sent':response.expired?'expired':'retry';
      }
     }catch{/* No credentials, device identifiers or provider responses in logs. */}

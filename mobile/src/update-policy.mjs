@@ -1,9 +1,9 @@
 // Public version policy contains no account data. Store publication precedes activation.
 export const UPDATE_NOTES=[
- '사장님 사용법을 기능별 영상으로 바로 확인하고, 체크리스트 업무를 쉽게 추가할 수 있어요.',
- '체크리스트 완료 사진을 최대 4장까지 첨부하고, 작은 사진을 눌러 크게 확인할 수 있어요.',
- '시급·월급 설정과 월별 급여 정산을 구분하고, ⓘ에서 용도를 확인할 수 있어요.',
- '직원 급여·근무조건과 매니저 권한 설정을 분리했어요.'
+ '매니저가 직원별 급여 적용 시간을 30분 단위로 지정하고 근무를 확인할 수 있어요.',
+ '매니저의 근무 확인과 급여 변경 내역을 사장님 알림함에서 확인할 수 있어요.',
+ '퇴사자 정산은 퇴사자관리로 분리하고, 실제 발생한 인건비는 리포트에 유지해요.',
+ '출근·퇴근은 확인창에서 확인한 뒤 기록되며, 시작 시 버전 확인창은 표시하지 않아요.'
 ];
 export function compareVersions(a,b){
  if(!/^\d+(\.\d+){0,3}$/.test(a||'')||!/^\d+(\.\d+){0,3}$/.test(b||''))throw Error('Invalid version');
@@ -30,7 +30,7 @@ export function createUpdateController({platform,getInfo,readPolicy,storage,show
  async function check(){
   if(pending)return pending;
   pending=(async()=>{
-   try{if(!info){showChecking?.();info=await getInfo();compareVersions(info.version,'0');compareVersions(info.build,'0');}}catch{info=null;hide();return;}
+   try{if(!info){info=await getInfo();compareVersions(info.version,'0');compareVersions(info.build,'0');}}catch{info=null;hide();return;}
    // Apply an already-known mandatory policy immediately, including while offline.
    const present=()=>{
     blocked=needsUpdate(info,policy);
@@ -64,7 +64,6 @@ export function installNativeUpdatePolicy({App,native,platform,store}){
   document.body.append(sheet);if(typeof sheet.showModal==='function')sheet.showModal();else{sheet.open=true;sheet.style.cssText+=';position:fixed;inset:0;margin:auto;z-index:2147483647;max-height:90vh;overflow:auto';}
  }
  controller=createUpdateController({platform,storage:window.localStorage,getInfo:()=>App.getInfo(),
-  showChecking:()=>show({title:'앱 버전을 확인하고 있어요',message:'잠시만 기다려 주세요.',buttons:[]}),
   async readPolicy(p){const db=context()?.db;if(!db)throw Error('Not configured');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);try{const r=await db.from('manee_mobile_update_policy').select('platform,enabled,minimum_version,minimum_build,available_version,available_build,published_at').eq('platform',p).single().abortSignal(controller.signal);if(r.error)throw r.error;return r.data;}finally{clearTimeout(timer);}},
   openStore:()=>store.openStore(),hide,
   showRequired:({version,update,retry})=>show({title:'업데이트가 필요해요',message:'매니 '+version+' 버전으로 업데이트한 뒤 이용해 주세요.',buttons:[['업데이트하기',update],['업데이트 확인',retry,true]],mandatory:true}),
