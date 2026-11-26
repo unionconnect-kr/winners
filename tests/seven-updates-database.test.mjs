@@ -86,3 +86,15 @@ test('version report binds auth identity; HQ-only read, multiple devices and las
  await db.exec("select set_config('test.hq','yes',false)");const r=(await db.query('select public.manee_hq_client_versions() r')).rows[0].r;assert.equal(r.items.filter(x=>x.user_id===staff).length,2);assert.equal(r.items.find(x=>x.user_id===other).platform,null);
  await db.exec("select set_config('test.live','no',false)");await assert.rejects(()=>db.query("select public.manee_report_client_version($1,'ios','1.58','158.1.1')",[id(41)]),/로그인/);
 });
+test('retired final pay remains in store labor totals while manager edits are blocked',async()=>{
+ await actor(owner);const retired=id(21);await db.query("insert into public.crew(id,store_id,name,wage_type,hire_date,resign_date) values($1,$2,'Retired','monthly',current_date-30,current_date)",[retired,store]);await db.query("insert into public.monthly_net_payroll(store_id,crew_id,month_key,net_pay) values($1,$2,to_char(current_date,'YYYY-MM'),22000)",[store,retired]);
+ const total=(await db.query("select private.net_payroll_totals($1,to_char(current_date,'YYYY-MM'),current_date) result",[store])).rows[0].result;assert.equal(total.net_pay,22000);
+ await actor(manager);await assert.rejects(()=>db.query("select public.manee_manager_write_v2($1,to_char(current_date,'YYYY-MM'),'wage',$2,'{}','{}')",[store,retired]),/퇴사/);
+});
+test('failed, duplicate and unauthorized changes create no misleading owner notices',async()=>{
+ await actor(manager);const c=(await db.query('select * from public.crew where id=$1',[crew])).rows[0],old=Object.fromEntries(['wage','wage_type','tax33','insurance4','insurance2','weekly_allowance','probation'].map(k=>[k,c[k]])),before=(await db.query('select count(*) n from private.manee_owner_activity')).rows[0].n;
+ await db.query("select public.manee_manager_write_v2($1,to_char(current_date,'YYYY-MM'),'wage',$2,$3,$3)",[store,crew,old]);
+ await assert.rejects(()=>db.query("select public.manee_manager_write_v2($1,to_char(current_date,'YYYY-MM'),'wage',$2,$3,$4)",[store,crew,{...old,insurance4:true},old]),e=>e.code==='22023');
+ await db.exec("select set_config('test.entitled','no',false)");await assert.rejects(()=>confirm('18:30','23:30'),/구독/);await db.exec("select set_config('test.entitled','yes',false)");
+ assert.equal((await db.query('select count(*) n from private.manee_owner_activity')).rows[0].n,before);
+});

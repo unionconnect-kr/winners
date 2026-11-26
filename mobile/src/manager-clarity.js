@@ -17,7 +17,7 @@
     if(u.managerPage==='wage'||u.managerPage==='payroll'){
       const key=u.managerPage;
       return '<h3>'+M161_PAY_HELP[key].title+'</h3>'+s4Hint(state.store+' · '+monthKey())+s4Hint(M161_PAY_HELP[key].text)+(p.crew||[]).map(c=>{
-        const pay=p.payroll?.find(row=>row.crew_id===c.id),amount=key==='wage'?(c.wage_type==='monthly'?'월급 ':'시급 ')+s3Money(c.wage):pay?'확정 급여 '+s3Money(pay.net_pay):'미확정';
+        const pay=p.payroll?.find(row=>row.crew_id===c.id),amount=key==='wage'?(c.wage_type==='monthly'?'월급 ':'시급 ')+s3Money(c.wage):pay?.needs_reconfirmation?'재확인 필요':pay?'확정 급여 '+s3Money(pay.net_pay):'미확정';
         return '<button class="s3-row" data-r135-manager="person" data-id="'+escapeHtml(c.id)+'"><span>'+escapeHtml(c.name)+'</span><strong>'+amount+'</strong><i>›</i></button>';
       }).join('');
     }
