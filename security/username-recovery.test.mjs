@@ -116,7 +116,10 @@ test('registered, unknown and provider-failure responses cannot enumerate accoun
   for(const options of [{allowed:true},{allowed:false},{allowed:true,sent:false}]){
     const h=harness(options),r=await h.run({action:'request',phone:'01011110001',username:'injected'});
     assert.equal(r.status,200);assert.equal(r.cache,'no-store');assert.equal(h.delivered.length,options.allowed?1:0);
-    const {challenge_id,...body}=r.body;assert.match(challenge_id,/^[0-9a-f-]{36}$/);bodies.push(body);
+    const {challenge_id,...body}=r.body;assert.match(challenge_id,/^[0-9a-f-]{36}$/);
+    const reference=challenge_id.slice(-12).toUpperCase().match(/.{4}/g).join('-');
+    assert.ok(body.message.includes(reference));
+    bodies.push({...body,message:body.message.replace(reference,'<reference>')});
     assert.equal(JSON.stringify(r.body).includes('send_allowed'),false);
   }
   assert.deepEqual(bodies[0],bodies[1]);assert.deepEqual(bodies[1],bodies[2]);
@@ -128,4 +131,76 @@ test('edge returns only validated usernames after verified service success and n
 });
 test('SMS delivery requires explicit provider acceptance',async()=>{
   for(const statusCode of ['2000','4000'])assert.equal(await sendSms({key:'key',secret:'secret',sender:'0212345678'},'+821011110001','123456',async()=>Response.json({failedMessageList:[],messageList:[{statusCode}]})),statusCode==='2000');
+});
+
+test('store-assisted usernames require both proofs and never transfer a recovery binding', async t => {
+  // Synthetic stores, employee records and sessions, local to this PGlite instance.
+  await db.exec(`
+    create table public.stores(id uuid primary key, archived_at timestamptz);
+    create table public.crew(id uuid primary key, store_id uuid, resign_date date);
+    create table public.store_memberships(id uuid primary key, user_id uuid, store_id uuid, crew_id uuid, role text, status text);
+    create function auth.uid() returns uuid language sql as $$select nullif(current_setting('fixture.actor',true),'')::uuid$$;
+    create function private.is_live_manee_session() returns boolean language sql as $$select coalesce(current_setting('fixture.live',true),'')='yes'$$;
+    create function private.manee_sms_ordinary_user(uid uuid) returns boolean language sql as $$
+      select exists(select 1 from public.profiles p join auth.users u on u.id=p.user_id
+        where u.id=uid and p.status='active' and u.encrypted_password<>'' and u.email like '%@auth.manee.local')$$;
+  `);
+  await db.exec(readFileSync(new URL('../supabase/migrations/20261126163000_store_assisted_username_lookup.sql',import.meta.url),'utf8'));
+  const id=()=>crypto.randomUUID(), store=id(), otherStore=id(), crew=id(), otherCrew=id();
+  const owner=await seed('attest_owner','',{unverified:true});
+  const stranger=await seed('other_owner','',{unverified:true});
+  const employee=await seed('한글아이디__','',{unverified:true});
+  const second=await seed('second_original','',{unverified:true});
+  const member=id(), ph='+821011117701';
+  await seed('number_account',ph);
+  await db.query('insert into public.stores(id) values ($1),($2)',[store,otherStore]);
+  await db.query('insert into public.crew(id,store_id) values($1,$3),($2,$3)',[crew,otherCrew,store]);
+  for(const row of [[id(),owner,store,null,'owner'],[id(),stranger,otherStore,null,'owner'],[member,employee,store,crew,'staff'],[id(),second,store,otherCrew,'staff']]){
+    await db.query("insert into public.store_memberships values($1,$2,$3,$4,$5,'active')",row);
+  }
+  await db.query('insert into private.manee_staff_id_lookup_enrollment values($1),($2)',[employee,second]);
+  const actor=async(uid,live)=>db.query("select set_config('fixture.actor',$1,false),set_config('fixture.live',$2,false)",[uid,live?'yes':'no']);
+  const approve=async(ref,c=crew,s=store)=>(await db.query('select public.manee_approve_staff_id_lookup($1,$2,$3) ok',[s,c,ref])).rows[0].ok;
+  async function challenge() {
+    await db.query("update private.manee_sms_challenges set created_at=now()-interval '2 hours' where phone_e164=$1",[ph]);
+    const r=await request(ph); await sent(r.id); return {id:r.id,ref:r.id.slice(-12)};
+  }
+  const verify=(cid,hash=good)=>rpc('verify',{id:cid,code_hash:hash});
+  await t.test('foreign store, signed-out and staff sessions cannot approve',async()=>{
+    const c=await challenge();
+    for(const [who,live] of [[stranger,true],[employee,true],[owner,false]]) {
+      await actor(who,live); assert.equal(await approve(c.ref),false);
+    }
+    await actor(owner,true); assert.equal(await approve(c.ref,crew,otherStore),false);
+    assert.equal(await approve('123456'),false);
+    assert.deepEqual((await verify(c.id)).usernames,['number_account']);
+  });
+  await t.test('conflicting phone returns only the selected original username after correct SMS',async()=>{
+    await actor(owner,true);
+    const c=await challenge();
+    assert.equal(await approve(c.ref),true); assert.equal(await approve(c.ref),true);
+    assert.equal(await approve(c.ref,otherCrew),false);
+    assert.equal((await verify(c.id,bad)).ok,false);
+    assert.deepEqual(await verify(c.id),{ok:true,usernames:['한글아이디__']});
+    assert.equal((await verify(c.id)).ok,false); assert.equal(await approve(c.ref),false);
+    assert.equal((await db.query('select count(*)::int n from private.manee_sms_bindings where user_id=$1',[employee])).rows[0].n,0);
+  });
+  await t.test('expired requests, retired employees and revoked approvals fail closed',async()=>{
+    await actor(owner,true);
+    let c=await challenge(); await db.query("update private.manee_sms_challenges set expires_at=now()-interval '1 second' where id=$1",[c.id]);
+    assert.equal(await approve(c.ref),false); assert.equal((await verify(c.id)).ok,false);
+    c=await challenge(); assert.equal(await approve(c.ref),true);
+    await db.query('update public.crew set resign_date=current_date where id=$1',[crew]);
+    assert.deepEqual((await verify(c.id)).usernames,[]);
+    await db.query('update public.crew set resign_date=null where id=$1',[crew]);
+    c=await challenge(); assert.equal(await approve(c.ref),true);
+    await db.query("update public.store_memberships set status='revoked' where user_id=$1",[owner]);
+    assert.deepEqual((await verify(c.id)).usernames,[]);
+  });
+  await t.test('neither anonymous nor authenticated clients can read the private cohort or call the verifier',async()=>{
+    for(const role of ['anon','authenticated']) {
+      const q=await db.query("select has_table_privilege($1,'private.manee_staff_id_lookup_enrollment','select') cohort,has_table_privilege($1,'private.manee_staff_id_lookup_approval','insert') approvals,has_function_privilege($1,'public.manee_find_username_service(text,jsonb)','execute') verifier,has_function_privilege($1,'public.manee_approve_staff_id_lookup(uuid,uuid,text)','execute') owner",[role]);
+      assert.deepEqual(q.rows[0],{cohort:false,approvals:false,verifier:false,owner:role==='authenticated'});
+    }
+  });
 });

@@ -67,9 +67,66 @@
     }
     dialog.showModal(); void load();
   }
+  function addStaffLookup() {
+    const context = getContext();
+    const detail = document.querySelector('[data-s2-go="employee-manage"]');
+    if (context?.role !== 'storeOwner' || !context.userId || !context.storeId ||
+        !detail?.dataset.s2Id || document.getElementById('manee-staff-lookup-button')) return;
+    const crewId = detail.dataset.s2Id;
+    const name = document.querySelector('.s2-identity h3')?.textContent;
+    if (!name) return;
+    const trigger = element('button', '직원 아이디 찾기 승인');
+    trigger.type = 'button'; trigger.className = 's2-button'; trigger.id = 'manee-staff-lookup-button';
+    detail.before(trigger);
+    trigger.onclick = () => {
+      const dialog = sheet('manee-staff-lookup', '직원 아이디 찾기 승인');
+      if (!dialog) return;
+      const current = () => {
+        const active = getContext();
+        return dialog.isConnected && detail.isConnected && active?.role === 'storeOwner' &&
+          active.userId === context.userId && active.storeId === context.storeId;
+      };
+      element('p', context.storeName + ' · ' + name, dialog);
+      element('p', '직원 본인을 직접 확인하고, 직원의 아이디 찾기 화면에 표시된 접수번호를 입력해 주세요. 문자 인증번호는 직원 본인이 입력합니다.', dialog);
+      const form = element('form', null, dialog);
+      const label = element('label', '접수번호', form);
+      const input = element('input', null, label);
+      input.className = 'field-input'; input.placeholder = 'ABCD-EF01-2345';
+      input.maxLength = 14; input.autocomplete = 'off'; input.required = true; input.spellcheck = false;
+      const approve = element('button', '본인 확인 후 승인', form);
+      approve.type = 'submit';
+      const status = element('p', '', dialog); status.setAttribute('role', 'status');
+      button(dialog, '닫기', () => dialog.close());
+      form.onsubmit = async event => {
+        event.preventDefault();
+        if (!current() || approve.disabled) return;
+        const reference = input.value.trim().replace(/-/g, '').toLowerCase();
+        if (!/^[a-f0-9]{12}$/.test(reference)) {
+          status.textContent = '직원 화면에 표시된 영문과 숫자 12자리를 확인해 주세요.'; input.focus(); return;
+        }
+        approve.disabled = true;
+        try {
+          const {data, error} = await context.db.rpc('manee_approve_staff_id_lookup', {
+            p_store_id: context.storeId, p_crew_id: crewId, p_reference: reference
+          });
+          if (!current()) return;
+          if (error) throw error;
+          if (data === true) {
+            form.hidden = true;
+            status.textContent = '승인했어요. 직원이 같은 화면에서 문자 인증을 마치면 기존 아이디가 표시돼요.';
+          } else {
+            status.textContent = '승인하지 못했어요. 직원과 매장, 새 접수번호, 3분 유효시간을 확인해 주세요.';
+          }
+        } catch {
+          if (current()) status.textContent = '승인 결과를 확인하지 못했어요. 같은 접수번호로 다시 확인해 주세요.';
+        } finally { if (current()) approve.disabled = false; }
+      };
+      dialog.showModal(); input.focus();
+    };
+  }
   root.MANEE_WEB = Object.freeze({
     configure(context) { getContext = context; },
-    refresh() {},
+    refresh: addStaffLookup,
     openSettings, openSubscriptionStatus,
     subscriptionDenied() { openSubscriptionStatus(); },
     afterOwnerSignup: async () => ({status: 'web'}),
