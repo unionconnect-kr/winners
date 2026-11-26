@@ -224,8 +224,8 @@ jobs:
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
             npm run build:ios139
           elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-review-fix-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/manee-seven-updates-20261126" ]; then
-            node scripts/build-release163.mjs ios production
-            node scripts/verify-release163.mjs ios
+            node scripts/build-release164.mjs ios production
+            node scripts/verify-release164.mjs ios
           else
             npm run build:production
           fi
@@ -286,7 +286,7 @@ jobs:
               info = plistlib.loads(archive.read(app + 'Info.plist'))
               if (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != ('kr.co.manee.app', '1.58', expected_build):
                   raise SystemExit('Unexpected signed app version or bundle')
-              for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'social-auth.js', 'build-info.json', 'store-guide-checklist.css'):
+              for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'social-auth.js', 'username-recovery.js', 'build-info.json', 'store-guide-checklist.css'):
                   if archive.read(app + 'public/' + asset) != (pathlib.Path('www') / asset).read_bytes():
                       raise SystemExit('Exported IPA differs from tested asset: ' + asset)
           print('Signed IPA matches the verified MANEE 1.58 production assets.')

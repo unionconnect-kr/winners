@@ -17,10 +17,12 @@ export function verifyAndroidAssets({info, appConfig, environment, environments,
     assert.equal(info.releasePurpose, releasePurpose, 'Wrong Android release purpose.');
     assert.equal(info.billingEnabled, ['paid-pilot','store-update'].includes(releasePurpose), 'Billing flag does not match release purpose.');
     if (releasePurpose === 'store-update') {
-      assert.ok(['1.45','1.46','1.47','1.48','1.49','1.50','1.51','1.52','1.53','1.54','1.55','1.56','1.57','1.58','1.59','1.60','1.61','1.62','1.63'].includes(info.versionName));
-      assert.equal(info.versionCode, info.versionName==='1.63'?64:info.versionName==='1.62'?63:info.versionName==='1.61'?62:info.versionName==='1.60'?61:info.versionName==='1.59'?60:info.versionName==='1.58'?59:info.versionName==='1.57'?58:info.versionName==='1.56'?57:info.versionName==='1.55'?56:info.versionName==='1.54'?55:info.versionName==='1.53'?54:info.versionName==='1.52'?53:info.versionName==='1.51'?52:info.versionName==='1.50'?51:info.versionName==='1.49'?50:info.versionName==='1.48'?49:info.versionName==='1.47'?48:info.versionName==='1.46'?47:46);
-      if(['1.46','1.47','1.48','1.49','1.50','1.51','1.52','1.53','1.54','1.55','1.56','1.57','1.58','1.59','1.60','1.61','1.62','1.63'].includes(info.versionName))assert.equal(info.usernameRecoveryEnabled,true);
-      if(['1.47','1.48','1.49','1.50','1.51','1.52','1.53','1.54','1.55','1.56','1.57','1.58','1.59','1.60','1.61','1.62','1.63'].includes(info.versionName))assert.equal(info.smsResendSeconds,30);
+      assert.match(info.versionName, /^1\.\d{2}$/);
+      const minor = Number(info.versionName.slice(2));
+      assert.ok(minor >= 45 && minor <= 64, 'Unsupported Android store version');
+      assert.equal(info.versionCode, minor + 1);
+      if (minor >= 46) assert.equal(info.usernameRecoveryEnabled, true);
+      if (minor >= 47) assert.equal(info.smsResendSeconds, 30);
       assert.equal(info.pushEnabled, true);
       assert.equal(info.signupCheckoutEnabled, true);
       assert.equal(info.nativeAuthStorage, 'keystore-v1');

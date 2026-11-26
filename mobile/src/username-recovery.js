@@ -73,7 +73,12 @@
         if (typeof data.challenge_id !== 'string' || data.expires_in !== 180 || ![30,60].includes(data.resend_after)) throw Error('인증 요청을 확인하지 못했어요. 다시 시도해 주세요.');
         state.challenge = data.challenge_id;
         state.expires = Date.now()+180000; state.resend = Date.now()+data.resend_after*1000;
-        status.textContent = data.message;
+        const reference = data.challenge_id.match(/-([0-9a-f]{12})$/i)?.[1]
+          .toUpperCase().match(/.{4}/g).join('-');
+        status.textContent = data.message || '문자 인증번호를 확인해 주세요.';
+        if (reference && !status.textContent.includes(reference)) {
+          status.textContent += ' 기존 번호로 아이디를 찾기 어려운 직원은 문자 인증 전에 사장님께 접수번호 '+reference+'를 보여 주세요.';
+        }
       } catch (e) {
         if (!state.closed && state.version === version) {
           status.textContent = e.message;
@@ -95,7 +100,7 @@
         state.challenge=null; code.value=''; form.hidden=true; results.hidden=false;
         const names=data.usernames.filter(name=>typeof name==='string'&&/^[a-z0-9가-힣._-]{4,30}$/.test(name)).slice(0,20);
         dialog.querySelector('#manee-id-title').textContent=names.length?'아이디를 찾았어요':'확인된 아이디가 없어요';
-        dialog.querySelector('[data-mir-intro]').textContent=names.length?'로그인할 아이디를 선택해 주세요.':'이 번호로 가입된 일반 계정이 없어요. 탈퇴·삭제한 계정은 신규가입해 주세요.';
+        dialog.querySelector('[data-mir-intro]').textContent=names.length?'로그인할 아이디를 선택해 주세요.':'이 번호로 확인된 아이디가 없어요. 기존 직원은 아이디 찾기를 다시 열고, 문자 인증 전에 사장님께 화면에 표시된 접수번호를 보여 주세요.';
         if(!names.length){
           const close=document.createElement('button');close.type='button';close.className='mir-account';close.textContent='로그인 화면으로 돌아가기';
           close.addEventListener('click',()=>{dialog.close();cleanup();});results.append(close);
