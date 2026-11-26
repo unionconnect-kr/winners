@@ -6,6 +6,8 @@ export function installSevenUpdates(source){
  html=html.slice(0,start)+"    html += '<section class=\"s-card\"><h3>오늘 근무 확인</h3>'+m163WorkRows(dateStr)+'</section>';\n\n"+html.slice(end);
  html=html.replaceAll('a.checkInExact||a.checkIn','a.payCheckIn||a.checkInExact||a.checkIn').replaceAll('a.checkOutExact||a.checkOut','a.payCheckOut||a.checkOutExact||a.checkOut');
  html=html.replaceAll('r.checkInExact||r.checkIn','r.payCheckIn||r.checkInExact||r.checkIn').replaceAll('r.checkOutExact||r.checkOut','r.payCheckOut||r.checkOutExact||r.checkOut');
+ // Keep original clock times and actual duration in exports; only the pay-hours column uses approval.
+ once('a.payCheckIn||a.checkInExact||a.checkIn, a.payCheckOut||a.checkOutExact||a.checkOut, Number(hoursBetween(a.payCheckIn||a.checkInExact||a.checkIn,a.payCheckOut||a.checkOutExact||a.checkOut).toFixed(4))','a.checkInExact||a.checkIn, a.checkOutExact||a.checkOut, Number(hoursBetween(a.checkInExact||a.checkIn,a.checkOutExact||a.checkOut).toFixed(4))');
  html=html.replaceAll("checkInExact:r.check_in,checkOutExact:r.check_out,","payCheckIn:r.pay_check_in,payCheckOut:r.pay_check_out,checkInExact:r.check_in,checkOutExact:r.check_out,");
  html=html.replaceAll("date,check_in,check_out,confirmed'","date,check_in,check_out,confirmed,pay_check_in,pay_check_out'");
  once("confirmed:!!confirmed,...(r?{time_edited:true", "confirmed:false,...(r?{time_edited:true");
