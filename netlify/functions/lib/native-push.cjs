@@ -9,7 +9,10 @@ const labels={test:'아이폰 알림이 연결됐어요.',attendance_in:'매장�
  reservation_due:'예약 시간이 됐어요.',report_closed:'월말 보고서가 마감됐어요.',monthly_costs:'월말 보고서에 필요한 비용을 확인해 주세요.',notice:'매장에 확인할 새 알림이 있어요.'};
 function apnsPayload(notification){
  if(!uuid.test(notification.storeId||'')||!Object.hasOwn(labels,notification.kind))throw Error('invalid_notification');
- return {aps:{alert:{title:'매니',body:notification.kind==='notice'&&typeof notification.message==='string'?notification.message.slice(0,300):labels[notification.kind]},sound:'default'},storeId:notification.storeId,kind:notification.kind,
+ const hasServerText = ['attendance_in', 'attendance_out', 'notice'].includes(notification.kind) &&
+   typeof notification.message === 'string' && notification.message.trim().length > 0;
+ const body = hasServerText ? notification.message.slice(0, 300) : labels[notification.kind];
+ return {aps:{alert:{title:'매니',body},sound:'default'},storeId:notification.storeId,kind:notification.kind,
   ...(uuid.test(notification.eventId||'')?{eventId:notification.eventId}:{}),
   ...(/^\d{4}-(0[1-9]|1[0-2])$/.test(notification.monthKey||'')?{monthKey:notification.monthKey}:{}),
   ...(/^\d{4}-\d{2}-\d{2}$/.test(notification.eventDate||'')?{eventDate:notification.eventDate}:{})};
