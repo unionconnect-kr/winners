@@ -24,12 +24,12 @@ test('resend stays disabled at 29 seconds and becomes available at 30',async()=>
     now+=1000;tick();assert.equal(f.q('[data-mir-send]').disabled,false);f.q('[data-mir-send]').click();await settle();assert.equal(calls,2);
   }finally{f.close();}
 });
-test('a verified unregistered phone shows a clear signup explanation',async()=>{
+test('an unmatched phone explains how an existing employee can recover the original account',async()=>{
   const f=fixture(false,async(_url,opts)=>Response.json(JSON.parse(opts.body).action==='request'?challenge:{ok:true,usernames:[]}));
   try{
     f.q('[data-find-username]').click();f.input('#manee-id-phone','01011110001');f.q('[data-mir-send]').click();await settle();
     f.input('#manee-id-code','123456');f.q('dialog form').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await settle();
-    assert.match(f.q('[data-mir-intro]').textContent,/삭제한 계정은 신규가입/);assert.equal(f.q('dialog form').hidden,true);
+    assert.match(f.q('[data-mir-intro]').textContent,/문자 인증 전에 사장님께.*접수번호/);assert.equal(f.q('dialog form').hidden,true);
     f.q('.mir-account').click();assert.equal(f.q('dialog'),null);
   }finally{f.close();}
 });
@@ -63,4 +63,26 @@ test('failed verification never renders an account result',async()=>{
     f.input('#manee-id-code','123456');f.q('dialog form').dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));await settle();
     assert.equal(f.q('[data-mir-results]').hidden,true);assert.equal(f.q('[data-mir-status]').textContent,'인증번호가 맞지 않아요.');
   }finally{f.close();}
+});
+
+test('owner approves the selected employee reference without handling the SMS code', async()=>{
+  const dom=new JSDOM('<div class="s2-identity"><h3>테스트 직원</h3></div><button data-s2-go="employee-manage" data-s2-id="crew-fixture">관리</button>',{runScripts:'outside-only'});
+  const w=dom.window, calls=[];
+  try {
+    w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+    w.eval(readFileSync(new URL('../web/web-platform.js',import.meta.url),'utf8'));
+    const context={storeId:'store-fixture',storeName:'테스트 매장',userId:'owner-fixture',role:'staff',
+      db:{rpc:async(name,args)=>{calls.push([name,args]);return {data:true};}}};
+    w.MANEE_WEB.configure(()=>context); w.MANEE_WEB.refresh();
+    assert.equal(w.document.querySelector('#manee-staff-lookup-button'),null);
+    context.role='storeOwner'; w.MANEE_WEB.refresh(); w.MANEE_WEB.refresh();
+    assert.equal(w.document.querySelectorAll('#manee-staff-lookup-button').length,1);
+    w.document.getElementById('manee-staff-lookup-button').click();
+    const form=w.document.querySelector('dialog form'),input=form.querySelector('input');
+    const submit=()=>form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+    input.value='123456';submit();assert.equal(calls.length,0);
+    input.value='ABCD-EF01-2345';submit();await settle();
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)),[['manee_approve_staff_id_lookup',{p_store_id:'store-fixture',p_crew_id:'crew-fixture',p_reference:'abcdef012345'}]]);
+    assert.equal(form.hidden,true);assert.match(w.document.querySelector('[role="status"]').textContent,/문자 인증/);
+  } finally {w.close();}
 });

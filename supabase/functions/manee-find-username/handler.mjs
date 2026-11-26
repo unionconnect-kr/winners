@@ -2,6 +2,10 @@ import {phone,sha,hmac,otp,sendSms} from './core.mjs';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,apikey','Access-Control-Allow-Methods':'POST,OPTIONS','Content-Type':'application/json','Cache-Control':'no-store'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
 const invalid=()=>json({ok:false,error:'verification_invalid',message:'인증번호가 맞지 않거나 만료됐어요. 다시 확인해 주세요.'},400);
+export function storeLookupMessage(challengeId) {
+  const reference = challengeId.slice(-12).toUpperCase().match(/.{4}/g).join('-');
+  return '기존 번호로 아이디를 찾기 어려운 직원은 문자 인증 전에 사장님께 접수번호 '+reference+'를 보여 주세요. 사장님 승인 후 본인이 문자 인증번호를 입력해 주세요.';
+}
 export function createHandler({admin,url,publishableKey,sms,deliver=sendSms}){
   return async req=>{
     if(req.method==='OPTIONS')return new Response('ok',{headers});
@@ -27,7 +31,7 @@ export function createHandler({admin,url,publishableKey,sms,deliver=sendSms}){
         if(!r?.ok){if(r?.error==='rate_limited')return json({ok:false,error:'rate_limited',retry_after:r.retry_after,message:'재전송 제한에 도달했어요. 잠시 후 다시 시도해 주세요.'},429);return invalid();}
         if(r.send_allowed){let sent=false;try{sent=await deliver(sms,dest,code);}catch{}await rpc(sent?'sent':'failed',{id});}
         // Do not reveal whether the phone belongs to an account before proof.
-        return json({ok:true,challenge_id:id,expires_in:180,resend_after:60,message:'가입·복구용으로 인증한 번호와 일치하면 인증번호를 보내드려요.'});
+        return json({ok:true,challenge_id:id,expires_in:180,resend_after:60,message:'가입·복구용으로 인증한 번호와 일치하면 인증번호를 보내드려요.'+' '+storeLookupMessage(id)});
       }
       const r=await rpc('verify',{id:b.challenge_id,code_hash:await hmac(sms.secret,'find-username:'+b.challenge_id+':'+b.code)});
       if(!r?.ok||!Array.isArray(r.usernames))return invalid();
