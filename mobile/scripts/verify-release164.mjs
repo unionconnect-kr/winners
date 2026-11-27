@@ -3,7 +3,9 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {verifySevenUpdates} from './verify-release163.mjs';
 
-const {html, info} = verifySevenUpdates(process.argv[2], '1.64', 65);
+const androidVersion = process.argv[3] || '1.64';
+assert.ok(['1.64', '1.65'].includes(androidVersion));
+const {html, info} = verifySevenUpdates(process.argv[2], androidVersion, androidVersion === '1.65' ? 66 : 65);
 assert.equal(info.storeAssistedUsernameRecovery, true);
 assert.equal(info.usernameRecoveryEnabled, true);
 assert.equal(info.smsResendSeconds, 30);

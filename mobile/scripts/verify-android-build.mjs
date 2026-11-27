@@ -19,7 +19,7 @@ export function verifyAndroidAssets({info, appConfig, environment, environments,
     if (releasePurpose === 'store-update') {
       assert.match(info.versionName, /^1\.\d{2}$/);
       const minor = Number(info.versionName.slice(2));
-      assert.ok(minor >= 45 && minor <= 64, 'Unsupported Android store version');
+      assert.ok(minor >= 45 && minor <= 65, 'Unsupported Android store version');
       assert.equal(info.versionCode, minor + 1);
       if (minor >= 46) assert.equal(info.usernameRecoveryEnabled, true);
       if (minor >= 47) assert.equal(info.smsResendSeconds, 30);

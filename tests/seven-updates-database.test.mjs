@@ -52,6 +52,18 @@ insert into public.attendance(id,store_id,crew_id,date,check_in,check_out) value
 insert into public.monthly_net_payroll(store_id,crew_id,month_key,net_pay) values('${store}','${crew}',to_char(current_date,'YYYY-MM'),50000);`);
 async function actor(user,cap='all'){await db.query("select set_config('test.uid',$1,false),set_config('test.cap',$2,false),set_config('test.live','yes',false),set_config('test.hq','no',false)",[user,cap]);}
 async function record(){return (await db.query('select * from public.attendance where id=$1',[att])).rows[0];}
+const previousShift=id(47);
+await db.query("insert into public.attendance(id,store_id,crew_id,date,check_in,check_out,confirmed) values($1,$2,$3,current_date-100,'09:05','18:08',true)",[previousShift,store,crew]);
+for(const file of ['20261127010000_manager_pay_notice_month.sql','20261127010100_require_paid_times_for_new_confirmations.sql']){
+ await db.exec(fs.readFileSync(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
+}
+test('first confirmation requires explicit times on legacy pending shifts and preserves historical confirmations',async()=>{
+ await actor(owner);
+ await assert.rejects(()=>db.query('update public.attendance set confirmed=true where id=$1',[att]),/30분/);
+ assert.equal((await record()).confirmed,false);
+ const prior=(await db.query('update public.attendance set staff_confirmed=true where id=$1 returning *',[previousShift])).rows[0];
+ assert.equal(prior.confirmed,true);assert.equal(prior.check_in,'09:05:00');assert.equal(prior.pay_check_in,null);
+});
 const previous=a=>Object.fromEntries(['check_in','check_out','confirmed','pay_check_in','pay_check_out'].map(k=>[k,a[k]]));
 async function confirm(start,end,old){return db.query("select public.manee_manager_work($1,current_date,'confirm',$2,$3,$4,$5)",[store,att,start,end,old||previous(await record())]);}
 test('manager sales writer reads only its store, rejects staff, foreign store and off-grid times',async()=>{
@@ -97,4 +109,18 @@ test('failed, duplicate and unauthorized changes create no misleading owner noti
  await assert.rejects(()=>db.query("select public.manee_manager_write_v2($1,to_char(current_date,'YYYY-MM'),'wage',$2,$3,$4)",[store,crew,{...old,insurance4:true},old]),e=>e.code==='22023');
  await db.exec("select set_config('test.entitled','no',false)");await assert.rejects(()=>confirm('18:30','23:30'),/구독/);await db.exec("select set_config('test.entitled','yes',false)");
  assert.equal((await db.query('select count(*) n from private.manee_owner_activity')).rows[0].n,before);
+});
+test('manager notifications use the selected payroll month and both payment dates',async()=>{
+ await actor(manager);
+ const keys=['wage','wage_type','tax33','insurance4','insurance2','weekly_allowance','probation'];
+ const employee=(await db.query('select * from public.crew where id=$1',[crew])).rows[0];
+ const old=Object.fromEntries(keys.map(k=>[k,employee[k]]));
+ const month='2025-06', changed={...old,wage:old.wage+100};
+ await db.query("select public.manee_manager_write_v2($1,$2,'wage',$3,$4,$5)",[store,month,crew,changed,old]);
+ const messages=async()=> (await db.query("select message from private.manee_owner_activity where kind='pay_change' and month_key=$1",[month])).rows.map(r=>r.message);
+ assert.ok((await messages()).some(m=>m.includes('시급') && m.includes(month)));
+ await assert.rejects(()=>db.query("select public.manee_manager_write_v2($1,'2025-13','wage',$2,$3,$3)",[store,crew,changed]),/적용 월/);
+ await db.query('insert into public.monthly_net_payroll(store_id,crew_id,month_key,net_pay,paid_on) values($1,$2,$3,100000,$4)',[store,crew,month,'2025-06-24']);
+ await db.query('update public.monthly_net_payroll set paid_on=$1 where store_id=$2 and crew_id=$3 and month_key=$4',['2025-06-26',store,crew,month]);
+ assert.ok((await messages()).some(m=>m.includes('지급일 2025-06-24 → 2025-06-26')));
 });

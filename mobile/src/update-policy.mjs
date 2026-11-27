@@ -22,22 +22,57 @@ export function validUpdatePolicy(p,platform){
 }
 export function needsUpdate(info,p){return p?.enabled===true&&(compareVersions(info.version,p.minimum_version)<0||compareVersions(info.version,p.minimum_version)===0&&compareVersions(info.build,p.minimum_build)<0);}
 export function createUpdateController({platform,getInfo,readPolicy,storage,showChecking,showRequired,showNotes,hide,openStore}){
- let info=null,pending=null,blocked=false,notesOpen=false,policy=null;
+ let info=null,pending=null,blocked=false,notesOpen=false,notesPending=false,policy=null;
  const cacheKey='manee-public-update-policy:'+platform;
+ const lastBuildKey='manee-last-opened-build:'+platform;
  const ackKey=()=> 'manee-update-ack:'+platform+':'+info.version+':'+info.build;
  const get=k=>{try{return storage.getItem(k);}catch{return null;}},set=(k,v)=>{try{storage.setItem(k,v);}catch{}};
  try{policy=validUpdatePolicy(JSON.parse(get(cacheKey)),platform);}catch{}
+ const hadPolicyOnLaunch=!!policy;
+ function isUpgrade(current){
+  if(get(ackKey())==='yes')return false;
+  let previous;
+  try{previous=JSON.parse(get(lastBuildKey));}catch{}
+  if(previous){
+   try{
+    const versionChange=compareVersions(current.version,previous.version);
+    return versionChange>0 || (versionChange===0 && compareVersions(current.build,previous.build)>0);
+   }catch{}
+  }
+  // Older clients kept their update policy and build acknowledgements.
+  if(hadPolicyOnLaunch)return true;
+  const prefix='manee-update-ack:'+platform+':';
+  try{
+   for(let i=0;i<storage.length;i++){
+    const key=storage.key(i);
+    if(!key?.startsWith(prefix))continue;
+    const [version,build]=key.slice(prefix.length).split(':');
+    const cmp=compareVersions(current.version,version);
+    if(cmp>0 || (cmp===0 && compareVersions(current.build,build)>0))return true;
+   }
+  }catch{}
+  return false;
+ }
+ const rememberBuild=()=>set(lastBuildKey,JSON.stringify({version:info.version,build:info.build}));
  async function check(){
   if(pending)return pending;
   pending=(async()=>{
-   try{if(!info){info=await getInfo();compareVersions(info.version,'0');compareVersions(info.build,'0');}}catch{info=null;hide();return;}
+   try{
+    if(!info){
+     info=await getInfo();compareVersions(info.version,'0');compareVersions(info.build,'0');
+     notesPending=isUpgrade(info);
+     if(!notesPending)rememberBuild();
+    }
+   }catch{info=null;hide();return;}
    // Apply an already-known mandatory policy immediately, including while offline.
    const present=()=>{
     blocked=needsUpdate(info,policy);
     if(blocked){notesOpen=false;showRequired({version:policy.available_version,update:openStore,retry:check});}
-    else if(get(ackKey())!=='yes'){
-     if(!notesOpen){hide();notesOpen=true;showNotes({version:info.version,notes:UPDATE_NOTES,confirm(){set(ackKey(),'yes');notesOpen=false;hide();}});}
-    }else{notesOpen=false;hide();}
+    else if(notesPending){
+     hide();notesOpen=true;
+     showNotes({version:info.version,notes:UPDATE_NOTES,confirm(){set(ackKey(),'yes');notesOpen=false;hide();}});
+     notesPending=false;rememberBuild();
+    }else if(!notesOpen)hide();
    };
    if(needsUpdate(info,policy))present();
    try{const fresh=validUpdatePolicy(await readPolicy(platform),platform);if(!fresh)throw Error('Invalid policy');policy=fresh;set(cacheKey,JSON.stringify(fresh));}catch{}

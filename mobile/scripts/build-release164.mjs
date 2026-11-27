@@ -14,6 +14,9 @@ export function installStaffLookupApproval(html) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const platform = process.argv[2];
+  const androidVersion = process.argv[4] || '1.64';
+  const versionCode = {'1.64': 65, '1.65': 66}[androidVersion];
+  if (!versionCode) throw Error('Unknown Android release version');
   if (!['android','ios'].includes(platform) || process.argv[3] !== 'production') {
     throw Error('Specify android|ios production');
   }
@@ -24,8 +27,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   writeFileSync(index, installStaffLookupApproval(readFileSync(index, 'utf8')));
   const manifest = new URL('../www/build-info.json', import.meta.url);
   const info = JSON.parse(readFileSync(manifest, 'utf8'));
-  const version = platform === 'ios' ? '1.58' : '1.64';
+  const version = platform === 'ios' ? '1.58' : androidVersion;
   writeFileSync(manifest, JSON.stringify({
-    ...info, versionName: version, releaseVersion: version, versionCode: 65, storeAssistedUsernameRecovery: true
+    ...info, versionName: version, releaseVersion: version, versionCode, storeAssistedUsernameRecovery: true
   }, null, 2) + '\n');
 }

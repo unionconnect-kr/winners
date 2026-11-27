@@ -224,8 +224,8 @@ jobs:
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
             npm run build:ios139
           elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-review-fix-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/manee-seven-updates-20261126" ]; then
-            node scripts/build-release164.mjs ios production
-            node scripts/verify-release164.mjs ios
+            node scripts/build-release164.mjs ios production 1.65
+            node scripts/verify-release164.mjs ios 1.65
           else
             npm run build:production
           fi
