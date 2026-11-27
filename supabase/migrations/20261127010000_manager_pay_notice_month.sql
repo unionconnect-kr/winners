@@ -6,32 +6,44 @@ create or replace function public.manee_manager_write(
   p_store_id uuid, p_month_key text, p_action text, p_crew_id uuid,
   p_payload jsonb, p_previous jsonb default null
 ) returns jsonb
-language plpgsql security invoker set search_path = '' set manee.wage_notice_month = ''
+language plpgsql security invoker set search_path = ''
 as $$
+declare previous_month text; result jsonb;
 begin
   if p_action = 'wage' then
     if p_month_key is null or p_month_key !~ '^20[0-9]{2}-(0[1-9]|1[0-2])$' then
       raise exception '급여 적용 월을 확인해 주세요.' using errcode = '22023';
     end if;
-    perform set_config('manee.wage_notice_month',p_month_key,true);
+    previous_month := current_setting('app.manee_pay_notice_month',true);
+    perform set_config('app.manee_pay_notice_month',p_month_key,true);
   end if;
-  return private.manee_manager_write(p_store_id,p_month_key,p_action,p_crew_id,p_payload,p_previous);
+  result := private.manee_manager_write(p_store_id,p_month_key,p_action,p_crew_id,p_payload,p_previous);
+  if p_action = 'wage' then
+    perform set_config('app.manee_pay_notice_month',coalesce(previous_month,''),true);
+  end if;
+  return result;
 end $$;
 
 create or replace function public.manee_manager_write_v2(
   p_store_id uuid, p_month_key text, p_action text, p_crew_id uuid,
   p_payload jsonb, p_previous jsonb default null
 ) returns jsonb
-language plpgsql security invoker set search_path = '' set manee.wage_notice_month = ''
+language plpgsql security invoker set search_path = ''
 as $$
+declare previous_month text; result jsonb;
 begin
   if p_action = 'wage' then
     if p_month_key is null or p_month_key !~ '^20[0-9]{2}-(0[1-9]|1[0-2])$' then
       raise exception '급여 적용 월을 확인해 주세요.' using errcode = '22023';
     end if;
-    perform set_config('manee.wage_notice_month',p_month_key,true);
+    previous_month := current_setting('app.manee_pay_notice_month',true);
+    perform set_config('app.manee_pay_notice_month',p_month_key,true);
   end if;
-  return private.manee_manager_write_v2(p_store_id,p_month_key,p_action,p_crew_id,p_payload,p_previous);
+  result := private.manee_manager_write_v2(p_store_id,p_month_key,p_action,p_crew_id,p_payload,p_previous);
+  if p_action = 'wage' then
+    perform set_config('app.manee_pay_notice_month',coalesce(previous_month,''),true);
+  end if;
+  return result;
 end $$;
 
 create or replace function private.manee_pay_change_event() returns trigger language plpgsql security definer set search_path='' as $$
@@ -43,7 +55,7 @@ begin
   if before_j=after_j then return new;end if;sid:=new.store_id;cid:=new.id;
   update public.monthly_net_payroll set needs_reconfirmation=true where store_id=sid and crew_id=cid and not needs_reconfirmation;
   select string_agg((case when key='wage' then case after_j->>'wage_type' when 'monthly' then '월급' else '시급' end else labels->>key end)||' '||(case when key='wage' then to_char((before_j->>key)::numeric,'FM999,999,999,990')||'원 → '||to_char(value::numeric,'FM999,999,999,990')||'원' when key='wage_type' then case before_j->>key when 'monthly' then '월급' else '시급' end||' → '||case value when 'monthly' then '월급' else '시급' end else case before_j->>key when 'true' then '적용' else '미적용' end||' → '||case value when 'true' then '적용' else '미적용' end end),', ' order by key) into change_text from jsonb_each_text(after_j) where before_j->>key is distinct from value;
-  mo:=coalesce(nullif(current_setting('manee.wage_notice_month',true),''),to_char(now() at time zone 'Asia/Seoul','YYYY-MM'));
+  mo:=coalesce(nullif(current_setting('app.manee_pay_notice_month',true),''),to_char(now() at time zone 'Asia/Seoul','YYYY-MM'));
  else
   before_j:=case when tg_op='INSERT' then null else to_jsonb(old) end;after_j:=case when tg_op='DELETE' then null else to_jsonb(new) end;
   if tg_op='UPDATE' and (before_j-'updated_at'-'confirmed_by'-'adjustment_snapshot'-'needs_reconfirmation')=(after_j-'updated_at'-'confirmed_by'-'adjustment_snapshot'-'needs_reconfirmation') then return new;end if;
