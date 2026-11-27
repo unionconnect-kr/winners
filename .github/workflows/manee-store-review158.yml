@@ -1,0 +1,37 @@
+name: Submit MANEE 1.58 to App Review
+on:
+  push:
+    branches: [codex/manee-stores-review-20261127]
+    paths: ['.github/scripts/manee-review158.mjs', '.github/scripts/manee-review158.test.mjs', '.github/workflows/manee-store-review158.yml']
+permissions:
+  contents: read
+concurrency:
+  group: manee-store-review158
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.repository == 'unionconnect-kr/winners' && github.ref == 'refs/heads/codex/manee-stores-review-20261127'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check release selection and Korean store title
+        run: node --test .github/scripts/manee-review158.test.mjs
+      - name: Verify the Korean listing, submit the signed build and read Apple's receipt
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MANEE_REVIEW_STATUS_FILE: ${{ runner.temp }}/manee158-store-review.json
+        run: node .github/scripts/manee-review158.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manee-ios158-store-review-receipt
+          path: ${{ runner.temp }}/manee158-store-review.json
+          if-no-files-found: error
+          retention-days: 14
