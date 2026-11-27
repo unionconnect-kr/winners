@@ -6,7 +6,7 @@ function fixture({foreign=false,wrongBuild=false}={}){
   const live={id:'live',attributes:{platform:'IOS',versionString:'1.57',appVersionState:'READY_FOR_DISTRIBUTION'}};
   const review=Object.fromEntries(['contactFirstName','contactLastName','contactPhone','contactEmail','demoAccountName','demoAccountPassword','notes'].map(k=>[k,'example']));
   const draftInfo={id:'ki',attributes:{locale:'ko',name:'매니'}},liveInfo={id:'li',attributes:{locale:'ko',name:'매니'}};
-  let version,detail,submission,entries=[],updates=0;
+  let version,detail,submission,entries=[],updates=0,timingWrites=0;
   const loc={id:'kl',attributes:{locale:'ko',whatsNew:null}};
   const build={id:'b',attributes:{version:buildNumber,processingState:'VALID',usesNonExemptEncryption:false}};
   const root='/v1/apps/'+appId, vp='/v1/appStoreVersions/v';
@@ -32,6 +32,7 @@ function fixture({foreign=false,wrongBuild=false}={}){
       if(p==='/v1/reviewSubmissions/s')return {data:submission};
     }else{
       if(method==='POST'&&p==='/v1/appStoreVersions'){version={id:'v',attributes:{...a,appVersionState:'PREPARE_FOR_SUBMISSION'},relationships:{}};return {data:version};}
+      if(method==='PATCH'&&p===vp){Object.assign(version.attributes,a);timingWrites++;return {data:version};}
       if(method==='PATCH'&&p==='/v1/appInfoLocalizations/ki'){Object.assign(draftInfo.attributes,a);return {};}
       if(method==='PATCH'&&p==='/v1/appStoreVersionLocalizations/kl'){Object.assign(loc.attributes,a);return {};}
       if(method==='POST'&&p==='/v1/appStoreReviewDetails'){detail={id:'rd',attributes:a};return {data:detail};}
@@ -42,7 +43,7 @@ function fixture({foreign=false,wrongBuild=false}={}){
     }
     throw Error(method+' '+u);
   };
-  return {api,liveInfo,updates:()=>updates};
+  return {api,liveInfo,updates:()=>updates,timingWrites:()=>timingWrites,setTiming:attrs=>Object.assign(version.attributes,attrs)};
 }
 test('review preserves the live listing, rereads the Korean name and submits the verified draft once',async()=>{
  const f=fixture();const one=await submit(f.api);assert.equal(one.build,buildNumber);assert.equal(one.storeTitle,title);assert.equal(one.submissionState,'WAITING_FOR_REVIEW');assert.equal(f.liveInfo.attributes.name,'매니');
@@ -53,4 +54,26 @@ test('an unrelated active review is preserved',async()=>{
 });
 test('a build from another version cannot be selected',async()=>{
  const f=fixture({wrongBuild:true});await assert.rejects(submit(f.api),/another version/);assert.equal(f.updates(),0);
+});
+test('a submitted version can switch to immediate release after approval without losing its place in review',async()=>{
+ const f=fixture();
+ const initial=await submit(f.api);
+ f.setTiming({releaseType:'MANUAL',earliestReleaseDate:null});
+ const modified=await submit(f.api);
+ assert.equal(modified.releaseType,'AFTER_APPROVAL');
+ assert.equal(modified.earliestReleaseDate,null);
+ assert.equal(modified.submissionId,initial.submissionId);
+ assert.equal(modified.submittedDate,initial.submittedDate);
+ await submit(f.api);
+ assert.equal(f.updates(),1);
+ assert.equal(f.timingWrites(),1);
+});
+test('a scheduled date is cleared when automatic release is selected',async()=>{
+ const f=fixture();
+ await submit(f.api);
+ f.setTiming({releaseType:'SCHEDULED',earliestReleaseDate:'2026-12-30T00:00:00Z'});
+ const result=await submit(f.api);
+ assert.equal(result.releaseType,'AFTER_APPROVAL');
+ assert.equal(result.earliestReleaseDate,null);
+ assert.equal(f.updates(),1);
 });

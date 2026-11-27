@@ -32,7 +32,7 @@ export async function submit(api,wait=sleep) {
   if(!version) {
     const prior=versions.find(x=>x.attributes.versionString==='1.57');
     assert.ok(prior&&['READY_FOR_DISTRIBUTION','READY_FOR_SALE'].includes(state(prior)),'Previous store version is not released');
-    const body=resource('appStoreVersions',null,{platform:'IOS',versionString:marketing,releaseType:'MANUAL',...(prior.attributes.copyright?{copyright:prior.attributes.copyright}:{})});
+    const body=resource('appStoreVersions',null,{platform:'IOS',versionString:marketing,releaseType:'AFTER_APPROVAL',...(prior.attributes.copyright?{copyright:prior.attributes.copyright}:{})});
     body.data.relationships={app:related('apps',appId)};
     version=(await api('POST','/v1/appStoreVersions',body)).data;
   }
@@ -115,6 +115,17 @@ export async function submit(api,wait=sleep) {
     const body=resource('reviewSubmissions',null,{platform:'IOS'});body.data.relationships={app:related('apps',appId)};
     batch=(await api('POST','/v1/reviewSubmissions',body)).data;
   }
+  // Apple allows changing release timing independently of an existing review submission.
+  const beforeTiming=await current();
+  assert.equal(beforeTiming.relationships.build.data.id,build.id);
+  if(beforeTiming.attributes.releaseType!=='AFTER_APPROVAL'||beforeTiming.attributes.earliestReleaseDate){
+    const timing={releaseType:'AFTER_APPROVAL'};
+    if(beforeTiming.attributes.earliestReleaseDate)timing.earliestReleaseDate=null;
+    await api('PATCH',vp,resource('appStoreVersions',version.id,timing));
+  }
+  const verifiedTiming=await current();
+  assert.equal(verifiedTiming.attributes.releaseType,'AFTER_APPROVAL');
+  assert.ok(!verifiedTiming.attributes.earliestReleaseDate,'An earliest release date is still set');
   if(!submitted.has(batch.attributes.state)){
     assert.equal(batch.attributes.state,'READY_FOR_REVIEW');
     if(!items.length){
@@ -126,8 +137,8 @@ export async function submit(api,wait=sleep) {
   }
   for(let at=0;at<12;at++){
     const [v,s,l]=await Promise.all([current(),get('/v1/reviewSubmissions/'+batch.id),get('/v1/appInfoLocalizations/'+locId)]);
-    if(submitted.has(state(v))&&submitted.has(s.data.attributes.state)&&s.data.attributes.submittedDate&&v.relationships.build.data.id===build.id&&l.data.attributes.name===title){
-      return {appId,version:marketing,build:buildNumber,storeTitle:title,versionId:version.id,submissionId:batch.id,state:state(v),submissionState:s.data.attributes.state,submittedDate:s.data.attributes.submittedDate,releaseType:v.attributes.releaseType};
+    if(submitted.has(state(v))&&submitted.has(s.data.attributes.state)&&s.data.attributes.submittedDate&&v.relationships.build.data.id===build.id&&l.data.attributes.name===title&&v.attributes.releaseType==='AFTER_APPROVAL'&&!v.attributes.earliestReleaseDate){
+      return {appId,version:marketing,build:buildNumber,storeTitle:title,versionId:version.id,submissionId:batch.id,state:state(v),submissionState:s.data.attributes.state,submittedDate:s.data.attributes.submittedDate,releaseType:v.attributes.releaseType,earliestReleaseDate:v.attributes.earliestReleaseDate??null};
     }
     if(at<11)await wait(5000);
   }
