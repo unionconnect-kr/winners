@@ -3,13 +3,14 @@ import {writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {makeToken} from '../../mobile/scripts/check-apple-connection.mjs';
 
-export const appId='6820833544', marketing='1.58', buildNumber='158.6.1';
+export const appId='6820833544', marketing='1.59', buildNumber='159.7.1';
 export const title='매니 - 우리가게 매니저';
 const editable=new Set(['PREPARE_FOR_SUBMISSION','READY_FOR_REVIEW','DEVELOPER_REJECTED','REJECTED','METADATA_REJECTED']);
 const submitted=new Set(['WAITING_FOR_REVIEW','IN_REVIEW']);
 const reviewFields=['contactFirstName','contactLastName','contactPhone','contactEmail','demoAccountName','demoAccountPassword','notes'];
-const notes='직원 출퇴근 확인과 사장님 알림을 개선했습니다. 매니저는 직원별 급여 적용 시간을 30분 단위로 지정할 수 있습니다. 퇴사자관리에서 급여 이력과 남은 지급액을 확인할 수 있습니다. 기존 직원의 아이디 찾기와 앱 시작 안내도 개선했습니다.';
-const notesEn='Employees confirm clock-in and clock-out. Managers can approve payroll times per shift in 30-minute increments. Owners can review payroll changes and check former employees’ pay history. This update also improves account recovery and startup.';
+const notes='매니저의 매출보고 저장 오류를 수정했습니다. 사장님과 매출보고 권한이 있는 매니저는 같은 매장에서 다른 담당자가 작성한 전날 보고서도 수정할 수 있습니다. 수정하면 매장명, 보고 날짜와 수정한 사람을 사장님에게 알려드립니다. 매니저도 정산표 사진으로 금액을 자동 입력할 수 있고, 금액란을 누르면 기본값 0이 지워집니다.';
+const notesEn='Fixed an issue saving manager sales reports. Owners and authorized managers can edit earlier reports from any author in the same store. Owners are notified of changes. Managers can also fill in sales figures from a settlement photo. Tapping a zero amount clears it for entry.';
+const incidentNote='Version 1.59 – Daily Sales reporting fix. In the previous public iOS version (1.58), sign in as a manager with Sales reporting access, open a store, open Daily Sales, and try to edit a previous-day report that another manager or the owner created. The old app hides editing for that report. We also recorded six failed manager save requests in production on November 28 (Korea time). A server compatibility fix restored the missing save endpoint for installed apps. The client update is still needed for editing reports by another author. In 1.59 an authorized manager can open and save those reports and the owner receives an edit notification. The store must be open for that report month.';
 const resource=(type,id,attributes)=>({data:{type,...(id?{id}:{}),attributes}});
 const related=(type,id)=>({data:{type,id}});
 const state=r=>r?.attributes?.appVersionState||r?.attributes?.state||r?.attributes?.appStoreState;
@@ -30,7 +31,7 @@ export async function submit(api,wait=sleep) {
   assert.ok(targets.length<=1,'Conflicting store versions');
   let version=targets[0];
   if(!version) {
-    const prior=versions.find(x=>x.attributes.versionString==='1.57');
+    const prior=versions.find(x=>x.attributes.versionString==='1.58');
     assert.ok(prior&&['READY_FOR_DISTRIBUTION','READY_FOR_SALE'].includes(state(prior)),'Previous store version is not released');
     const body=resource('appStoreVersions',null,{platform:'IOS',versionString:marketing,releaseType:'AFTER_APPROVAL',...(prior.attributes.copyright?{copyright:prior.attributes.copyright}:{})});
     body.data.relationships={app:related('apps',appId)};
@@ -71,7 +72,7 @@ export async function submit(api,wait=sleep) {
       if(loc.attributes.whatsNew!==text)await api('PATCH','/v1/appStoreVersionLocalizations/'+loc.id,resource('appStoreVersionLocalizations',loc.id,{whatsNew:text}));
       assert.equal((await get('/v1/appStoreVersionLocalizations/'+loc.id)).data.attributes.whatsNew,text);
     }
-    const prior=versions.find(x=>x.attributes.versionString==='1.57');
+    const prior=versions.find(x=>x.attributes.versionString==='1.58');
     const getDetail=async path=>{try{return (await get(path+'/appStoreReviewDetail')).data;}catch(e){if(e.status===404)return null;throw e;}};
     let detail=await getDetail(vp);
     if(!detail || !detail.attributes.demoAccountRequired || reviewFields.some(k=>!detail.attributes[k])){
@@ -86,6 +87,14 @@ export async function submit(api,wait=sleep) {
       detail=await getDetail(vp);
     }
     assert.ok(detail?.attributes?.demoAccountRequired&&reviewFields.every(k=>detail.attributes[k]),'Review information incomplete');
+    if (!detail.attributes.notes.includes(incidentNote)) {
+      const combined = [incidentNote, detail.attributes.notes].join('\n\n');
+      assert.ok(combined.length <= 4000, 'Combined review notes exceed the Apple limit');
+      const body = resource('appStoreReviewDetails', detail.id, {notes: combined});
+      await api('PATCH', '/v1/appStoreReviewDetails/' + detail.id, body);
+      const verifiedDetail = await getDetail(vp);
+      assert.ok(verifiedDetail?.attributes?.notes === combined, 'Incident review notes missing');
+    }
   }
   let build;
   for(let at=0;at<30;at++){

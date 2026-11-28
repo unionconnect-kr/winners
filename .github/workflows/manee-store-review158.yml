@@ -1,4 +1,4 @@
-name: Submit MANEE 1.58 to App Review
+name: Submit MANEE 1.59 to App Review
 on:
   push:
     branches: [codex/manee-stores-review-20261127]
@@ -27,11 +27,11 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
-          MANEE_REVIEW_STATUS_FILE: ${{ runner.temp }}/manee158-store-review.json
+          MANEE_REVIEW_STATUS_FILE: ${{ runner.temp }}/manee159-store-review.json
         run: node .github/scripts/manee-review158.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: manee-ios158-store-review-receipt
-          path: ${{ runner.temp }}/manee158-store-review.json
+          name: manee-ios159-store-review-receipt
+          path: ${{ runner.temp }}/manee159-store-review.json
           if-no-files-found: error
           retention-days: 14
