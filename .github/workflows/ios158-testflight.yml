@@ -1,4 +1,4 @@
-name: MANEE 1.58 TestFlight verification
+name: MANEE 1.59 TestFlight verification
 
 on:
   push:
@@ -224,8 +224,8 @@ jobs:
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then
             npm run build:ios139
           elif [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-review-fix-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/manee-seven-updates-20261126" ]; then
-            node scripts/build-release164.mjs ios production 1.65
-            node scripts/verify-release164.mjs ios 1.65
+            node scripts/build-release164.mjs ios production 1.66
+            node scripts/verify-release164.mjs ios 1.66
           else
             npm run build:production
           fi
@@ -237,8 +237,8 @@ jobs:
           version_args=()
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-release-20261016" ]; then version_args=(MARKETING_VERSION=1.39); fi
           if [ "$GITHUB_REF" = "refs/heads/codex/ios-final-156-20261109" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-apple-login-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/ios-review-fix-20261111" ] || [ "$GITHUB_REF" = "refs/heads/codex/manee-seven-updates-20261126" ]; then
-            build_number="158.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-            version_args=(MARKETING_VERSION=1.58)
+            build_number="159.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+            version_args=(MARKETING_VERSION=1.59)
           fi
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
@@ -271,7 +271,7 @@ jobs:
               raise SystemExit('Signed app is missing the Apple sign-in entitlement')
           print('Signed MANEE app contains the native Apple sign-in entitlement.')
           PY
-      - name: Verify the exported 1.58 IPA matches the tested production assets
+      - name: Verify the exported 1.59 IPA matches the tested production assets
         if: github.ref == 'refs/heads/codex/ios-final-156-20261109' || github.ref == 'refs/heads/codex/ios-apple-login-20261111' || (github.ref == 'refs/heads/codex/ios-review-fix-20261111' || github.ref == 'refs/heads/codex/manee-seven-updates-20261126')
         run: |
           set -euo pipefail
@@ -280,16 +280,16 @@ jobs:
           archives = list((pathlib.Path(os.environ['RUNNER_TEMP']) / 'manee-ipa').glob('*.ipa'))
           if len(archives) != 1:
               raise SystemExit('Expected exactly one signed IPA')
-          expected_build = '158.' + os.environ['GITHUB_RUN_NUMBER'] + '.' + os.environ['GITHUB_RUN_ATTEMPT']
+          expected_build = '159.' + os.environ['GITHUB_RUN_NUMBER'] + '.' + os.environ['GITHUB_RUN_ATTEMPT']
           with zipfile.ZipFile(archives[0]) as archive:
               app = 'Payload/App.app/'
               info = plistlib.loads(archive.read(app + 'Info.plist'))
-              if (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != ('kr.co.manee.app', '1.58', expected_build):
+              if (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != ('kr.co.manee.app', '1.59', expected_build):
                   raise SystemExit('Unexpected signed app version or bundle')
               for asset in ('app-config.js', 'index.html', 'native.js', 'email-verification.js', 'social-auth.js', 'username-recovery.js', 'build-info.json', 'store-guide-checklist.css'):
                   if archive.read(app + 'public/' + asset) != (pathlib.Path('www') / asset).read_bytes():
                       raise SystemExit('Exported IPA differs from tested asset: ' + asset)
-          print('Signed IPA matches the verified MANEE 1.58 production assets.')
+          print('Signed IPA matches the verified MANEE 1.59 production assets.')
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -316,7 +316,7 @@ jobs:
       - name: Verify Apple processing and connect the existing internal QA group
         if: github.event_name == 'push' && (github.ref == 'refs/heads/codex/ios-final-156-20261109' || (github.ref == 'refs/heads/codex/ios-review-fix-20261111' || github.ref == 'refs/heads/codex/manee-seven-updates-20261126'))
         env:
-          MANEE_INTERNAL_BUILD: ${{ github.ref == 'refs/heads/codex/manee-seven-updates-20261126' && 'ios-20261126-1.58-seven' || github.ref == 'refs/heads/codex/ios-review-fix-20261111' && 'ios-20261111-1.58-review-fix' || 'ios-20261109-1.58' }}
+          MANEE_INTERNAL_BUILD: ${{ github.ref == 'refs/heads/codex/manee-seven-updates-20261126' && 'ios-20261128-1.59-sales' || github.ref == 'refs/heads/codex/ios-review-fix-20261111' && 'ios-20261111-1.58-review-fix' || 'ios-20261109-1.58' }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
@@ -327,7 +327,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/codex/ios-final-156-20261109' || (github.ref == 'refs/heads/codex/ios-review-fix-20261111' || github.ref == 'refs/heads/codex/manee-seven-updates-20261126'))
         with:
-          name: manee-ios-1.58-testflight-status
+          name: manee-ios-1.59-testflight-status
           path: ${{ runner.temp }}/manee157-testflight-status.json
           if-no-files-found: ignore
           retention-days: 14

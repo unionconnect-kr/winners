@@ -4,8 +4,13 @@ import vm from 'node:vm';
 import {verifySevenUpdates} from './verify-release163.mjs';
 
 const androidVersion = process.argv[3] || '1.64';
-assert.ok(['1.64', '1.65'].includes(androidVersion));
-const {html, info} = verifySevenUpdates(process.argv[2], androidVersion, androidVersion === '1.65' ? 66 : 65);
+assert.ok(['1.64', '1.65', '1.66'].includes(androidVersion));
+const {html, info} = verifySevenUpdates(process.argv[2], androidVersion, {'1.64': 65, '1.65': 66, '1.66': 67}[androidVersion]);
+if (androidVersion === '1.66') {
+  assert.ok(html.includes('bindSalesAmount(inp)'));
+  assert.ok(!html.includes('manee_manager_save_sales'));
+  assert.ok(!html.includes('다른 직원의 매출보고는 수정할 수 없어요.'));
+}
 assert.equal(info.storeAssistedUsernameRecovery, true);
 assert.equal(info.usernameRecoveryEnabled, true);
 assert.equal(info.smsResendSeconds, 30);

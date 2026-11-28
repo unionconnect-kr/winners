@@ -9,7 +9,7 @@ export function verifySevenUpdates(platform, androidVersion = '1.63', versionCod
   const asset = name => readFileSync(new URL('../www/' + name, import.meta.url), 'utf8');
   const info = JSON.parse(asset('build-info.json'));
   const html = asset('index.html');
-  assert.equal(info.versionName, platform === 'ios' ? '1.58' : androidVersion);
+  assert.equal(info.versionName, platform === 'ios' ? (androidVersion === '1.66' ? '1.59' : '1.58') : androidVersion);
   assert.equal(info.versionCode, versionCode);
   assert.equal(info.environment, 'production');
   assert.equal(info.projectRef, 'bhwuuxcrzxespkjlmqxr');

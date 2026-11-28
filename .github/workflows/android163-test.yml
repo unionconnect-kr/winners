@@ -1,4 +1,4 @@
-name: MANEE 1.65 signed Google Play build
+name: MANEE 1.66 signed Google Play build
 on:
   push:
     branches: [codex/manee-seven-updates-20261126]
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android165-${{ github.ref }}
+  group: android166-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   regression:
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: manee165-full-regression-results
+          name: manee166-full-regression-results
           path: /tmp/android-*.txt
           retention-days: 14
   verify:
@@ -125,11 +125,11 @@ jobs:
           writeFileSync(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE,Buffer.from(process.env.MANEE_ANDROID_UPLOAD_KEYSTORE_BASE64,'base64'),{mode:0o600});
           writeFileSync('android/app/src/release/google-services.json',process.env.MANEE_ANDROID_FIREBASE_PRODUCTION_JSON,{mode:0o600});
           JS
-          node scripts/build-release164.mjs android production 1.65
-          node scripts/verify-release164.mjs android 1.65
+          node scripts/build-release164.mjs android production 1.66
+          node scripts/verify-release164.mjs android 1.66
           npm run sync:android
           cd android
-          ./gradlew :app:bundleRelease :app:assembleRelease -PmaneeRelease165
+          ./gradlew :app:bundleRelease :app:assembleRelease -PmaneeRelease166
           cd ..
           node scripts/verify-android-aab.mjs --store-update
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
@@ -137,7 +137,7 @@ jobs:
           python3 - <<'PY'
           import os,pathlib
           report=(pathlib.Path(os.environ['RUNNER_TEMP'])/'manee157-apk-manifest.txt').read_text()
-          assert "package: name='kr.co.manee.app' versionCode='66' versionName='1.65'" in report
+          assert "package: name='kr.co.manee.app' versionCode='67' versionName='1.66'" in report
           assert "targetSdkVersion:'36'" in report
           assert "uses-permission: name='android.permission.POST_NOTIFICATIONS'" in report
           assert "uses-permission: name='com.android.vending.BILLING'" in report
@@ -147,7 +147,7 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: manee-android-1.65-store
+          name: manee-android-1.66-store
           path: |
             mobile/android/app/build/outputs/bundle/release/app-release.aab
             mobile/android/app/build/outputs/apk/release/app-release.apk

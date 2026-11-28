@@ -3,6 +3,7 @@ import {pathToFileURL} from 'node:url';
 
 const app='6820833544', group='b5982888-0280-4513-8f78-74ca63dcd342';
 const releases=new Map([
+  ['ios-20261128-1.59-sales',{branch:'codex/manee-seven-updates-20261126',workflow:'ios158-testflight.yml',marketing:'1.59',buildPrefix:'159',attempts:20}],
   ['ios-20261126-1.58-seven',{branch:'codex/manee-seven-updates-20261126',workflow:'ios158-testflight.yml',marketing:'1.58',buildPrefix:'158',attempts:20}],
   ['ios-20261124-1.57-checklist',{branch:'codex/mobile-checklist-guide-20261124',workflow:'ios157-testflight.yml',marketing:'1.57',buildPrefix:'157',attempts:20}],
   ['ios-20261106-1.52',{branch:'codex/final-email-billing-152-20261106',workflow:'mobile152-release.yml',marketing:'1.52',buildPrefix:'152',attempts:12}],
@@ -65,7 +66,7 @@ export async function connectTestFlight(env, {
     if(beta.data?.attributes?.internalBuildState==='IN_BETA_TESTING')break;
     if(at<3)await wait(15000);
   }
-  if(['1.56','1.57','1.58'].includes(marketing)&&beta.data?.attributes?.internalBuildState!=='IN_BETA_TESTING')throw Error('INTERNAL_CONNECT_BETA_NOT_READY');
+  if(['1.56','1.57','1.58','1.59'].includes(marketing)&&beta.data?.attributes?.internalBuildState!=='IN_BETA_TESTING')throw Error('INTERNAL_CONNECT_BETA_NOT_READY');
   return {appId:app,marketingVersion:marketing,version,processingState:build.attributes.processingState,
     internalBuildState:beta.data?.attributes?.internalBuildState||'UNKNOWN',internalGroupConnected:true,
     invitationSent:false,reviewSubmitted:false};
